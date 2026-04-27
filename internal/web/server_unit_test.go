@@ -179,6 +179,137 @@ func TestConfiguredPublicURLAndSMTPDomainOverrideRequest(t *testing.T) {
 	}
 }
 
+func TestGroupReportChecksCategoryOrdering(t *testing.T) {
+	checks := []model.CheckResult{
+		{ID: "ptr", Name: "PTR", Status: "pass", Category: "DNS und Infrastruktur"},
+		{ID: "spf", Name: "SPF", Status: "fail", Category: "Authentifizierung"},
+		{ID: "date", Name: "Date", Status: "info", Category: ""},
+		{ID: "mime", Name: "MIME", Status: "warn", Category: "Format und Inhalt"},
+	}
+
+	groups := groupReportChecks(checks)
+
+	if len(groups) == 0 {
+		t.Fatal("expected at least one check group")
+	}
+	if groups[0].Name != "Authentifizierung" {
+		t.Fatalf("expected Authentifizierung first, got %q", groups[0].Name)
+	}
+	// Empty category should fall back to "Header und Rohdaten"
+	last := groups[len(groups)-1]
+	if last.Name != "Header und Rohdaten" {
+		t.Fatalf("expected Header und Rohdaten last (fallback for empty category), got %q", last.Name)
+	}
+}
+
+func TestGroupLinksByDomainCombinesAndSorts(t *testing.T) {
+	links := []string{
+		"https://example.org/a",
+		"https://example.org/b",
+		"https://www.other.com/x",
+		"https://other.com/y",
+		"not-a-url",
+	}
+
+	groups := groupLinksByDomain(links)
+
+	if len(groups) == 0 {
+		t.Fatal("expected link groups")
+	}
+	// www.other.com and other.com should both map to "other.com"
+	var otherGroup *ReportLinkGroup
+	for i := range groups {
+		if groups[i].Domain == "other.com" {
+			otherGroup = &groups[i]
+		}
+	}
+	if otherGroup == nil {
+		t.Fatal("expected other.com group (www. stripped)")
+	}
+	if otherGroup.Count != 2 {
+		t.Fatalf("expected 2 links for other.com, got %d", otherGroup.Count)
+	}
+}
+
+func TestReportHeroTitleThresholds(t *testing.T) {
+	cases := []struct {
+		score float64
+		want  string
+	}{
+		{9.5, "Wow"},
+		{7.5, "Solide"},
+		{5.5, "braucht"},
+		{3.0, "Hohes"},
+	}
+	for _, tc := range cases {
+		got := reportHeroTitle(tc.score)
+		if !strings.Contains(got, tc.want) {
+			t.Errorf("score %.1f: title %q should contain %q", tc.score, got, tc.want)
+		}
+	}
+}
+
+func TestReportHeroSubtitleThresholds(t *testing.T) {
+	if reportHeroSubtitle(9.5) == "" {
+		t.Fatal("expected non-empty subtitle for score 9.5")
+	}
+	if reportHeroSubtitle(0.0) == "" {
+		t.Fatal("expected non-empty subtitle for score 0.0")
+	}
+}
+
+func TestScorePercentBounds(t *testing.T) {
+	if got := scorePercent(-5); got != 0 {
+		t.Fatalf("expected 0 for negative score, got %v", got)
+	}
+	if got := scorePercent(10); got != 100 {
+		t.Fatalf("expected 100 for score 10, got %v", got)
+	}
+	if got := scorePercent(15); got != 100 {
+		t.Fatalf("expected 100 for score >10, got %v", got)
+	}
+	if got := scorePercent(5); got != 50 {
+		t.Fatalf("expected 50 for score 5, got %v", got)
+	}
+}
+
+func TestDetailsTextFormatting(t *testing.T) {
+	details := map[string]string{
+		"b_key": "value2",
+		"a_key": "value1",
+		"empty": "",
+	}
+	got := detailsText(details)
+	if !strings.Contains(got, "a_key: value1") {
+		t.Errorf("expected a_key line, got %q", got)
+	}
+	if !strings.Contains(got, "b_key: value2") {
+		t.Errorf("expected b_key line, got %q", got)
+	}
+	if strings.Contains(got, "empty") {
+		t.Errorf("empty value should be omitted, got %q", got)
+	}
+	// keys should be sorted
+	posA := strings.Index(got, "a_key")
+	posB := strings.Index(got, "b_key")
+	if posA > posB {
+		t.Errorf("expected a_key before b_key (sorted), got %q", got)
+	}
+}
+
+func TestSafeIDOutputIsURLSafe(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"Authentifizierung", "authentifizierung"},
+		{"DNS und Infrastruktur", "dns-und-infrastruktur"},
+		{"---", "item"},
+	}
+	for _, tc := range cases {
+		if got := safeID(tc.in); got != tc.want {
+			t.Errorf("safeID(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestForceHTTPSRedirect(t *testing.T) {
 	srv := &Server{cfg: config.Config{ForceHTTPS: true}}
 	handler := srv.withHTTPSRedirect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

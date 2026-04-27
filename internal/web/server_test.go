@@ -247,6 +247,74 @@ func TestReportAPIReturnsJSONForTokenizedMessageRef(t *testing.T) {
 	}
 }
 
+func TestMailboxPageRendersMessageList(t *testing.T) {
+	restoreWD := chdirToRepoRoot(t)
+	defer restoreWD()
+
+	srv, _, mb, msg, rep := prepareWebTestFixture(t)
+	h := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/mailbox/"+mb.Token, nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, mb.Address) {
+		t.Fatalf("expected mailbox address in page")
+	}
+	if !strings.Contains(body, msg.Subject) {
+		t.Fatalf("expected message subject in page")
+	}
+	msgRef := messageReference(mb.Token, msg.ID)
+	if !strings.Contains(body, msgRef) {
+		t.Fatalf("expected message reference link in page")
+	}
+	_ = rep
+}
+
+func TestDeleteMailboxAPI(t *testing.T) {
+	restoreWD := chdirToRepoRoot(t)
+	defer restoreWD()
+
+	srv, st, mb, _, _ := prepareWebTestFixture(t)
+	h := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/mailboxes/"+mb.Token+"/delete", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 on delete, got %d body=%q", rr.Code, rr.Body.String())
+	}
+
+	// Mailbox should be gone
+	if _, err := st.GetMailboxByToken(context.Background(), mb.Token); err == nil {
+		t.Fatal("expected mailbox to be deleted, but it still exists")
+	}
+}
+
+func TestReportScoreHeroClassThreshold(t *testing.T) {
+	restoreWD := chdirToRepoRoot(t)
+	defer restoreWD()
+
+	srv, _, mb, msg, _ := prepareWebTestFixture(t)
+	h := srv.Handler()
+
+	msgRef := messageReference(mb.Token, msg.ID)
+	req := httptest.NewRequest(http.MethodGet, "/report/"+mb.Token+"?msg="+msgRef, nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+	// fixture score is 8.8 which is ≥7.5 → "pass"
+	if !strings.Contains(body, "status-pass") {
+		t.Fatalf("expected status-pass class for score 8.8 (≥7.5), got body length %d", len(body))
+	}
+}
+
 func prepareWebTestFixture(t *testing.T) (*Server, *store.Store, model.Mailbox, model.Message, model.AnalysisReport) {
 	t.Helper()
 
