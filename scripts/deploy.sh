@@ -4,8 +4,8 @@ set -euo pipefail
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/mailprobe}"
 HTTP_PORT="${HTTP_PORT:-8080}"
-SMTP_PORT="${SMTP_PORT:-2525}"
-MAILPROBE_IMAGE="ghcr.io/brightcolor/mailprobe:latest"
+SMTP_PORT="${SMTP_PORT:-25}"
+MAILPROBE_IMAGE="ghcr.io/brightcolor/mailprobev2:latest"
 REPO_URL="https://github.com/brightcolor/mailprobev2.git"
 
 BOLD='\033[1m'
