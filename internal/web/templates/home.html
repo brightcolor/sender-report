@@ -4,58 +4,93 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="description" content="Teste deine E-Mail auf Zustellbarkeit – SPF, DKIM, DMARC, Spam-Score und mehr." />
-  <title>{{.AppName}} - Mail Deliverability Test</title>
+  <meta name="description" content="Teste deine E-Mail auf Zustellbarkeit – SPF, DKIM, DMARC, Spam-Score und mehr. Self-hosted, kein Account nötig." />
+  <title>{{.AppName}} – E-Mail Deliverability Test</title>
   <script>(function(){try{var p=localStorage.getItem('mailprobe-theme')||'auto';var d=p==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.bsTheme=d;document.documentElement.dataset.themePreference=p;}catch(e){document.documentElement.dataset.bsTheme='light';}})()</script>
-  <link rel="stylesheet" href="/static/vendor/vvveb/admin.css" />
+  <link rel="stylesheet" href="/static/vendor/bootstrap.min.css" />
   <link rel="stylesheet" href="/static/app.css" />
 </head>
 <body class="mailprobe-ui page-home">
-<div id="container" class="mp-shell">
-<main class="main mp-main">
-    <header class="top-header mp-topbar">
-      <a class="mp-brand mp-top-brand" href="/"><span class="mp-brand-mark">MP</span><span>{{.AppName}}</span></a>
-      <div>
-        <p class="mp-eyebrow">Self-hosted deliverability lab</p>
-        <h1>Teste deine E-Mail, bevor sie bei echten Empf&auml;ngern landet.</h1>
-      </div>
-      <div class="mp-top-actions">
-        <span class="badge rounded-pill text-bg-primary">SMTP: {{.Domain}}</span>
-        <button class="btn btn-outline-secondary btn-sm mp-theme-text" id="theme-toggle" type="button">Theme <span class="theme-icon">AUTO</span></button>
-      </div>
-    </header>
+<div class="mp-shell">
 
-    <section class="mp-hero-card" id="check-panel" data-token="{{.Mailbox.Token}}" data-public-url="{{.PublicURL}}">
-      <div class="mp-hero-copy">
-        <span class="mp-step">1</span>
-        <p class="mp-eyebrow">Empf&auml;ngeradresse</p>
-        <h2>Sende deine Testmail an diese Adresse.</h2>
-        <p class="text-secondary">Danach klickst du auf <strong>Check starten</strong>. MailProbe wartet live auf den Eingang und springt automatisch in den Report, sobald die Analyse fertig ist.</p>
+  <header class="mp-topbar">
+    <a class="mp-brand" href="/"><span class="mp-brand-mark">MP</span>{{.AppName}}</a>
+    <div class="mp-topbar-center">
+      <p class="mp-topbar-subtitle">Self-hosted E-Mail Deliverability Lab</p>
+    </div>
+    <div class="mp-topbar-actions">
+      <span class="badge text-bg-primary mp-hide-mobile">{{.Domain}}</span>
+      <button class="btn btn-ghost btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
+        <span class="theme-icon">AUTO</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="mp-main" id="check-panel" data-token="{{.Mailbox.Token}}" data-public-url="{{.PublicURL}}">
+
+    <div class="mp-home-hero">
+      <div class="mp-home-label">
+        <span>●</span>&nbsp;Self-hosted &middot; Open Source
       </div>
-      <div class="mp-address-card">
-        <span class="mp-label">Tempor&auml;re Adresse</span>
-        <code id="mail-address">{{.Mailbox.Address}}</code>
-        <button class="btn btn-primary btn-icon copy-btn" type="button" onclick="copyAddress()">Adresse kopieren</button>
+      <h1 class="mp-home-h1">Teste deine E-Mail,<br>bevor sie sendet.</h1>
+      <p class="mp-home-sub">Schicke eine Testmail an die temporäre Adresse unten. MailProbe prüft SPF, DKIM, DMARC, PTR, Spam-Signale und mehr – sofort, live, ohne Account.</p>
+    </div>
+
+    <div class="mp-addr-card">
+      <p class="mp-addr-eyebrow">Temporäre Empfängeradresse</p>
+
+      <div class="mp-addr-row">
+        <code class="mp-addr-text" id="mail-address">{{.Mailbox.Address}}</code>
+        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyAddress()">Kopieren</button>
       </div>
-      <div class="mp-action-row">
-        <button id="check-btn" class="btn btn-primary btn-lg check-score-button" type="button">Check starten</button>
+
+      <div class="mp-addr-actions">
+        <button id="check-btn" class="btn btn-primary btn-lg" type="button">Check starten</button>
         <button id="new-address-btn" class="btn btn-outline-secondary btn-lg" type="button">Neue Adresse</button>
       </div>
-      <div id="check-loader" class="scan-loader d-none" aria-hidden="true"><span></span><span></span><span></span></div>
-      <p id="check-status" class="check-status">Bereit. Noch wurde keine E-Mail f&uuml;r diese Adresse gepr&uuml;ft.</p>
-      <dl class="mp-meta-grid">
-        <div><dt>Ablauf</dt><dd id="mail-expires-at" data-time="{{.Mailbox.ExpiresAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.Mailbox.ExpiresAt.Format "02.01.2006, 15:04:05 MST"}}</dd></div>
-        <div><dt>Direktlink</dt><dd><a id="mailbox-direct-link" href="{{.PublicURL}}/mailbox/{{.Mailbox.Token}}">{{.PublicURL}}/mailbox/{{.Mailbox.Token}}</a></dd></div>
-      </dl>
-    </section>
 
-    <section class="mp-card-grid" aria-label="Pr&uuml;fbereiche">
-      <article class="card mp-feature-card"><div class="card-body"><span class="mp-card-icon success">OK</span><h3>Authentifizierung</h3><p>SPF, DKIM, DMARC und Alignment mit konkreten DNS-Hinweisen.</p></div></article>
-      <article class="card mp-feature-card"><div class="card-body"><span class="mp-card-icon info">DNS</span><h3>Infrastruktur</h3><p>PTR, HELO/EHLO, MX, A/AAAA, TLS und Received-Kette.</p></div></article>
-      <article class="card mp-feature-card"><div class="card-body"><span class="mp-card-icon warn">!</span><h3>Content</h3><p>MIME, Plaintext, HTML, Links, Betreff und Spam-Heuristiken.</p></div></article>
-      <article class="card mp-feature-card"><div class="card-body"><span class="mp-card-icon neutral">{}</span><h3>Rohdaten</h3><p>Header, Source und JSON bleiben direkt kopierbar.</p></div></article>
-    </section>
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
+        <div id="check-loader" class="mp-scan-dots d-none" aria-hidden="true"><span></span><span></span><span></span></div>
+        <p id="check-status" class="mp-check-status" style="margin:0">Bereit &ndash; noch keine E-Mail für diese Adresse geprüft.</p>
+      </div>
+
+      <dl class="mp-addr-meta">
+        <div class="mp-meta-cell">
+          <dt>Ablauf</dt>
+          <dd id="mail-expires-at" data-time="{{.Mailbox.ExpiresAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.Mailbox.ExpiresAt.Format "02.01.2006, 15:04 MST"}}</dd>
+        </div>
+        <div class="mp-meta-cell">
+          <dt>Direktlink</dt>
+          <dd><a id="mailbox-direct-link" href="{{.PublicURL}}/mailbox/{{.Mailbox.Token}}">{{.PublicURL}}/mailbox/{{.Mailbox.Token}}</a></dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="mp-features" aria-label="Prüfbereiche">
+      <div class="mp-feat">
+        <div class="mp-feat-icon ok">✓</div>
+        <h3>Authentifizierung</h3>
+        <p>SPF, DKIM, DMARC &amp; Alignment mit DNS-Hinweisen.</p>
+      </div>
+      <div class="mp-feat">
+        <div class="mp-feat-icon info">⬡</div>
+        <h3>Infrastruktur</h3>
+        <p>PTR, HELO/EHLO, MX, TLS &amp; Received-Kette.</p>
+      </div>
+      <div class="mp-feat">
+        <div class="mp-feat-icon warn">!</div>
+        <h3>Content</h3>
+        <p>MIME, Links, Betreff &amp; Spam-Heuristiken.</p>
+      </div>
+      <div class="mp-feat">
+        <div class="mp-feat-icon neutral">{ }</div>
+        <h3>Rohdaten</h3>
+        <p>Header, Source &amp; JSON-Export – kopierbar.</p>
+      </div>
+    </div>
+
   </main>
+
 </div>
 <script src="/static/vendor/bootstrap.bundle.min.js"></script>
 <script src="/static/app.js"></script>

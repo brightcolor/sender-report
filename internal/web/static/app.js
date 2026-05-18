@@ -373,7 +373,9 @@ function colorScoreDeltas() {
 
 function colorScoreMinis() {
   document.querySelectorAll('.mp-score-mini').forEach((el) => {
-    const v = parseFloat(el.querySelector('strong')?.textContent ?? 'NaN');
+    // Support both direct data-score attribute and parsing from inner <strong>
+    const raw = el.dataset.score ?? el.querySelector('strong')?.textContent;
+    const v = parseFloat(raw ?? 'NaN');
     if (Number.isNaN(v)) return;
     if (v >= 7.5)      el.classList.add('score-pass');
     else if (v >= 5.5) el.classList.add('score-warn');
