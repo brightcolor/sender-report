@@ -28,17 +28,32 @@ have_cmd() {
 
 # ── Port utilities ─────────────────────────────────────────────────────────────
 
-# Returns 0 (true) if something is already listening on $1
+# Returns 0 (true) if something is already listening/allocated on $1
 port_in_use() {
   local port="$1"
-  # ss is authoritative; fall back to a short-lived TCP connect attempt
+
+  # 1. Ask the kernel via ss (covers host processes and docker-proxy)
   if have_cmd ss; then
     ss -tlnH 2>/dev/null | awk '{print $4}' | grep -qE "(^|:)${port}$" && return 0
   fi
-  # /dev/tcp is a bash builtin – no external dependency
-  if ( echo "" | timeout 1 bash -c "exec 3<>/dev/tcp/127.0.0.1/$port" 2>/dev/null ); then
+
+  # 2. Also check netstat as a fallback (older distros without ss)
+  if have_cmd netstat; then
+    netstat -tlnp 2>/dev/null | awk '{print $4}' | grep -qE "(^|:)${port}$" && return 0
+  fi
+
+  # 3. Query Docker directly – catches running containers whose docker-proxy
+  #    may not appear in ss until it has fully started.
+  if have_cmd docker && docker info >/dev/null 2>&1; then
+    docker ps --format '{{.Ports}}' 2>/dev/null \
+      | grep -qE "(0\.0\.0\.0|::|\*):${port}->" && return 0
+  fi
+
+  # 4. /dev/tcp connect attempt (bash builtin, no external deps)
+  if ( timeout 1 bash -c "exec 3<>/dev/tcp/127.0.0.1/$port" 2>/dev/null ); then
     return 0
   fi
+
   return 1
 }
 
@@ -207,6 +222,15 @@ infer_display_web_url() {
 
 resolve_ports() {
   log "Checking port availability..."
+
+  # If a previous MailProbe stack is running from this install dir, bring it
+  # down first so its ports don't block our own re-deployment.
+  if [[ -d "$INSTALL_DIR" ]] && have_cmd docker && docker info >/dev/null 2>&1; then
+    if docker_cmd compose -f "$INSTALL_DIR/docker-compose.yml" ps -q 2>/dev/null | grep -q .; then
+      log "Stopping existing MailProbe stack before port check..."
+      docker_cmd compose -f "$INSTALL_DIR/docker-compose.yml" down 2>/dev/null || true
+    fi
+  fi
 
   local new_http
   new_http="$(find_free_port "$HTTP_PORT" "$SMTP_PORT")"
