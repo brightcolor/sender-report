@@ -346,9 +346,16 @@ function startMailboxPollingFallback(token, onStatus) {
 // ── Report: auto-open first fail/warn check ───────────────────────────────────
 
 function autoOpenFirstFailedCheck() {
-  document.querySelectorAll('.mp-check-accordion').forEach((group) => {
-    const firstBad = group.querySelector('details.fail, details.warn');
-    if (firstBad) firstBad.open = true;
+  document.querySelectorAll('.mp-check-accordion').forEach((accordion) => {
+    const firstBad = accordion.querySelector('.accordion-item.fail, .accordion-item.warn');
+    if (!firstBad) return;
+    const btn = firstBad.querySelector('.accordion-button');
+    const collapse = firstBad.querySelector('.accordion-collapse');
+    if (btn && collapse) {
+      btn.classList.remove('collapsed');
+      btn.setAttribute('aria-expanded', 'true');
+      collapse.classList.add('show');
+    }
   });
 }
 

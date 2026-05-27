@@ -7,279 +7,459 @@
   <meta name="description" content="Deliverability-Report für {{.Mailbox.Address}} – Score {{printf "%.1f" .Report.Score}}/10" />
   <title>Report {{.Mailbox.Token}} – {{.AppName}}</title>
   <script>(function(){try{var p=localStorage.getItem('mailprobe-theme')||'auto';var d=p==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.bsTheme=d;document.documentElement.dataset.themePreference=p;}catch(e){document.documentElement.dataset.bsTheme='light';}})()</script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.10.0/styles/overlayscrollbars.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0/dist/css/adminlte.min.css">
   <link rel="stylesheet" href="/static/app.css" />
 </head>
-<body class="mailprobe-ui page-report">
-<div class="mp-shell">
+<body class="layout-fixed">
+<div class="app-wrapper">
 
-  <header class="mp-topbar">
-    <a class="mp-brand" href="/"><span class="mp-brand-mark">MP</span>{{.AppName}}</a>
-    <div class="mp-topbar-center">
-      <p class="mp-topbar-subtitle">Deliverability Report &middot; {{.Mailbox.Address}}</p>
+  <!-- ── Navbar ─────────────────────────────────────────────────────────── -->
+  <nav class="app-header navbar navbar-expand bg-body shadow-sm">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+        <span class="mp-brand-mark">MP</span>{{.AppName}}
+      </a>
+      <span class="navbar-text d-none d-lg-block text-secondary small ms-3">
+        Deliverability Report &middot; {{.Mailbox.Address}}
+      </span>
+      <ul class="navbar-nav ms-auto align-items-center gap-2">
+        <li class="nav-item">
+          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
+            <span class="theme-icon">AUTO</span>
+          </button>
+        </li>
+        <li class="nav-item d-none d-md-block">
+          <a class="btn btn-outline-secondary btn-sm" href="/mailbox/{{.Mailbox.Token}}">
+            <i class="bi bi-inbox me-1"></i>Mailbox
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="btn btn-primary btn-sm" href="/">
+            <i class="bi bi-plus-circle me-1"></i>Neuer Test
+          </a>
+        </li>
+      </ul>
     </div>
-    <div class="mp-topbar-actions">
-      <button class="btn btn-ghost btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
-        <span class="theme-icon">AUTO</span>
-      </button>
-      <a class="btn btn-outline-secondary btn-sm mp-hide-mobile" href="/mailbox/{{.Mailbox.Token}}">Mailbox</a>
-      <a class="btn btn-primary btn-sm" href="/">Neuer Test</a>
-    </div>
-  </header>
+  </nav>
 
-  <main class="mp-main" style="padding-top:1.5rem">
+  <!-- ── Main ───────────────────────────────────────────────────────────── -->
+  <main class="app-main">
+    <div class="app-content pt-3">
+      <div class="container-fluid">
 
-    {{/* ── Score hero ─────────────────────────────────────────────────────── */}}
-    <section class="mp-score-hero status-{{if ge .Report.Score 7.5}}pass{{else if ge .Report.Score 5.5}}warn{{else}}fail{{end}}"
-             aria-label="Gesamtscore">
-      <div class="mp-ring" style="--score:{{scorePercent .Report.Score}}%">
-        <div class="mp-ring-inner">
-          <span class="mp-ring-value">{{printf "%.1f" .Report.Score}}</span>
-          <span class="mp-ring-sub">/10</span>
-        </div>
-      </div>
-      <div class="mp-hero-copy">
-        <p class="mp-hero-eyebrow">Gesamtscore</p>
-        <h1 class="mp-hero-title">{{.HeroTitle}}</h1>
-        <p class="mp-hero-subtitle">{{.HeroSubtitle}}</p>
-        <div class="mp-status-pills">
-          <span class="mp-pill pass">{{statusIcon "pass"}} {{index .Statuses "pass"}} bestanden</span>
-          <span class="mp-pill warn">{{statusIcon "warn"}} {{index .Statuses "warn"}} Warnungen</span>
-          <span class="mp-pill fail">{{statusIcon "fail"}} {{index .Statuses "fail"}} Fehler</span>
-          <span class="mp-pill info">{{statusIcon "info"}} {{index .Statuses "info"}} Infos</span>
-        </div>
-      </div>
-    </section>
-
-    {{/* ── Metadata bar ────────────────────────────────────────────────────── */}}
-    <dl class="mp-meta-bar">
-      <div class="mp-meta-fact">
-        <dt>Betreff</dt>
-        <dd>{{if .Message.Subject}}{{.Message.Subject}}{{else}}(kein Betreff){{end}}</dd>
-      </div>
-      <div class="mp-meta-fact">
-        <dt>Empfangen</dt>
-        <dd data-time="{{.Message.ReceivedAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.Message.ReceivedAt.Format "2006-01-02 15:04:05 MST"}}</dd>
-      </div>
-      <div class="mp-meta-fact">
-        <dt>Envelope-From</dt>
-        <dd>{{if .Message.SMTPFrom}}{{.Message.SMTPFrom}}{{else}}(leer){{end}}</dd>
-      </div>
-      <div class="mp-meta-fact">
-        <dt>Quelle</dt>
-        <dd>{{.Message.RemoteIP}} / {{.Message.HELO}}</dd>
-      </div>
-    </dl>
-
-    {{/* ── Two-column report layout ─────────────────────────────────────── */}}
-    <div class="mp-report-cols">
-
-      {{/* Main column: check groups */}}
-      <div class="mp-report-main">
-        {{range .CheckGroups}}
-        {{$groupID := safeID .Name}}
-        <section class="mp-check-group">
-          <div class="mp-check-group-hd">
-            <h2>{{.Name}}</h2>
-            {{if .Hint}}<p>{{.Hint}}</p>{{end}}
-          </div>
-          <div class="mp-check-accordion" id="checks-{{$groupID}}">
-            {{range .Checks}}
-            <details class="mp-check-item {{.Status}}" id="chk-{{safeID .ID}}">
-              <summary>
-                <span class="mp-status-dot {{.Status}}">{{statusIcon .Status}}</span>
-                <span class="mp-chk-name">
-                  <strong>{{.Name}}</strong>
-                  <small>{{.Summary}}</small>
-                </span>
-                <span class="mp-pill {{.Status}}">{{statusLabel .Status}}</span>
-                <strong class="mp-delta">{{printf "%+.1f" .ScoreDelta}}</strong>
-                <span class="mp-chk-arrow">›</span>
-              </summary>
-              <div class="mp-check-body">
-
-                <div class="mp-check-section">
-                  <h4>Kurzbewertung</h4>
-                  <p>{{.Summary}}</p>
-                </div>
-
-                {{if .TechnicalDetails}}
-                <div class="mp-check-section">
-                  <div class="mp-section-row">
-                    <h4>Technische Details</h4>
-                    <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="{{detailsText .TechnicalDetails}}">Kopieren</button>
-                  </div>
-                  <dl class="mp-tech-dl">
-                    {{range $k, $v := .TechnicalDetails}}
-                    <div><dt>{{$k}}</dt><dd><code>{{$v}}</code></dd></div>
-                    {{end}}
-                  </dl>
-                </div>
-                {{end}}
-
-                {{if .Explanation}}
-                <div class="mp-check-section">
-                  <h4>Erklärung</h4>
-                  <p>{{.Explanation}}</p>
-                </div>
-                {{end}}
-
-                {{if and .Recommendation (or (eq .Status "warn") (eq .Status "fail"))}}
-                <div class="mp-check-section mp-fix-box">
-                  <div class="mp-section-row">
-                    <h4>Wie wird's gemacht?</h4>
-                    <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="{{.Recommendation}}">Kopieren</button>
-                  </div>
-                  <p>{{.Recommendation}}</p>
-                </div>
-                {{end}}
-
+        <!-- ── Score hero card ────────────────────────────────────────── -->
+        <div class="card mp-score-hero status-{{if ge .Report.Score 7.5}}pass{{else if ge .Report.Score 5.5}}warn{{else}}fail{{end}} mb-3">
+          <div class="card-body d-flex align-items-center gap-4 p-4 flex-wrap">
+            <div class="mp-ring" style="--score:{{scorePercent .Report.Score}}%">
+              <div class="mp-ring-inner">
+                <span class="mp-ring-value">{{printf "%.1f" .Report.Score}}</span>
+                <span class="mp-ring-sub">/10</span>
               </div>
-            </details>
-            {{end}}
-          </div>
-        </section>
-        {{end}}
-      </div>
-
-      {{/* Sidebar */}}
-      <aside class="mp-report-side">
-
-        {{if .Report.Suggestions}}
-        <div class="mp-side-card">
-          <div class="mp-side-hd">
-            <h3>Empfehlungen</h3>
-            <span class="badge text-bg-secondary">{{len .Report.Suggestions}}</span>
-          </div>
-          <div class="mp-side-body">
-            <ul class="mp-side-list">
-              {{range .Report.Suggestions}}<li>{{.}}</li>{{end}}
-            </ul>
-          </div>
-        </div>
-        {{end}}
-
-        {{if .Report.SpamSignals}}
-        <div class="mp-side-card">
-          <div class="mp-side-hd">
-            <h3>Spam-Indikatoren</h3>
-            <span class="badge text-bg-secondary">{{len .Report.SpamSignals}}</span>
-          </div>
-          <div class="mp-side-body">
-            <ul class="mp-side-list">
-              {{range .Report.SpamSignals}}<li>{{.}}</li>{{end}}
-            </ul>
-          </div>
-        </div>
-        {{end}}
-
-        <div class="mp-side-card">
-          <div class="mp-side-hd">
-            <h3>Export &amp; Rohdaten</h3>
-          </div>
-          <div class="mp-side-body">
-            <div class="mp-export-btns">
-              <a class="btn btn-outline-secondary btn-sm" href="/raw/{{.Mailbox.Token}}/{{msgref .Mailbox.Token .Message.ID}}/headers" target="_blank" rel="noopener noreferrer">Header herunterladen</a>
-              <a class="btn btn-outline-secondary btn-sm" href="/raw/{{.Mailbox.Token}}/{{msgref .Mailbox.Token .Message.ID}}/source" target="_blank" rel="noopener noreferrer">Raw herunterladen</a>
-              <a class="btn btn-outline-secondary btn-sm" href="/api/reports/{{.Mailbox.Token}}/{{msgref .Mailbox.Token .Message.ID}}" target="_blank" rel="noopener noreferrer">JSON Export</a>
+            </div>
+            <div class="flex-grow-1">
+              <p class="text-uppercase fw-bold small text-secondary mb-1" style="letter-spacing:.06em">Gesamtscore</p>
+              <h1 class="h2 fw-bold mb-1">{{.HeroTitle}}</h1>
+              <p class="text-secondary mb-3">{{.HeroSubtitle}}</p>
+              <div class="d-flex gap-2 flex-wrap">
+                <span class="mp-pill pass">{{statusIcon "pass"}} {{index .Statuses "pass"}} bestanden</span>
+                <span class="mp-pill warn">{{statusIcon "warn"}} {{index .Statuses "warn"}} Warnungen</span>
+                <span class="mp-pill fail">{{statusIcon "fail"}} {{index .Statuses "fail"}} Fehler</span>
+                <span class="mp-pill info">{{statusIcon "info"}} {{index .Statuses "info"}} Infos</span>
+              </div>
             </div>
           </div>
         </div>
 
-      </aside>
-    </div>
+        <!-- ── Metadata info-boxes ────────────────────────────────────── -->
+        <div class="row g-2 mb-3">
+          <div class="col-12 col-sm-6 col-xl-3">
+            <div class="info-box border shadow-none mb-0">
+              <span class="info-box-icon text-bg-secondary"><i class="bi bi-chat-left-text"></i></span>
+              <div class="info-box-content" style="min-width:0">
+                <span class="info-box-text">Betreff</span>
+                <span class="info-box-number text-truncate d-block"
+                      title="{{if .Message.Subject}}{{.Message.Subject}}{{else}}(kein Betreff){{end}}"
+                      style="font-size:.875rem">
+                  {{if .Message.Subject}}{{.Message.Subject}}{{else}}(kein Betreff){{end}}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-sm-6 col-xl-3">
+            <div class="info-box border shadow-none mb-0">
+              <span class="info-box-icon text-bg-secondary"><i class="bi bi-clock"></i></span>
+              <div class="info-box-content">
+                <span class="info-box-text">Empfangen</span>
+                <span class="info-box-number"
+                      style="font-size:.875rem"
+                      data-time="{{.Message.ReceivedAt.Format "2006-01-02T15:04:05Z07:00"}}">
+                  {{.Message.ReceivedAt.Format "2006-01-02 15:04:05 MST"}}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-sm-6 col-xl-3">
+            <div class="info-box border shadow-none mb-0">
+              <span class="info-box-icon text-bg-secondary"><i class="bi bi-envelope-at"></i></span>
+              <div class="info-box-content" style="min-width:0">
+                <span class="info-box-text">Envelope-From</span>
+                <span class="info-box-number text-truncate d-block" style="font-size:.875rem">
+                  {{if .Message.SMTPFrom}}{{.Message.SMTPFrom}}{{else}}(leer){{end}}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-sm-6 col-xl-3">
+            <div class="info-box border shadow-none mb-0">
+              <span class="info-box-icon text-bg-secondary"><i class="bi bi-router"></i></span>
+              <div class="info-box-content" style="min-width:0">
+                <span class="info-box-text">Quelle</span>
+                <span class="info-box-number text-truncate d-block" style="font-size:.875rem">
+                  {{.Message.RemoteIP}} / {{.Message.HELO}}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
 
-    {{/* ── Raw data ───────────────────────────────────────────────────────── */}}
-    <div class="mp-raw-card">
-      <div class="mp-inbox-head">
-        <h2>Quelltext, Header &amp; Mail-Inhalt</h2>
-        <span>Einklappbar &middot; kopierbar</span>
-      </div>
-      <div id="rawAccordion">
+        <!-- ── Two-column report layout ───────────────────────────────── -->
+        <div class="row g-3">
 
-        <details>
-          <summary>Plaintext-Ansicht</summary>
-          <div class="mp-raw-body">
-            {{if .PlainTextBody}}
-            <button class="btn btn-sm btn-outline-secondary mb-2" type="button" data-copy="{{.PlainTextBody}}">Kopieren</button>
-            <pre class="mp-raw-pre">{{.PlainTextBody}}</pre>
-            {{else}}
-            <p class="text-secondary">Kein Plaintext-Body gefunden.</p>
+          <!-- Main column: check groups -->
+          <div class="col-xl-8">
+            {{range .CheckGroups}}
+            {{$groupID := safeID .Name}}
+            <div class="card mb-3">
+              <div class="card-header">
+                <h3 class="card-title mb-0">{{.Name}}</h3>
+                {{if .Hint}}<p class="text-secondary small mt-1 mb-0">{{.Hint}}</p>{{end}}
+              </div>
+              <div class="card-body p-0">
+                <div class="accordion accordion-flush mp-check-accordion" id="checks-{{$groupID}}">
+                  {{range .Checks}}
+                  <div class="accordion-item mp-check-item {{.Status}}" id="chk-{{safeID .ID}}">
+                    <h2 class="accordion-header">
+                      <button class="accordion-button collapsed"
+                              type="button"
+                              data-bs-toggle="collapse"
+                              data-bs-target="#chk-body-{{safeID .ID}}"
+                              aria-expanded="false"
+                              aria-controls="chk-body-{{safeID .ID}}">
+                        <div class="mp-chk-inner">
+                          <span class="mp-status-dot {{.Status}}">{{statusIcon .Status}}</span>
+                          <span class="mp-chk-name">
+                            <strong>{{.Name}}</strong>
+                            <small>{{.Summary}}</small>
+                          </span>
+                          <span class="mp-pill {{.Status}}">{{statusLabel .Status}}</span>
+                          <strong class="mp-delta">{{printf "%+.1f" .ScoreDelta}}</strong>
+                        </div>
+                      </button>
+                    </h2>
+                    <div id="chk-body-{{safeID .ID}}" class="accordion-collapse collapse">
+                      <div class="accordion-body">
+
+                        <div class="mb-3">
+                          <h6 class="text-uppercase small fw-bold text-secondary mb-1"
+                              style="letter-spacing:.06em">Kurzbewertung</h6>
+                          <p class="mb-0">{{.Summary}}</p>
+                        </div>
+
+                        {{if .TechnicalDetails}}
+                        <div class="mb-3">
+                          <div class="d-flex align-items-center justify-content-between mb-2">
+                            <h6 class="text-uppercase small fw-bold text-secondary mb-0"
+                                style="letter-spacing:.06em">Technische Details</h6>
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    type="button"
+                                    data-copy="{{detailsText .TechnicalDetails}}">
+                              <i class="bi bi-clipboard me-1"></i>Kopieren
+                            </button>
+                          </div>
+                          <dl class="mp-tech-dl">
+                            {{range $k, $v := .TechnicalDetails}}
+                            <div><dt>{{$k}}</dt><dd><code>{{$v}}</code></dd></div>
+                            {{end}}
+                          </dl>
+                        </div>
+                        {{end}}
+
+                        {{if .Explanation}}
+                        <div class="mb-3">
+                          <h6 class="text-uppercase small fw-bold text-secondary mb-1"
+                              style="letter-spacing:.06em">Erklärung</h6>
+                          <p class="mb-0">{{.Explanation}}</p>
+                        </div>
+                        {{end}}
+
+                        {{if and .Recommendation (or (eq .Status "warn") (eq .Status "fail"))}}
+                        <div class="mp-fix-box">
+                          <div class="d-flex align-items-center justify-content-between mb-2">
+                            <h6 class="fw-bold mb-0">
+                              <i class="bi bi-wrench me-1"></i>Wie wird's gemacht?
+                            </h6>
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    type="button"
+                                    data-copy="{{.Recommendation}}">
+                              <i class="bi bi-clipboard me-1"></i>Kopieren
+                            </button>
+                          </div>
+                          <p class="mb-0">{{.Recommendation}}</p>
+                        </div>
+                        {{end}}
+
+                      </div>
+                    </div>
+                  </div>
+                  {{end}}
+                </div>
+              </div>
+            </div>
             {{end}}
           </div>
-        </details>
 
-        <details>
-          <summary>HTML Vorschau</summary>
-          <div class="mp-raw-body">
-            {{if .HTMLPreviewBody}}
-            <iframe class="mp-html-frame" sandbox="allow-same-origin" srcdoc="{{.HTMLPreviewBody}}" title="HTML Mail Vorschau"></iframe>
+          <!-- Sidebar column -->
+          <div class="col-xl-4">
+            <div class="mp-report-side">
+
+              {{if .Report.Suggestions}}
+              <div class="card mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                  <h3 class="card-title mb-0">
+                    <i class="bi bi-lightbulb me-1 text-warning"></i>Empfehlungen
+                  </h3>
+                  <span class="badge text-bg-warning">{{len .Report.Suggestions}}</span>
+                </div>
+                <div class="card-body pt-3 pb-2">
+                  <ul class="mp-side-list">
+                    {{range .Report.Suggestions}}<li>{{.}}</li>{{end}}
+                  </ul>
+                </div>
+              </div>
+              {{end}}
+
+              {{if .Report.SpamSignals}}
+              <div class="card mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                  <h3 class="card-title mb-0">
+                    <i class="bi bi-exclamation-triangle me-1 text-danger"></i>Spam-Indikatoren
+                  </h3>
+                  <span class="badge text-bg-danger">{{len .Report.SpamSignals}}</span>
+                </div>
+                <div class="card-body pt-3 pb-2">
+                  <ul class="mp-side-list">
+                    {{range .Report.SpamSignals}}<li>{{.}}</li>{{end}}
+                  </ul>
+                </div>
+              </div>
+              {{end}}
+
+              <div class="card mb-3">
+                <div class="card-header">
+                  <h3 class="card-title mb-0">
+                    <i class="bi bi-download me-1"></i>Export &amp; Rohdaten
+                  </h3>
+                </div>
+                <div class="card-body d-flex flex-column gap-2">
+                  <a class="btn btn-outline-secondary btn-sm"
+                     href="/raw/{{.Mailbox.Token}}/{{msgref .Mailbox.Token .Message.ID}}/headers"
+                     target="_blank" rel="noopener noreferrer">
+                    <i class="bi bi-file-text me-1"></i>Header herunterladen
+                  </a>
+                  <a class="btn btn-outline-secondary btn-sm"
+                     href="/raw/{{.Mailbox.Token}}/{{msgref .Mailbox.Token .Message.ID}}/source"
+                     target="_blank" rel="noopener noreferrer">
+                    <i class="bi bi-file-earmark-code me-1"></i>Raw herunterladen
+                  </a>
+                  <a class="btn btn-outline-secondary btn-sm"
+                     href="/api/reports/{{.Mailbox.Token}}/{{msgref .Mailbox.Token .Message.ID}}"
+                     target="_blank" rel="noopener noreferrer">
+                    <i class="bi bi-braces me-1"></i>JSON Export
+                  </a>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Raw data accordion ──────────────────────────────────────── -->
+        <div class="card mb-3">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <h3 class="card-title mb-0">
+              <i class="bi bi-code me-1"></i>Quelltext, Header &amp; Mail-Inhalt
+            </h3>
+            <span class="text-secondary small">Einklappbar &middot; kopierbar</span>
+          </div>
+          <div class="card-body p-0">
+            <div class="accordion accordion-flush" id="rawAccordion">
+
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed" type="button"
+                          data-bs-toggle="collapse" data-bs-target="#raw-plaintext"
+                          aria-expanded="false">
+                    <i class="bi bi-file-text me-2"></i>Plaintext-Ansicht
+                  </button>
+                </h2>
+                <div id="raw-plaintext" class="accordion-collapse collapse" data-bs-parent="#rawAccordion">
+                  <div class="accordion-body">
+                    {{if .PlainTextBody}}
+                    <button class="btn btn-sm btn-outline-secondary mb-2"
+                            type="button" data-copy="{{.PlainTextBody}}">
+                      <i class="bi bi-clipboard me-1"></i>Kopieren
+                    </button>
+                    <pre class="mp-raw-pre">{{.PlainTextBody}}</pre>
+                    {{else}}
+                    <p class="text-secondary mb-0">Kein Plaintext-Body gefunden.</p>
+                    {{end}}
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed" type="button"
+                          data-bs-toggle="collapse" data-bs-target="#raw-html-preview"
+                          aria-expanded="false">
+                    <i class="bi bi-eye me-2"></i>HTML Vorschau
+                  </button>
+                </h2>
+                <div id="raw-html-preview" class="accordion-collapse collapse" data-bs-parent="#rawAccordion">
+                  <div class="accordion-body">
+                    {{if .HTMLPreviewBody}}
+                    <iframe class="mp-html-frame" sandbox="allow-same-origin"
+                            srcdoc="{{.HTMLPreviewBody}}" title="HTML Mail Vorschau"></iframe>
+                    {{else}}
+                    <p class="text-secondary mb-0">Kein HTML-Body gefunden.</p>
+                    {{end}}
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed" type="button"
+                          data-bs-toggle="collapse" data-bs-target="#raw-html-source"
+                          aria-expanded="false">
+                    <i class="bi bi-code-slash me-2"></i>HTML Quelltext
+                  </button>
+                </h2>
+                <div id="raw-html-source" class="accordion-collapse collapse" data-bs-parent="#rawAccordion">
+                  <div class="accordion-body">
+                    {{if .HTMLSourceBody}}
+                    <button class="btn btn-sm btn-outline-secondary mb-2"
+                            type="button" data-copy="{{.HTMLSourceBody}}">
+                      <i class="bi bi-clipboard me-1"></i>Kopieren
+                    </button>
+                    <pre class="mp-raw-pre">{{.HTMLSourceBody}}</pre>
+                    {{else}}
+                    <p class="text-secondary mb-0">Kein HTML-Body gefunden.</p>
+                    {{end}}
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed" type="button"
+                          data-bs-toggle="collapse" data-bs-target="#raw-headers"
+                          aria-expanded="false">
+                    <i class="bi bi-list-ul me-2"></i>Header Block
+                  </button>
+                </h2>
+                <div id="raw-headers" class="accordion-collapse collapse" data-bs-parent="#rawAccordion">
+                  <div class="accordion-body">
+                    <button class="btn btn-sm btn-outline-secondary mb-2"
+                            type="button" data-copy="{{.Message.HeaderBlock}}">
+                      <i class="bi bi-clipboard me-1"></i>Kopieren
+                    </button>
+                    <pre class="mp-raw-pre">{{.Message.HeaderBlock}}</pre>
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed" type="button"
+                          data-bs-toggle="collapse" data-bs-target="#raw-source"
+                          aria-expanded="false">
+                    <i class="bi bi-file-earmark-code me-2"></i>Vollst&auml;ndige Rohnachricht
+                  </button>
+                </h2>
+                <div id="raw-source" class="accordion-collapse collapse" data-bs-parent="#rawAccordion">
+                  <div class="accordion-body">
+                    <button class="btn btn-sm btn-outline-secondary mb-2"
+                            type="button" data-copy="{{.Message.RawSource}}">
+                      <i class="bi bi-clipboard me-1"></i>Kopieren
+                    </button>
+                    <pre class="mp-raw-pre">{{.Message.RawSource}}</pre>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Links section ───────────────────────────────────────────── -->
+        <div class="card mb-3">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <h3 class="card-title mb-0">
+              <i class="bi bi-link-45deg me-1"></i>Erkannte URLs
+              {{if .LinkTotal}}
+              <span class="badge text-bg-secondary ms-1">{{.LinkTotal}} gesamt</span>
+              {{end}}
+            </h3>
+            <span class="text-secondary small">Gruppiert nach Domain</span>
+          </div>
+          <div class="card-body p-0">
+            {{if .LinkGroups}}
+            <div class="accordion accordion-flush" id="linkGroups">
+              {{range $i, $g := .LinkGroups}}
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed" type="button"
+                          data-bs-toggle="collapse"
+                          data-bs-target="#link-group-{{$i}}"
+                          aria-expanded="false">
+                    <strong class="me-2">{{$g.Domain}}</strong>
+                    <span class="badge text-bg-secondary">{{$g.Count}}</span>
+                  </button>
+                </h2>
+                <div id="link-group-{{$i}}" class="accordion-collapse collapse" data-bs-parent="#linkGroups">
+                  <div class="accordion-body">
+                    <ul class="list-unstyled mb-0">
+                      {{range $g.Links}}
+                      <li class="mb-1">
+                        <a href="{{.}}" target="_blank" rel="noopener noreferrer"
+                           class="text-break small">{{.}}</a>
+                      </li>
+                      {{end}}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              {{end}}
+            </div>
             {{else}}
-            <p class="text-secondary">Kein HTML-Body gefunden.</p>
+            <div class="p-4 text-secondary">Keine Links erkannt.</div>
             {{end}}
           </div>
-        </details>
-
-        <details>
-          <summary>HTML Quelltext</summary>
-          <div class="mp-raw-body">
-            {{if .HTMLSourceBody}}
-            <button class="btn btn-sm btn-outline-secondary mb-2" type="button" data-copy="{{.HTMLSourceBody}}">Kopieren</button>
-            <pre class="mp-raw-pre">{{.HTMLSourceBody}}</pre>
-            {{else}}
-            <p class="text-secondary">Kein HTML-Body gefunden.</p>
-            {{end}}
-          </div>
-        </details>
-
-        <details>
-          <summary>Header Block</summary>
-          <div class="mp-raw-body">
-            <button class="btn btn-sm btn-outline-secondary mb-2" type="button" data-copy="{{.Message.HeaderBlock}}">Kopieren</button>
-            <pre class="mp-raw-pre">{{.Message.HeaderBlock}}</pre>
-          </div>
-        </details>
-
-        <details>
-          <summary>Vollst&auml;ndige Rohnachricht</summary>
-          <div class="mp-raw-body">
-            <button class="btn btn-sm btn-outline-secondary mb-2" type="button" data-copy="{{.Message.RawSource}}">Kopieren</button>
-            <pre class="mp-raw-pre">{{.Message.RawSource}}</pre>
-          </div>
-        </details>
+        </div>
 
       </div>
     </div>
-
-    {{/* ── Links section ──────────────────────────────────────────────────── */}}
-    <div class="mp-links-card">
-      <div class="mp-inbox-head">
-        <h2>Erkannte URLs {{if .LinkTotal}}<span class="badge text-bg-secondary" style="font-size:.75rem">{{.LinkTotal}} gesamt</span>{{end}}</h2>
-        <span>Gruppiert nach Domain</span>
-      </div>
-      {{if .LinkGroups}}
-      <div id="linkGroups">
-        {{range .LinkGroups}}
-        <details>
-          <summary>
-            <strong>{{.Domain}}</strong>
-            <span class="badge text-bg-secondary">{{.Count}}</span>
-          </summary>
-          <div class="mp-link-body">
-            <ul class="mp-clean-list mp-link-list">
-              {{range .Links}}<li><a href="{{.}}" target="_blank" rel="noopener noreferrer">{{.}}</a></li>{{end}}
-            </ul>
-          </div>
-        </details>
-        {{end}}
-      </div>
-      {{else}}
-      <div style="padding:1.5rem 1.25rem;color:var(--muted);font-size:.9375rem">Keine Links erkannt.</div>
-      {{end}}
-    </div>
-
   </main>
 
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.10.0/browser/es5/overlayscrollbars.browser.es5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0/dist/js/adminlte.min.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

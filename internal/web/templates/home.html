@@ -7,96 +7,169 @@
   <meta name="description" content="Teste deine E-Mail auf Zustellbarkeit – SPF, DKIM, DMARC, Spam-Score und mehr. Self-hosted, kein Account nötig." />
   <title>{{.AppName}} – E-Mail Deliverability Test</title>
   <script>(function(){try{var p=localStorage.getItem('mailprobe-theme')||'auto';var d=p==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.bsTheme=d;document.documentElement.dataset.themePreference=p;}catch(e){document.documentElement.dataset.bsTheme='light';}})()</script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.10.0/styles/overlayscrollbars.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0/dist/css/adminlte.min.css">
   <link rel="stylesheet" href="/static/app.css" />
 </head>
-<body class="mailprobe-ui page-home">
-<div class="mp-shell">
+<body class="layout-fixed">
+<div class="app-wrapper">
 
-  <header class="mp-topbar">
-    <a class="mp-brand" href="/"><span class="mp-brand-mark">MP</span>{{.AppName}}</a>
-    <div class="mp-topbar-center">
-      <p class="mp-topbar-subtitle">E-Mail Deliverability Lab &middot; Self-hosted &middot; Open Source</p>
+  <!-- ── Navbar ─────────────────────────────────────────────────────────── -->
+  <nav class="app-header navbar navbar-expand bg-body shadow-sm">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+        <span class="mp-brand-mark">MP</span>{{.AppName}}
+      </a>
+      <span class="navbar-text d-none d-lg-block text-secondary small ms-3">
+        E-Mail Deliverability Lab &middot; Self-hosted &middot; Open Source
+      </span>
+      <ul class="navbar-nav ms-auto align-items-center gap-2">
+        <li class="nav-item d-none d-md-block">
+          <span class="badge text-bg-primary">{{.Domain}}</span>
+        </li>
+        <li class="nav-item">
+          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
+            <span class="theme-icon">AUTO</span>
+          </button>
+        </li>
+      </ul>
     </div>
-    <div class="mp-topbar-actions">
-      <span class="badge text-bg-primary mp-hide-mobile">{{.Domain}}</span>
-      <button class="btn btn-ghost btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
-        <span class="theme-icon">AUTO</span>
-      </button>
-    </div>
-  </header>
+  </nav>
 
-  <main class="mp-main" id="check-panel" data-token="{{.Mailbox.Token}}" data-public-url="{{.PublicURL}}">
+  <!-- ── Main ───────────────────────────────────────────────────────────── -->
+  <main class="app-main">
+    <div class="app-content pt-4">
+      <div class="container" style="max-width:780px">
 
-    <div class="mp-hero">
-      <div class="mp-hero-badge">
-        <span class="hdot"></span>
-        Self-hosted &middot; Open Source
-      </div>
-      <h1>Teste deine E-Mail,<br>bevor sie sendet.</h1>
-      <p>Schicke eine Testmail an die temporäre Adresse unten. MailProbe prüft SPF, DKIM, DMARC, PTR, Spam-Signale und mehr &ndash; sofort, live, ohne Account.</p>
-    </div>
-
-    <div class="mp-addr-card">
-      <div class="mp-addr-card-head">
-        <span class="mp-addr-label">Temporäre Empfängeradresse</span>
-        <button class="btn btn-ghost btn-sm" type="button" onclick="copyAddress()">Kopieren</button>
-      </div>
-      <div class="mp-addr-body">
-
-        <div class="mp-addr-box">
-          <code class="mp-addr-text" id="mail-address">{{.Mailbox.Address}}</code>
+        <!-- Hero copy -->
+        <div class="text-center mb-4">
+          <span class="mp-hero-badge mb-3 d-inline-flex">
+            <span class="hdot"></span>Self-hosted &middot; Open Source
+          </span>
+          <h1 class="display-5 fw-bold mb-3" style="letter-spacing:-.03em">
+            Teste deine E-Mail,<br>bevor sie sendet.
+          </h1>
+          <p class="lead text-secondary mx-auto" style="max-width:560px">
+            Schicke eine Testmail an die temporäre Adresse unten. MailProbe prüft
+            SPF, DKIM, DMARC, PTR, Spam-Signale und mehr &ndash; sofort, live, ohne Account.
+          </p>
         </div>
 
-        <div class="mp-addr-actions">
-          <button id="check-btn" class="btn btn-primary btn-lg" type="button">Check starten</button>
-          <button id="new-address-btn" class="btn btn-secondary btn-lg" type="button">Neue Adresse</button>
-        </div>
-
-        <div class="mp-addr-status">
-          <div id="check-loader" class="mp-scan-dots d-none" aria-hidden="true"><span></span><span></span><span></span></div>
-          <p id="check-status" class="mp-check-status">Bereit &ndash; noch keine E-Mail für diese Adresse geprüft.</p>
-        </div>
-
-        <dl class="mp-addr-meta">
-          <div class="mp-meta-tile">
-            <dt>Ablauf</dt>
-            <dd id="mail-expires-at" data-time="{{.Mailbox.ExpiresAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.Mailbox.ExpiresAt.Format "02.01.2006, 15:04 MST"}}</dd>
+        <!-- Address card -->
+        <div class="card shadow mb-4"
+             id="check-panel"
+             data-token="{{.Mailbox.Token}}"
+             data-public-url="{{.PublicURL}}">
+          <div class="card-header d-flex align-items-center justify-content-between py-3">
+            <span class="fw-semibold">
+              <i class="bi bi-envelope-at me-1 text-primary"></i>Temporäre Empfängeradresse
+            </span>
+            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyAddress()">
+              <i class="bi bi-clipboard me-1"></i>Kopieren
+            </button>
           </div>
-          <div class="mp-meta-tile">
-            <dt>Direktlink</dt>
-            <dd><a id="mailbox-direct-link" href="{{.PublicURL}}/mailbox/{{.Mailbox.Token}}">{{.PublicURL}}/mailbox/{{.Mailbox.Token}}</a></dd>
+          <div class="card-body px-4 pt-4 pb-3">
+
+            <div class="bg-body-secondary rounded-2 px-4 py-3 mb-4 text-center border">
+              <code class="mp-addr-text fs-6" id="mail-address">{{.Mailbox.Address}}</code>
+            </div>
+
+            <div class="d-flex gap-2 justify-content-center mb-3">
+              <button id="check-btn" class="btn btn-primary px-4" type="button">
+                <i class="bi bi-play-fill me-1"></i>Check starten
+              </button>
+              <button id="new-address-btn" class="btn btn-secondary px-4" type="button">
+                <i class="bi bi-arrow-clockwise me-1"></i>Neue Adresse
+              </button>
+            </div>
+
+            <div class="text-center">
+              <div id="check-loader" class="mp-scan-dots d-none justify-content-center mb-1" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+              <p id="check-status" class="mb-0">Bereit &ndash; noch keine E-Mail für diese Adresse geprüft.</p>
+            </div>
+
           </div>
-        </dl>
+          <div class="card-footer">
+            <dl class="row mb-0 small">
+              <dt class="col-sm-2 text-secondary">Ablauf</dt>
+              <dd class="col-sm-10 mb-1 mb-sm-0"
+                  id="mail-expires-at"
+                  data-time="{{.Mailbox.ExpiresAt.Format "2006-01-02T15:04:05Z07:00"}}">
+                {{.Mailbox.ExpiresAt.Format "02.01.2006, 15:04 MST"}}
+              </dd>
+              <dt class="col-sm-2 text-secondary">Link</dt>
+              <dd class="col-sm-10 mb-0">
+                <a id="mailbox-direct-link"
+                   href="{{.PublicURL}}/mailbox/{{.Mailbox.Token}}"
+                   class="text-break">
+                  {{.PublicURL}}/mailbox/{{.Mailbox.Token}}
+                </a>
+              </dd>
+            </dl>
+          </div>
+        </div>
+
+        <!-- Feature info-boxes -->
+        <div class="row g-3 pb-5">
+          <div class="col-6 col-md-3">
+            <div class="info-box border shadow-none mb-0">
+              <span class="info-box-icon text-bg-success rounded-start-2">
+                <i class="bi bi-shield-check fs-4"></i>
+              </span>
+              <div class="info-box-content">
+                <span class="info-box-text">Authentifizierung</span>
+                <span class="info-box-number" style="font-size:.75rem">SPF · DKIM · DMARC</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="info-box border shadow-none mb-0">
+              <span class="info-box-icon text-bg-info rounded-start-2">
+                <i class="bi bi-hdd-network fs-4"></i>
+              </span>
+              <div class="info-box-content">
+                <span class="info-box-text">Infrastruktur</span>
+                <span class="info-box-number" style="font-size:.75rem">PTR · HELO · MX · TLS</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="info-box border shadow-none mb-0">
+              <span class="info-box-icon text-bg-warning rounded-start-2">
+                <i class="bi bi-file-earmark-text fs-4"></i>
+              </span>
+              <div class="info-box-content">
+                <span class="info-box-text">Content</span>
+                <span class="info-box-number" style="font-size:.75rem">MIME · Links · Spam</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="info-box border shadow-none mb-0">
+              <span class="info-box-icon text-bg-secondary rounded-start-2">
+                <i class="bi bi-code-slash fs-4"></i>
+              </span>
+              <div class="info-box-content">
+                <span class="info-box-text">Rohdaten</span>
+                <span class="info-box-number" style="font-size:.75rem">Header · Source · JSON</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
       </div>
     </div>
-
-    <div class="mp-feats" aria-label="Prüfbereiche">
-      <div class="mp-feat">
-        <div class="mp-feat-icon ok">✓</div>
-        <h3>Authentifizierung</h3>
-        <p>SPF, DKIM, DMARC &amp; Alignment.</p>
-      </div>
-      <div class="mp-feat">
-        <div class="mp-feat-icon info">⬡</div>
-        <h3>Infrastruktur</h3>
-        <p>PTR, HELO, MX &amp; TLS.</p>
-      </div>
-      <div class="mp-feat">
-        <div class="mp-feat-icon warn">!</div>
-        <h3>Content</h3>
-        <p>MIME, Links &amp; Spam-Score.</p>
-      </div>
-      <div class="mp-feat">
-        <div class="mp-feat-icon neu">{ }</div>
-        <h3>Rohdaten</h3>
-        <p>Header, Source &amp; JSON.</p>
-      </div>
-    </div>
-
   </main>
 
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.10.0/browser/es5/overlayscrollbars.browser.es5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0/dist/js/adminlte.min.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
