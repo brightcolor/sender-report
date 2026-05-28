@@ -608,6 +608,91 @@ body,
   white-space: nowrap;
 }
 
+/* ── Cookie consent banner ──────────────────────────────────────────────── */
+.mp-consent-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1080;
+  background: var(--bs-body-bg);
+  border-top: 1px solid var(--bs-border-color);
+  box-shadow: 0 -4px 20px rgba(0,0,0,.08);
+  padding: .875rem 1rem;
+  animation: mp-consent-in .25s ease;
+}
+@keyframes mp-consent-in {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.mp-consent-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* ── Page footer ────────────────────────────────────────────────────────── */
+.mp-page-footer {
+  text-align: center;
+  padding: 1.25rem 1rem 2rem;
+  font-size: .75rem;
+  color: var(--bs-secondary-color);
+  opacity: .7;
+}
+.mp-page-footer a:hover { opacity: 1; }
+
+/* ── Previous mailboxes (home page) ─────────────────────────────────────── */
+.mp-prev-mb-item {
+  background: var(--bs-body-bg);
+  transition: background .12s;
+}
+.mp-prev-mb-item:hover {
+  background: var(--bs-secondary-bg);
+}
+.mp-prev-mb-addr {
+  font-size: .8125rem;
+  font-weight: 600;
+  background: none;
+  color: var(--bs-body-color);
+  font-family: 'Cascadia Code', 'JetBrains Mono', ui-monospace, Consolas, monospace;
+}
+
+/* ── Privacy page body ──────────────────────────────────────────────────── */
+.mp-privacy-body h2 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: .75rem;
+  padding-bottom: .4rem;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+.mp-privacy-body h2:first-child { margin-top: 0; }
+.mp-privacy-body h3 {
+  font-size: .9375rem;
+  font-weight: 700;
+  margin-top: 1.25rem;
+  margin-bottom: .5rem;
+  color: var(--bs-secondary-color);
+}
+.mp-privacy-body p,
+.mp-privacy-body li {
+  font-size: .9375rem;
+  line-height: 1.7;
+}
+.mp-privacy-body ul { padding-left: 1.25rem; }
+.mp-privacy-table {
+  font-size: .8125rem;
+}
+.mp-privacy-table th {
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .mp-chk-inner .mp-pill,
@@ -617,6 +702,7 @@ body,
   }
   .mp-live-meta { display: none; }
   .mp-report-side { position: static; }
+  .mp-consent-inner { flex-direction: column; gap: .75rem; }
 }
 @media (max-width: 576px) {
   .mp-addr-box { flex-wrap: wrap; }

@@ -29,6 +29,9 @@
         <li class="nav-item d-none d-md-block">
           <span class="badge text-bg-primary">{{.Domain}}</span>
         </li>
+        <li class="nav-item d-none d-sm-block">
+          <a class="nav-link text-secondary small py-0" href="/privacy">Datenschutz</a>
+        </li>
         <li class="nav-item">
           <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
             <span class="theme-icon">AUTO</span>
@@ -113,6 +116,14 @@
           </div>
         </div>
 
+        <!-- Previous mailboxes (shown by JS when localStorage has entries) -->
+        <div id="prev-mailboxes-section" class="d-none mb-4">
+          <h6 class="text-secondary small fw-semibold text-uppercase mb-2" style="letter-spacing:.05em">
+            <i class="bi bi-clock-history me-1"></i>Frühere Testadressen
+          </h6>
+          <div id="prev-mailboxes-list" class="d-flex flex-column gap-2"></div>
+        </div>
+
         <!-- Feature info-boxes -->
         <div class="row g-3 pb-5">
           <div class="col-6 col-md-3">
@@ -164,6 +175,9 @@
       </div>
     </div>
   </main>
+
+  {{template "consent-banner" .}}
+  {{template "page-footer" .}}
 
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>

@@ -1,0 +1,35 @@
+{{/* ── Shared partials – included in every page template ──────────────────── */}}
+
+{{define "consent-banner"}}
+<div id="mp-consent-banner" class="mp-consent-banner d-none"
+     role="alertdialog" aria-label="Einwilligung zur lokalen Datenspeicherung">
+  <div class="mp-consent-inner">
+    <i class="bi bi-database-lock text-primary flex-shrink-0" style="font-size:1.25rem"></i>
+    <div class="flex-grow-1 min-w-0">
+      <strong class="d-block mb-1" style="font-size:.9rem">Mailbox-Verlauf speichern?</strong>
+      <p class="mb-0 text-secondary" style="font-size:.8125rem">
+        MailProbe kann deine Testadressen-Tokens <strong>lokal im Browser</strong> speichern
+        (localStorage), damit du frühere Tests schnell wiederfindest.
+        Keine Tracking-Cookies, keine Übermittlung an Server.
+        <a href="/privacy" class="text-secondary ms-1">Datenschutz&nbsp;&rarr;</a>
+      </p>
+    </div>
+    <div class="d-flex gap-2 flex-shrink-0">
+      <button class="btn btn-sm btn-primary" type="button" onclick="consentAccept()">
+        <i class="bi bi-check2 me-1"></i>Erlauben
+      </button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" onclick="consentDecline()">
+        Ablehnen
+      </button>
+    </div>
+  </div>
+</div>
+{{end}}
+
+{{define "page-footer"}}
+<footer class="mp-page-footer">
+  <a href="/privacy" class="text-secondary text-decoration-none">Datenschutz</a>
+  <span class="text-secondary mx-2 opacity-50">&middot;</span>
+  <span class="text-secondary">{{appVersion}}</span>
+</footer>
+{{end}}

@@ -31,6 +31,9 @@
             <span class="theme-icon">AUTO</span>
           </button>
         </li>
+        <li class="nav-item d-none d-sm-block">
+          <a class="nav-link text-secondary small py-0" href="/privacy">Datenschutz</a>
+        </li>
         <li class="nav-item d-none d-md-block">
           <a class="btn btn-outline-secondary btn-sm" href="/mailbox/{{.Mailbox.Token}}">
             <i class="bi bi-inbox me-1"></i>Mailbox
@@ -570,6 +573,9 @@
       </div>
     </div>
   </main>
+
+  {{template "consent-banner" .}}
+  {{template "page-footer" .}}
 
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>

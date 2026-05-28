@@ -33,6 +33,7 @@ import (
 	"github.com/brightcolor/mailprobev2/internal/ratelimit"
 	"github.com/brightcolor/mailprobev2/internal/store"
 	"github.com/brightcolor/mailprobev2/internal/telemetry"
+	"github.com/brightcolor/mailprobev2/internal/version"
 	htmlcharset "golang.org/x/net/html/charset"
 )
 
@@ -56,6 +57,10 @@ type HomeData struct {
 	Domain    string
 	Mailbox   model.Mailbox
 	PublicURL string
+}
+
+type PrivacyData struct {
+	AppName string
 }
 
 type MailboxData struct {
@@ -193,6 +198,7 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"rspamdMeta":          rspamdMetaFn,
 		"rspamdActionClass":   rspamdActionClass,
 		"rspamdScorePercent":  rspamdScorePercent,
+		"appVersion":          func() string { return version.Version },
 	}).ParseGlob(filepath.Join("internal", "web", "templates", "*.html"))
 	if err != nil {
 		return nil, err
@@ -218,6 +224,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/static/", s.staticFS)
 	mux.HandleFunc("/", s.home)
+	mux.HandleFunc("/privacy", s.privacyPage)
 	mux.HandleFunc("/healthz", s.health)
 	mux.HandleFunc("/readyz", s.ready)
 	mux.HandleFunc("/metrics", s.metricsPage)
@@ -546,6 +553,14 @@ func (s *Server) rawPage(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (s *Server) privacyPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.render(w, "privacy", PrivacyData{AppName: s.cfg.AppName})
 }
 
 func (s *Server) reportAPI(w http.ResponseWriter, r *http.Request) {

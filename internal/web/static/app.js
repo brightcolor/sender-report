@@ -130,6 +130,7 @@ async function createNewAddress() {
   try {
     const data = await createMailbox();
     updateMailboxIdentity(data);
+    saveMbToHistory(data.token);        // track new token if consented
     setCheckUIState(false, 'Neue Testadresse bereit.', 'ok');
     setupMailboxPolling();
   } catch (_) {
@@ -416,6 +417,103 @@ function colorScoreMinis() {
   });
 }
 
+// ── Cookie consent & mailbox history ─────────────────────────────────────────
+
+function getConsentState() {
+  try { return localStorage.getItem('mailprobe:consent'); } catch (_) { return null; }
+}
+
+function saveMbToHistory(token) {
+  if (!token || getConsentState() !== 'granted') return;
+  try {
+    const stored = JSON.parse(localStorage.getItem('mailprobe:mailboxes') || '[]');
+    const updated = [token, ...stored.filter((t) => t !== token)].slice(0, 12);
+    localStorage.setItem('mailprobe:mailboxes', JSON.stringify(updated));
+  } catch (_) {}
+}
+
+function removeFromHistory(token) {
+  try {
+    const stored = JSON.parse(localStorage.getItem('mailprobe:mailboxes') || '[]');
+    localStorage.setItem('mailprobe:mailboxes', JSON.stringify(stored.filter((t) => t !== token)));
+  } catch (_) {}
+}
+
+function scoreClass(score) {
+  if (score >= 7.5) return 'score-pass';
+  if (score >= 5.5) return 'score-warn';
+  return 'score-fail';
+}
+
+async function loadPreviousMailboxes() {
+  if (getConsentState() !== 'granted') return;
+  const section = document.getElementById('prev-mailboxes-section');
+  const list    = document.getElementById('prev-mailboxes-list');
+  if (!section || !list) return;
+
+  const currentToken = document.getElementById('check-panel')?.dataset?.token || '';
+  let stored = [];
+  try { stored = JSON.parse(localStorage.getItem('mailprobe:mailboxes') || '[]'); } catch (_) {}
+  const others = stored.filter((t) => t !== currentToken);
+  if (others.length === 0) return;
+
+  const results = await Promise.allSettled(others.map((t) => fetchMailboxStatus(t)));
+  const items   = [];
+  results.forEach((res, i) => {
+    if (res.status === 'fulfilled') {
+      items.push({ token: others[i], data: res.value });
+    } else {
+      removeFromHistory(others[i]); // stale / deleted mailbox
+    }
+  });
+
+  if (items.length === 0) return;
+  section.classList.remove('d-none');
+
+  list.innerHTML = items.map(({ token, data }) => {
+    const expired   = data.expires_at && new Date(data.expires_at) < new Date();
+    const scoreHtml = data.latest_score != null
+      ? `<span class="mp-score-mini ${scoreClass(data.latest_score)}">` +
+        `<strong>${Number(data.latest_score).toFixed(1)}</strong><span>/10</span></span>`
+      : '';
+    const reportBtn = data.latest_report_path
+      ? `<a href="${data.latest_report_path}" class="btn btn-sm btn-primary py-0 px-2">Report</a>`
+      : '';
+    return `<div class="d-flex align-items-center gap-2 py-2 px-3 rounded border mp-prev-mb-item${expired ? ' opacity-50' : ''}">
+      <i class="bi bi-envelope-at text-secondary flex-shrink-0"></i>
+      <code class="flex-grow-1 text-truncate mp-prev-mb-addr">${data.mailbox || token}</code>
+      ${scoreHtml}
+      ${reportBtn}
+      <a href="/mailbox/${token}" class="btn btn-sm btn-outline-secondary py-0 px-2">Öffnen</a>
+    </div>`;
+  }).join('');
+}
+
+function setupCookieConsent() {
+  if (getConsentState() === null) {
+    // Show banner after a short delay so it doesn't flash on first paint
+    setTimeout(() => document.getElementById('mp-consent-banner')?.classList.remove('d-none'), 800);
+  } else if (getConsentState() === 'granted') {
+    const token = document.getElementById('check-panel')?.dataset?.token;
+    if (token) saveMbToHistory(token);
+    loadPreviousMailboxes();
+  }
+}
+
+// Called from HTML onclick – must be global
+function consentAccept() {
+  try { localStorage.setItem('mailprobe:consent', 'granted'); } catch (_) {}
+  document.getElementById('mp-consent-banner')?.classList.add('d-none');
+  const token = document.getElementById('check-panel')?.dataset?.token;
+  if (token) saveMbToHistory(token);
+  loadPreviousMailboxes();
+}
+
+function consentDecline() {
+  try { localStorage.setItem('mailprobe:consent', 'declined'); } catch (_) {}
+  document.getElementById('mp-consent-banner')?.classList.add('d-none');
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 setupThemeToggle();
@@ -425,5 +523,6 @@ setupCopyButtons();
 localizeStaticTimes();
 setupMailboxPolling();
 setupCheckFilter();
+setupCookieConsent();
 colorScoreDeltas();
 colorScoreMinis();

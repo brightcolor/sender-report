@@ -1,0 +1,372 @@
+{{define "privacy"}}
+<!doctype html>
+<html lang="de" data-bs-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Datenschutzerklärung für {{.AppName}}" />
+  <title>Datenschutz – {{.AppName}}</title>
+  <script>(function(){try{var p=localStorage.getItem('mailprobe-theme')||'auto';var d=p==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.bsTheme=d;document.documentElement.dataset.themePreference=p;}catch(e){document.documentElement.dataset.bsTheme='light';}})()</script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.10.0/styles/overlayscrollbars.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0/dist/css/adminlte.min.css">
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body class="layout-fixed">
+<div class="app-wrapper">
+
+  <!-- ── Navbar ─────────────────────────────────────────────────────────── -->
+  <nav class="app-header navbar navbar-expand bg-body shadow-sm">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+        <span class="mp-brand-mark">MP</span>{{.AppName}}
+      </a>
+      <span class="navbar-text d-none d-lg-block text-secondary small ms-3">
+        Datenschutzerklärung
+      </span>
+      <ul class="navbar-nav ms-auto align-items-center gap-2">
+        <li class="nav-item">
+          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
+            <span class="theme-icon">AUTO</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <a class="btn btn-primary btn-sm" href="/">
+            <i class="bi bi-arrow-left me-1"></i>Zurück
+          </a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ── Main ───────────────────────────────────────────────────────────── -->
+  <main class="app-main">
+    <div class="app-content pt-4 pb-5">
+      <div class="container" style="max-width:820px">
+
+        <div class="card shadow-sm mb-4">
+          <div class="card-header">
+            <h1 class="card-title h4 mb-0">
+              <i class="bi bi-shield-lock me-2 text-primary"></i>Datenschutzerklärung
+            </h1>
+          </div>
+          <div class="card-body mp-privacy-body">
+
+            <div class="alert alert-info d-flex gap-2 mb-4" role="note">
+              <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
+              <div>
+                <strong>Selbst-gehostete Software.</strong>
+                {{.AppName}} ist eine selbst-gehostete Open-Source-Anwendung.
+                Verantwortlich für den Betrieb dieser Instanz ist die Person oder Organisation,
+                die diese Software auf ihrem eigenen Server betreibt
+                (<strong>der Betreiber</strong>).
+                Die Kontaktdaten des Betreibers sind diesem nicht automatisch bekannt –
+                bitte wende dich an die Person, die dir diesen Link mitgeteilt hat.
+              </div>
+            </div>
+
+            <!-- 1 -->
+            <h2>1. Wer ist verantwortlich?</h2>
+            <p>
+              Verantwortliche Stelle im Sinne der DSGVO ist der Betreiber dieser
+              {{.AppName}}-Instanz. Da es sich um selbst-gehostete Software handelt,
+              ist der jeweilige Serverbetreiber der datenschutzrechtlich Verantwortliche –
+              nicht der Entwickler der Software.
+            </p>
+            <p>
+              Die Kontaktdaten des Betreibers müssen hier vom Betreiber selbst ergänzt werden,
+              sofern diese Instanz öffentlich oder für mehrere Personen zugänglich ist.
+            </p>
+
+            <!-- 2 -->
+            <h2>2. Welche Daten werden verarbeitet?</h2>
+
+            <h3>2.1 E-Mail-Daten (SMTP)</h3>
+            <p>
+              Wenn du eine E-Mail an eine temporäre {{.AppName}}-Adresse sendest, empfängt
+              der Server folgende Daten über die SMTP-Verbindung:
+            </p>
+            <ul>
+              <li><strong>IP-Adresse des sendenden Servers</strong> (technisch notwendig für SMTP)</li>
+              <li><strong>HELO/EHLO-Hostname</strong> des sendenden Servers</li>
+              <li><strong>Envelope-From</strong> (Rücksende- bzw. Bounce-Adresse)</li>
+              <li><strong>RCPT-To</strong> (Empfängeradresse, die temporäre Testadresse)</li>
+              <li><strong>Vollständiger E-Mail-Inhalt</strong>: alle Header (inkl. From, Subject,
+                Date, Message-ID, Authentication-Results usw.) sowie der Body (Text- und
+                HTML-Anteil, Anhänge)</li>
+            </ul>
+            <p>
+              Diese Daten werden ausschließlich für die Zustellbarkeitsanalyse verwendet und
+              anschließend automatisch nach Ablauf der konfigurierten Aufbewahrungsfristen gelöscht.
+            </p>
+
+            <h3>2.2 Technische Analysen</h3>
+            <p>
+              Zur Analyse einer empfangenen E-Mail führt {{.AppName}} folgende Aktivitäten durch:
+            </p>
+            <ul>
+              <li><strong>DNS-Lookups</strong>: SPF-Records, DKIM-Schlüssel, DMARC-Records,
+                PTR/rDNS, MX- und A/AAAA-Records werden über den konfigurierten DNS-Resolver
+                abgefragt. Die IP-Adresse des sendenden Servers wird dabei an DNS-Server
+                übermittelt.</li>
+              <li><strong>DNSBL/RBL-Prüfungen</strong> (optional, konfigurierbar): Die sendende
+                IP-Adresse wird gegen konfigurierte DNS-Blocklisten geprüft. Dabei wird eine
+                DNS-Anfrage an den jeweiligen DNSBL-Betreiber gestellt.</li>
+              <li><strong>SpamAssassin</strong> (optional, konfigurierbar): Falls konfiguriert,
+                wird der E-Mail-Inhalt an einen lokal oder im gleichen Netzwerk laufenden
+                SpamAssassin-Dienst übermittelt.</li>
+              <li><strong>Rspamd</strong> (optional, konfigurierbar): Falls konfiguriert, wird
+                der E-Mail-Inhalt an einen lokal oder im gleichen Netzwerk laufenden
+                Rspamd-Dienst übermittelt.</li>
+            </ul>
+
+            <h3>2.3 HTTP-Anfragen und Server-Logs</h3>
+            <p>
+              Beim Aufruf der Weboberfläche werden technisch notwendige Verbindungsdaten
+              verarbeitet:
+            </p>
+            <ul>
+              <li>IP-Adresse des Browsers (oder des vorgelagerten Proxy-Servers)</li>
+              <li>Zeitstempel der Anfrage</li>
+              <li>Aufgerufene URL, HTTP-Methode, HTTP-Statuscode</li>
+              <li>User-Agent (Browserkennung)</li>
+            </ul>
+            <p>
+              Diese Daten werden nur im Arbeitsspeicher des Prozesses vorgehalten und
+              in der Standardkonfiguration <strong>nicht persistent</strong> in Dateien
+              gespeichert. Ob und wie lange der Betreiber Logs aufbewahrt, liegt in dessen
+              Verantwortung.
+            </p>
+
+            <h3>2.4 Browser-Speicher (Cookies und localStorage)</h3>
+            <p>
+              {{.AppName}} nutzt folgende Mechanismen im Browser:
+            </p>
+
+            <div class="table-responsive mb-3">
+              <table class="table table-bordered table-sm mp-privacy-table">
+                <thead class="table-light">
+                  <tr>
+                    <th>Name</th>
+                    <th>Art</th>
+                    <th>Zweck</th>
+                    <th>Ablauf</th>
+                    <th>Einwilligung</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>mailprobe_mailbox</code></td>
+                    <td>HTTP-Cookie<br><small class="text-secondary">HttpOnly, SameSite=Lax</small></td>
+                    <td>Speichert den Token der aktuell aktiven Mailbox, damit sie beim Seitenaufruf wiedererkannt wird. Nicht durch JavaScript auslesbar.</td>
+                    <td>Läuft mit der Mailbox ab (Standard: 24 Stunden)</td>
+                    <td><span class="badge text-bg-secondary">Nicht erforderlich</span><br><small class="text-secondary">technisch notwendig</small></td>
+                  </tr>
+                  <tr>
+                    <td><code>mailprobe-theme</code></td>
+                    <td>localStorage</td>
+                    <td>Speichert die Farbschema-Einstellung (hell/dunkel/auto) für die Benutzeroberfläche.</td>
+                    <td>Unbegrenzt (bis manuelle Löschung)</td>
+                    <td><span class="badge text-bg-secondary">Nicht erforderlich</span><br><small class="text-secondary">funktional/Komfort</small></td>
+                  </tr>
+                  <tr>
+                    <td><code>mailprobe:consent</code></td>
+                    <td>localStorage</td>
+                    <td>Speichert deine Einwilligungsentscheidung bezüglich des Mailbox-Verlaufs (<code>granted</code> oder <code>declined</code>).</td>
+                    <td>Unbegrenzt (bis manuelle Löschung)</td>
+                    <td><span class="badge text-bg-secondary">Nicht erforderlich</span><br><small class="text-secondary">technisch notwendig für Einwilligungsspeicherung</small></td>
+                  </tr>
+                  <tr>
+                    <td><code>mailprobe:mailboxes</code></td>
+                    <td>localStorage</td>
+                    <td>Speichert eine Liste der zuletzt genutzten Mailbox-Tokens, damit frühere Testadressen auf der Startseite angezeigt werden können.</td>
+                    <td>Unbegrenzt (bis manuelle Löschung), max. 12 Einträge</td>
+                    <td><span class="badge text-bg-success">Einwilligung erforderlich</span><br><small class="text-secondary">wird nur mit Zustimmung gesetzt</small></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Du kannst deine Einwilligung zum Mailbox-Verlauf jederzeit widerrufen, indem du
+              den localStorage-Eintrag <code>mailprobe:consent</code> im Browser löschst
+              (Browser-Einstellungen → Datenschutz &amp; Sicherheit → Website-Daten löschen).
+              Beim nächsten Seitenaufruf erscheint die Einwilligungsabfrage erneut.
+            </p>
+
+            <h3>2.5 Externe Ressourcen (CDN)</h3>
+            <p>
+              Die Weboberfläche lädt CSS- und JavaScript-Bibliotheken von einem externen
+              Content Delivery Network:
+            </p>
+            <ul>
+              <li><strong>jsDelivr</strong> (<code>cdn.jsdelivr.net</code>): Bootstrap 5, Bootstrap Icons,
+                OverlayScrollbars, AdminLTE 4. Anbieter: Prospect One Sp. z o.o.,
+                ul. Krolowej Jadwigi 220, 30-212 Krakau, Polen.
+                Beim Laden dieser Ressourcen wird die IP-Adresse des Browsers an jsDelivr übermittelt.
+                Datenschutzerklärung: <a href="https://www.jsdelivr.com/privacy-policy-jsdelivr-net" target="_blank" rel="noopener noreferrer">jsdelivr.com/privacy-policy-jsdelivr-net</a>
+              </li>
+            </ul>
+            <p>
+              Betreiber, die externe CDN-Verbindungen vollständig vermeiden möchten,
+              können die Bibliotheken selbst hosten und die Templates entsprechend anpassen.
+            </p>
+
+            <!-- 3 -->
+            <h2>3. Zweck und Rechtsgrundlage der Verarbeitung</h2>
+            <table class="table table-bordered table-sm mp-privacy-table mb-3">
+              <thead class="table-light">
+                <tr><th>Verarbeitungszweck</th><th>Rechtsgrundlage (DSGVO)</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Empfang und Analyse von E-Mails auf technische Zustellbarkeit</td>
+                  <td>Art. 6 Abs. 1 lit. b – Erfüllung der Nutzung des Dienstes</td>
+                </tr>
+                <tr>
+                  <td>DNS-Lookups, DNSBL-Prüfungen im Rahmen der Analyse</td>
+                  <td>Art. 6 Abs. 1 lit. b – für die Kernfunktion technisch notwendig</td>
+                </tr>
+                <tr>
+                  <td>HTTP-Server-Logs (IP, Zeitstempel, Pfad)</td>
+                  <td>Art. 6 Abs. 1 lit. f – berechtigtes Interesse an Betrieb und Fehlerdiagnose</td>
+                </tr>
+                <tr>
+                  <td>Mailbox-Verlauf im Browser (localStorage)</td>
+                  <td>Art. 6 Abs. 1 lit. a – Einwilligung (nur nach Zustimmung)</td>
+                </tr>
+                <tr>
+                  <td>Farbschema-Präferenz (localStorage)</td>
+                  <td>Art. 6 Abs. 1 lit. f – berechtigtes Interesse an Benutzerkomfort</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- 4 -->
+            <h2>4. Speicherdauer und automatische Löschung</h2>
+            <p>
+              E-Mail-Daten werden temporär gespeichert und automatisch gelöscht:
+            </p>
+            <ul>
+              <li><strong>Mailbox-TTL</strong> (Standard: 24 Stunden): Nach Ablauf dieser Zeit
+                wird die Mailbox als abgelaufen markiert.</li>
+              <li><strong>Datenaufbewahrung</strong> (Standard: 7 Tage): E-Mails, Analyseberichte
+                und Mailbox-Daten werden spätestens nach dieser Frist automatisch aus der
+                Datenbank gelöscht. Der Betreiber kann diese Werte konfigurieren.</li>
+              <li><strong>HTTP-Logs</strong>: Werden nur im Arbeitsspeicher gehalten und
+                gehen beim Neustart des Prozesses verloren (Standardkonfiguration).</li>
+            </ul>
+            <p>
+              Der Betreiber kann diese Fristen über Umgebungsvariablen (<code>MAILBOX_TTL</code>,
+              <code>DATA_RETENTION_TTL</code>) konfigurieren. Informationen zu den tatsächlich
+              konfigurierten Fristen erhältst du beim Betreiber.
+            </p>
+
+            <!-- 5 -->
+            <h2>5. Weitergabe an Dritte</h2>
+            <p>
+              E-Mail-Inhalte werden in der Standardkonfiguration <strong>nicht an Dritte
+              weitergegeben</strong>. Folgende optionale Integrationen können aktiviert sein
+              und bedingen eine Übermittlung des E-Mail-Inhalts:
+            </p>
+            <ul>
+              <li><strong>SpamAssassin</strong> (optional): Lokaler Dienst; E-Mail-Inhalt wird
+                an den lokal oder im privaten Netzwerk laufenden spamd-Prozess übermittelt.</li>
+              <li><strong>Rspamd</strong> (optional): Lokaler Dienst; E-Mail-Inhalt wird an
+                den lokal oder im privaten Netzwerk laufenden Rspamd-Controller übermittelt.</li>
+              <li><strong>DNSBL-Betreiber</strong>: Bei aktivierten RBL-Prüfungen wird die
+                sendende IP-Adresse als DNS-Anfrage an den jeweiligen DNSBL-Betreiber übermittelt
+                (z.&nbsp;B. Spamhaus, SpamCop, Barracuda).</li>
+              <li><strong>jsDelivr CDN</strong>: Beim Laden der Seite wird deine IP-Adresse an
+                cdn.jsdelivr.net übermittelt (siehe Abschnitt 2.5).</li>
+            </ul>
+            <p>
+              Eine Weitergabe von E-Mail-Inhalten an kommerzielle Dritte, Tracking-Dienste
+              oder Werbetreibende findet nicht statt.
+            </p>
+
+            <!-- 6 -->
+            <h2>6. Deine Rechte (DSGVO)</h2>
+            <p>
+              Als betroffene Person hast du gegenüber dem <strong>Betreiber</strong> dieser
+              Instanz folgende Rechte:
+            </p>
+            <ul>
+              <li><strong>Auskunft</strong> (Art. 15 DSGVO): Du kannst Auskunft über die
+                zu deiner Person gespeicherten Daten verlangen.</li>
+              <li><strong>Berichtigung</strong> (Art. 16 DSGVO): Du kannst die Berichtigung
+                unrichtiger Daten verlangen.</li>
+              <li><strong>Löschung</strong> (Art. 17 DSGVO): Du kannst die Löschung deiner
+                Daten verlangen, soweit keine gesetzlichen Aufbewahrungspflichten entgegenstehen.
+                E-Mail-Daten werden automatisch nach Ablauf der konfigurierten Frist gelöscht.</li>
+              <li><strong>Einschränkung der Verarbeitung</strong> (Art. 18 DSGVO)</li>
+              <li><strong>Datenübertragbarkeit</strong> (Art. 20 DSGVO): Analysedaten sind
+                über die JSON-Export-Funktion im Report verfügbar.</li>
+              <li><strong>Widerspruch</strong> (Art. 21 DSGVO)</li>
+              <li><strong>Widerruf der Einwilligung</strong> (Art. 7 Abs. 3 DSGVO): Die
+                Einwilligung zum Mailbox-Verlauf kannst du jederzeit widerrufen (siehe
+                Abschnitt 2.4).</li>
+            </ul>
+            <p>
+              Zur Geltendmachung dieser Rechte wende dich bitte an den Betreiber dieser Instanz.
+            </p>
+
+            <!-- 7 -->
+            <h2>7. Beschwerderecht</h2>
+            <p>
+              Du hast das Recht, dich bei einer Datenschutz-Aufsichtsbehörde zu beschweren,
+              wenn du der Meinung bist, dass die Verarbeitung deiner Daten gegen die DSGVO
+              verstößt. Die zuständige Behörde richtet sich nach dem Sitz des Betreibers.
+            </p>
+            <p>
+              Eine Übersicht der Aufsichtsbehörden in der EU findest du auf der Website des
+              <a href="https://www.edpb.europa.eu/about-edpb/about-edpb/members_de" target="_blank" rel="noopener noreferrer">Europäischen Datenschutzausschusses (EDPB)</a>.
+            </p>
+
+            <!-- 8 -->
+            <h2>8. Hinweise für Betreiber</h2>
+            <div class="alert alert-warning d-flex gap-2" role="note">
+              <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+              <div>
+                <strong>Diese Datenschutzerklärung ist eine Vorlage.</strong>
+                Als Betreiber dieser Instanz bist du verpflichtet, diese Seite mit deinen
+                konkreten Kontaktdaten, der tatsächlichen Konfiguration (Aufbewahrungsfristen,
+                aktivierte Integrationen) sowie dem Sitz und den Rechtsgrundlagen deiner
+                Organisation zu ergänzen. Hole ggf. rechtliche Beratung ein, bevor du diesen
+                Dienst für andere Personen bereitstellst.
+              </div>
+            </div>
+
+            <!-- 9 -->
+            <h2>9. Änderungen dieser Erklärung</h2>
+            <p>
+              Diese Datenschutzerklärung kann vom Betreiber jederzeit aktualisiert werden.
+              Die aktuelle Version ist immer unter <a href="/privacy">/privacy</a> abrufbar.
+            </p>
+
+            <hr class="my-4">
+            <p class="text-secondary small mb-0">
+              {{.AppName}} &middot; {{appVersion}} &middot;
+              Open-Source-Software &middot;
+              <a href="https://github.com/brightcolor/mailprobev2" target="_blank" rel="noopener noreferrer" class="text-secondary">Quellcode auf GitHub</a>
+            </p>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  {{template "consent-banner" .}}
+  {{template "page-footer" .}}
+
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.10.0/browser/es5/overlayscrollbars.browser.es5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0/dist/js/adminlte.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
+{{end}}
