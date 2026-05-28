@@ -4,4 +4,4 @@ package version
 // Override at build time with:
 //
 //	go build -ldflags "-X github.com/brightcolor/mailprobev2/internal/version.Version=v1.2.3" ./...
-var Version = "v0.2.1"
+var Version = "v0.3.0"

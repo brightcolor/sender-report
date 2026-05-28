@@ -37,174 +37,204 @@
 
   <!-- ── Main ───────────────────────────────────────────────────────────── -->
   <main class="app-main">
-    <div class="app-content pt-4">
-      <div class="container" style="max-width:800px">
 
-        <!-- Hero -->
+    <!-- ══ Hero-Section ══════════════════════════════════════════════════ -->
+    <section class="mp-hero-section">
+      <div class="container-xl px-4">
+        <div class="row align-items-center g-5 py-5">
+
+          <!-- Left: pitch -->
+          <div class="col-lg-5 col-xl-5">
+            <span class="mp-hero-badge mb-4 d-inline-flex">
+              <span class="hdot"></span>Self-hosted &middot; Open Source
+            </span>
+            <h1 class="mp-hero-h1 mb-4">
+              Deine Mail.<br>Dein Check.<br>Sofort.
+            </h1>
+            <p class="text-secondary mb-5" style="font-size:1.05rem; line-height:1.7">
+              Schick eine Testmail — MailProbe analysiert in Sekunden,
+              warum deine Mails im Spam landen oder nicht ankommen.
+              Kein Account, kein Tracking.
+            </p>
+
+            <!-- Steps -->
+            <ol class="mp-steps mb-0">
+              <li>
+                <span class="mp-step-num">1</span>
+                <div>
+                  <strong>Adresse kopieren</strong>
+                  <span class="text-secondary d-block" style="font-size:.85rem">Temporäre Mailbox wird automatisch erzeugt</span>
+                </div>
+              </li>
+              <li>
+                <span class="mp-step-num">2</span>
+                <div>
+                  <strong>Testmail senden</strong>
+                  <span class="text-secondary d-block" style="font-size:.85rem">Mit deinem eigenen Mailserver oder Client</span>
+                </div>
+              </li>
+              <li>
+                <span class="mp-step-num">3</span>
+                <div>
+                  <strong>Report öffnen</strong>
+                  <span class="text-secondary d-block" style="font-size:.85rem">SPF, DKIM, DMARC, Score & mehr auf einen Blick</span>
+                </div>
+              </li>
+            </ol>
+          </div>
+
+          <!-- Right: mailbox widget -->
+          <div class="col-lg-7 col-xl-7">
+            <div class="card mp-widget-card shadow-lg"
+                 id="check-panel"
+                 data-token="{{.Mailbox.Token}}"
+                 data-public-url="{{.PublicURL}}">
+
+              <div class="card-header py-3 d-flex align-items-center gap-2">
+                <i class="bi bi-envelope-at text-primary"></i>
+                <span class="fw-semibold">Temporäre Mailbox-Adresse</span>
+                <span class="badge text-bg-success ms-auto" style="font-size:.7rem">Bereit</span>
+              </div>
+
+              <div class="card-body p-4">
+                <div class="mp-addr-box mb-4" onclick="copyAddress()" title="Klicken zum Kopieren" role="button" tabindex="0"
+                     onkeydown="if(event.key==='Enter'||event.key===' ')copyAddress()">
+                  <code class="mp-addr-text" id="mail-address">{{.Mailbox.Address}}</code>
+                  <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren</span>
+                </div>
+
+                <div class="d-flex gap-2 justify-content-center mb-4">
+                  <button id="check-btn" class="btn btn-primary px-4" type="button">
+                    <i class="bi bi-play-fill me-1"></i>Check starten
+                  </button>
+                  <button id="new-address-btn" class="btn btn-outline-secondary px-4" type="button">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Neue Mailbox
+                  </button>
+                </div>
+
+                <div class="text-center">
+                  <div id="check-loader" class="mp-scan-dots d-none justify-content-center mb-1" aria-hidden="true">
+                    <span></span><span></span><span></span>
+                  </div>
+                  <p id="check-status" class="mb-0">Bereit &ndash; noch keine E-Mail geprüft.</p>
+                </div>
+              </div>
+
+              <div class="card-footer px-4 py-3">
+                <div class="d-flex flex-wrap gap-3 small text-secondary">
+                  <span>
+                    <i class="bi bi-clock me-1"></i>
+                    Gültig bis
+                    <span id="mail-expires-at"
+                          data-time="{{.Mailbox.ExpiresAt.Format "2006-01-02T15:04:05Z07:00"}}">
+                      {{.Mailbox.ExpiresAt.Format "02.01.2006, 15:04 MST"}}
+                    </span>
+                  </span>
+                  <a id="mailbox-direct-link"
+                     href="{{.PublicURL}}/mailbox/{{.Mailbox.Token}}"
+                     class="text-secondary text-decoration-none">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>Direktlink
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ Frühere Mailboxen ══════════════════════════════════════════════ -->
+    <div id="prev-mailboxes-section" class="d-none">
+      <div class="container-xl px-4 pb-4">
+        <h6 class="text-secondary small fw-semibold text-uppercase mb-3" style="letter-spacing:.06em">
+          <i class="bi bi-clock-history me-1"></i>Frühere Mailboxen
+        </h6>
+        <div id="prev-mailboxes-list" class="d-flex flex-column gap-2"></div>
+      </div>
+    </div>
+
+    <!-- ══ Was wird geprüft ═══════════════════════════════════════════════ -->
+    <section class="mp-checks-section">
+      <div class="container-xl px-4 py-5">
+
         <div class="text-center mb-5">
-          <span class="mp-hero-badge mb-3 d-inline-flex">
-            <span class="hdot"></span>Self-hosted &middot; Open Source
-          </span>
-          <h1 class="display-5 fw-bold mb-3" style="letter-spacing:-.03em">
-            Deine E-Mail auf dem Prüfstand.
-          </h1>
-          <p class="lead text-secondary mx-auto" style="max-width:580px">
-            Schicke eine Testmail an die temporäre Mailbox-Adresse unten.
-            MailProbe analysiert sofort, ob deine Mail zuverlässig zugestellt
-            wird – ohne Account, ohne Tracking.
+          <h2 class="fw-bold mb-2" style="font-size:1.5rem">Was MailProbe prüft</h2>
+          <p class="text-secondary mb-0" style="max-width:520px;margin:auto">
+            Über 20 automatische Checks direkt nach Mail-Empfang — keine Konfiguration nötig.
           </p>
         </div>
 
-        <!-- Mailbox card -->
-        <div class="card shadow mb-4"
-             id="check-panel"
-             data-token="{{.Mailbox.Token}}"
-             data-public-url="{{.PublicURL}}">
-          <div class="card-header py-3">
-            <span class="fw-semibold">
-              <i class="bi bi-envelope-at me-1 text-primary"></i>Temporäre Mailbox-Adresse
-            </span>
-          </div>
-          <div class="card-body px-4 pt-4 pb-3">
-
-            <div class="mp-addr-box mb-4" onclick="copyAddress()" title="Klicken zum Kopieren" role="button" tabindex="0"
-                 onkeydown="if(event.key==='Enter'||event.key===' ')copyAddress()">
-              <code class="mp-addr-text" id="mail-address">{{.Mailbox.Address}}</code>
-              <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren</span>
-            </div>
-
-            <div class="d-flex gap-2 justify-content-center mb-3">
-              <button id="check-btn" class="btn btn-primary px-4" type="button">
-                <i class="bi bi-play-fill me-1"></i>Check starten
-              </button>
-              <button id="new-address-btn" class="btn btn-secondary px-4" type="button">
-                <i class="bi bi-arrow-clockwise me-1"></i>Neue Mailbox
-              </button>
-            </div>
-
-            <div class="text-center">
-              <div id="check-loader" class="mp-scan-dots d-none justify-content-center mb-1" aria-hidden="true">
-                <span></span><span></span><span></span>
+        <div class="row g-4">
+          <div class="col-12 col-sm-6 col-xl-3">
+            <div class="mp-check-tile h-100">
+              <div class="mp-check-tile-icon text-bg-success mb-3">
+                <i class="bi bi-shield-check"></i>
               </div>
-              <p id="check-status" class="mb-0">Bereit &ndash; noch keine E-Mail für diese Mailbox geprüft.</p>
+              <h6 class="fw-semibold mb-2">Authentifizierung</h6>
+              <p class="text-secondary small mb-3">
+                Der häufigste Grund für Spam-Einordnung: falsch konfigurierte Auth-Records.
+              </p>
+              <ul class="mp-feat-list">
+                <li><strong>SPF</strong> – Absender-IP im DNS erlaubt?</li>
+                <li><strong>DKIM</strong> – Signatur gültig?</li>
+                <li><strong>DMARC</strong> – Policy-Alignment korrekt?</li>
+              </ul>
             </div>
-
           </div>
-          <div class="card-footer">
-            <dl class="row mb-0 small">
-              <dt class="col-sm-2 text-secondary">Gültig bis</dt>
-              <dd class="col-sm-10 mb-1 mb-sm-0"
-                  id="mail-expires-at"
-                  data-time="{{.Mailbox.ExpiresAt.Format "2006-01-02T15:04:05Z07:00"}}">
-                {{.Mailbox.ExpiresAt.Format "02.01.2006, 15:04 MST"}}
-              </dd>
-              <dt class="col-sm-2 text-secondary">Link</dt>
-              <dd class="col-sm-10 mb-0">
-                <a id="mailbox-direct-link"
-                   href="{{.PublicURL}}/mailbox/{{.Mailbox.Token}}"
-                   class="text-break">
-                  {{.PublicURL}}/mailbox/{{.Mailbox.Token}}
-                </a>
-              </dd>
-            </dl>
-          </div>
-        </div>
-
-        <!-- Frühere Mailboxen (JS zeigt diesen Block wenn localStorage-Einträge vorhanden) -->
-        <div id="prev-mailboxes-section" class="d-none mb-4">
-          <h6 class="text-secondary small fw-semibold text-uppercase mb-2" style="letter-spacing:.05em">
-            <i class="bi bi-clock-history me-1"></i>Frühere Mailboxen
-          </h6>
-          <div id="prev-mailboxes-list" class="d-flex flex-column gap-2"></div>
-        </div>
-
-        <!-- Was MailProbe prüft – 2×2 -->
-        <div class="row g-3 pb-5 mt-1">
-
-          <div class="col-12 col-md-6">
-            <div class="card border h-100 mp-feature-card">
-              <div class="card-body p-4">
-                <div class="d-flex align-items-center gap-3 mb-3">
-                  <span class="mp-feat-icon text-bg-success"><i class="bi bi-shield-check"></i></span>
-                  <h6 class="mb-0 fw-semibold">Authentifizierung</h6>
-                </div>
-                <p class="text-secondary small mb-3">
-                  Überprüft, ob dein Mailserver korrekt autorisiert ist – ein
-                  häufiger Grund warum Mails im Spam landen oder gar nicht ankommen.
-                </p>
-                <ul class="mp-feat-list mb-0">
-                  <li><strong>SPF</strong> – Ist deine Absender-IP im DNS erlaubt?</li>
-                  <li><strong>DKIM</strong> – Ist die Signatur gültig und vertrauenswürdig?</li>
-                  <li><strong>DMARC</strong> – Greift die Domain-Policy korrekt?</li>
-                </ul>
+          <div class="col-12 col-sm-6 col-xl-3">
+            <div class="mp-check-tile h-100">
+              <div class="mp-check-tile-icon text-bg-info mb-3">
+                <i class="bi bi-hdd-network"></i>
               </div>
+              <h6 class="fw-semibold mb-2">Server &amp; Netz</h6>
+              <p class="text-secondary small mb-3">
+                Technische Konfigurationsfehler, die Zustellbarkeit still sabotieren.
+              </p>
+              <ul class="mp-feat-list">
+                <li><strong>PTR / rDNS</strong> – Reverse-DNS korrekt?</li>
+                <li><strong>HELO</strong> – Server-Identität stimmig?</li>
+                <li><strong>TLS</strong> – Verschlüsselt übertragen?</li>
+              </ul>
             </div>
           </div>
-
-          <div class="col-12 col-md-6">
-            <div class="card border h-100 mp-feature-card">
-              <div class="card-body p-4">
-                <div class="d-flex align-items-center gap-3 mb-3">
-                  <span class="mp-feat-icon text-bg-info"><i class="bi bi-hdd-network"></i></span>
-                  <h6 class="mb-0 fw-semibold">Server &amp; Infrastruktur</h6>
-                </div>
-                <p class="text-secondary small mb-3">
-                  Prüft die technische Konfiguration deines Mailservers auf
-                  gängige Konfigurationsfehler, die Zustellbarkeit verschlechtern.
-                </p>
-                <ul class="mp-feat-list mb-0">
-                  <li><strong>PTR / rDNS</strong> – Stimmt der Reverse-DNS-Eintrag?</li>
-                  <li><strong>HELO / EHLO</strong> – Meldet sich der Server korrekt an?</li>
-                  <li><strong>TLS</strong> – Wird die Verbindung verschlüsselt übertragen?</li>
-                </ul>
+          <div class="col-12 col-sm-6 col-xl-3">
+            <div class="mp-check-tile h-100">
+              <div class="mp-check-tile-icon text-bg-warning mb-3">
+                <i class="bi bi-funnel"></i>
               </div>
+              <h6 class="fw-semibold mb-2">Spam-Filter</h6>
+              <p class="text-secondary small mb-3">
+                Inhalt und IP-Reputation — was Spam-Filter wirklich entscheiden lässt.
+              </p>
+              <ul class="mp-feat-list">
+                <li><strong>SpamAssassin</strong> – Score & Regeldetails</li>
+                <li><strong>Rspamd</strong> – Symbol-Analyse (optional)</li>
+                <li><strong>DNSBL / RBL</strong> – IP auf Blacklists?</li>
+              </ul>
             </div>
           </div>
-
-          <div class="col-12 col-md-6">
-            <div class="card border h-100 mp-feature-card">
-              <div class="card-body p-4">
-                <div class="d-flex align-items-center gap-3 mb-3">
-                  <span class="mp-feat-icon text-bg-warning"><i class="bi bi-file-earmark-text"></i></span>
-                  <h6 class="mb-0 fw-semibold">Inhalt &amp; Spam-Signale</h6>
-                </div>
-                <p class="text-secondary small mb-3">
-                  Analysiert den Inhalt der Mail auf Merkmale, die Spam-Filter
-                  anschlagen lassen – bevor sie beim Empfänger ankommt.
-                </p>
-                <ul class="mp-feat-list mb-0">
-                  <li><strong>Spam-Score</strong> – SpamAssassin &amp; Rspamd (optional)</li>
-                  <li><strong>MIME-Struktur</strong> – Korrekte Content-Types &amp; Encoding</li>
-                  <li><strong>Blacklists</strong> – IP-Reputations-Prüfung via DNSBL/RBL</li>
-                </ul>
+          <div class="col-12 col-sm-6 col-xl-3">
+            <div class="mp-check-tile h-100">
+              <div class="mp-check-tile-icon text-bg-secondary mb-3">
+                <i class="bi bi-bar-chart-steps"></i>
               </div>
+              <h6 class="fw-semibold mb-2">Report &amp; Score</h6>
+              <p class="text-secondary small mb-3">
+                Alle Ergebnisse auf einen Blick — plus Rohdaten für die Fehlersuche.
+              </p>
+              <ul class="mp-feat-list">
+                <li><strong>Score 0–10</strong> – Gesamtbewertung</li>
+                <li><strong>Header-Chain</strong> – Received-Path</li>
+                <li><strong>JSON-Export</strong> – API-Zugriff</li>
+              </ul>
             </div>
           </div>
-
-          <div class="col-12 col-md-6">
-            <div class="card border h-100 mp-feature-card">
-              <div class="card-body p-4">
-                <div class="d-flex align-items-center gap-3 mb-3">
-                  <span class="mp-feat-icon text-bg-secondary"><i class="bi bi-code-slash"></i></span>
-                  <h6 class="mb-0 fw-semibold">Rohdaten &amp; Report</h6>
-                </div>
-                <p class="text-secondary small mb-3">
-                  Alle Prüfergebnisse als übersichtlicher Score-Report – inklusive
-                  vollständigem Zugriff auf Header, Quelltext und Rohdaten.
-                </p>
-                <ul class="mp-feat-list mb-0">
-                  <li><strong>Score 0–10</strong> – Gesamtbewertung auf einen Blick</li>
-                  <li><strong>Header-Analyse</strong> – Received-Chain &amp; alle Mail-Header</li>
-                  <li><strong>JSON-Export</strong> – Maschinenlesbare Report-Ausgabe</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
         </div>
 
       </div>
-    </div>
+    </section>
+
   </main>
 
   <!-- Bestätigungs-Modal für Mailbox-Löschung -->
@@ -219,8 +249,7 @@
         </div>
         <div class="modal-body pt-2">
           <p class="mb-2">
-            Die Mailbox <strong id="mp-delete-addr" class="text-break"></strong> wird
-            dauerhaft gelöscht.
+            Die Mailbox <strong id="mp-delete-addr" class="text-break"></strong> wird dauerhaft gelöscht.
           </p>
           <div id="mp-delete-msg-warn" class="alert alert-warning d-none py-2 mb-2" role="alert">
             <i class="bi bi-exclamation-triangle-fill me-1"></i>
