@@ -17,20 +17,14 @@
 <div class="app-wrapper">
 
   <!-- ── Navbar ─────────────────────────────────────────────────────────── -->
-  <nav class="app-header navbar navbar-expand bg-body shadow-sm">
+  <nav class="app-header navbar navbar-expand bg-body">
     <div class="container-fluid">
       <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
         <span class="mp-brand-mark">MP</span>{{.AppName}}
       </a>
-      <span class="navbar-text d-none d-lg-block text-secondary small ms-3">
-        E-Mail Deliverability Lab &middot; Self-hosted &middot; Open Source
-      </span>
       <ul class="navbar-nav ms-auto align-items-center gap-2">
         <li class="nav-item d-none d-md-block">
           <span class="badge text-bg-primary">{{.Domain}}</span>
-        </li>
-        <li class="nav-item d-none d-sm-block">
-          <a class="nav-link text-secondary small py-0" href="/privacy">Datenschutz</a>
         </li>
         <li class="nav-item">
           <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">

@@ -36,6 +36,12 @@ body,
   transition: none !important;
 }
 
+/* ── Header: kein Schatten, keine Trennlinie ────────────────────────────── */
+.app-header.navbar {
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
 /* ── Brand mark ─────────────────────────────────────────────────────────── */
 .mp-brand-mark {
   display: inline-flex;
@@ -110,61 +116,55 @@ body,
 .mp-status-dot.fail { background-color: rgba(var(--bs-danger-rgb),  .12); color: var(--bs-danger); }
 .mp-status-dot.info { background-color: rgba(var(--bs-info-rgb),    .12); color: var(--bs-info); }
 
-/* ── Wait icon with ripple rings (mailbox page) ──────────────────────────── */
+/* ── Wait icon with ripple animation (mailbox page) ─────────────────────── */
 /*
- * The .mp-wait-wrap wrapper sits OUTSIDE any overflow:hidden container.
- * It is 96px × 96px so the rings have plenty of room to expand.
- * The callout only sees the wrapper, which has overflow:visible.
+ * box-shadow is used for the ripple — it is NOT clipped by any parent
+ * overflow:hidden (unlike transform-based child elements).
  */
 .mp-wait-wrap {
-  position: relative;
-  width: 96px;
-  height: 96px;
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: visible;        /* rings must NOT be clipped */
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
 }
 .mp-wait-icon {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  background: rgba(var(--bs-primary-rgb), .10);
+  background: rgba(var(--bs-primary-rgb), .12);
   color: var(--bs-primary);
-  font-size: 1.6rem;
-  z-index: 1;
+  font-size: 1.5rem;
   flex-shrink: 0;
-  transition: background .3s, color .3s;
+  animation: mp-ripple 2.2s ease-out infinite;
+  transition: background .3s, color .3s, box-shadow .3s;
 }
-/* Ripple rings — absolutely inside the 96px wrap, centered */
-.mp-wait-ring {
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 56px; height: 56px;
-  margin-top: -28px; margin-left: -28px;
-  border-radius: 50%;
-  border: 2.5px solid var(--bs-primary);
-  opacity: 0;
-  animation: mp-ripple 2.1s cubic-bezier(.2,.6,.4,1) infinite;
-  pointer-events: none;
-}
-.mp-wait-ring-2 { animation-delay: .7s; }
-.mp-wait-ring-3 { animation-delay: 1.4s; }
 @keyframes mp-ripple {
-  0%   { transform: scale(1);   opacity: .65; }
-  100% { transform: scale(2.6); opacity: 0; }
+  0%  { box-shadow: 0 0 0 0px  rgba(var(--bs-primary-rgb),.45),
+                    0 0 0 0px  rgba(var(--bs-primary-rgb),.20); }
+  45% { box-shadow: 0 0 0 14px rgba(var(--bs-primary-rgb),.18),
+                    0 0 0 0px  rgba(var(--bs-primary-rgb),.42); }
+  80% { box-shadow: 0 0 0 26px rgba(var(--bs-primary-rgb),0),
+                    0 0 0 14px rgba(var(--bs-primary-rgb),.10); }
+ 100% { box-shadow: 0 0 0 0px  rgba(var(--bs-primary-rgb),0),
+                    0 0 0 26px rgba(var(--bs-primary-rgb),0); }
 }
 
 /* State variants */
-.mp-wait-wrap[data-state="received"] .mp-wait-icon { background: rgba(var(--bs-warning-rgb), .12); color: var(--bs-warning); }
-.mp-wait-wrap[data-state="received"] .mp-wait-ring  { animation: none; opacity: 0; }
-.mp-wait-wrap[data-state="ready"]    .mp-wait-icon { background: rgba(var(--bs-success-rgb), .12); color: var(--bs-success); }
-.mp-wait-wrap[data-state="ready"]    .mp-wait-ring  { animation: none; opacity: 0; }
+.mp-wait-wrap[data-state="received"] .mp-wait-icon {
+  background: rgba(var(--bs-warning-rgb), .12);
+  color: var(--bs-warning);
+  animation: none; box-shadow: none;
+}
+.mp-wait-wrap[data-state="ready"] .mp-wait-icon {
+  background: rgba(var(--bs-success-rgb), .12);
+  color: var(--bs-success);
+  animation: none; box-shadow: none;
+}
 
 /* Legacy dot (kept so old markup doesn't break) */
 .status-dot {
