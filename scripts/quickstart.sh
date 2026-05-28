@@ -199,6 +199,8 @@ YAML
     restart: unless-stopped
     expose:
       - "11334"
+    volumes:
+      - ./rspamd/local.d:/etc/rspamd/local.d:ro
     mem_limit: 256m
 YAML
   fi
