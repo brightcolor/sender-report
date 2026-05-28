@@ -111,38 +111,60 @@ body,
 .mp-status-dot.info { background-color: rgba(var(--bs-info-rgb),    .12); color: var(--bs-info); }
 
 /* ── Wait icon with ripple rings (mailbox page) ──────────────────────────── */
-.mp-wait-icon {
+/*
+ * The .mp-wait-wrap wrapper sits OUTSIDE any overflow:hidden container.
+ * It is 96px × 96px so the rings have plenty of room to expand.
+ * The callout only sees the wrapper, which has overflow:visible.
+ */
+.mp-wait-wrap {
   position: relative;
-  display: inline-flex;
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
-  flex-shrink: 0;
-  color: var(--bs-primary);
-  font-size: 1.5rem;
+  overflow: visible;        /* rings must NOT be clipped */
 }
-.mp-wait-icon i { position: relative; z-index: 1; }
+.mp-wait-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(var(--bs-primary-rgb), .10);
+  color: var(--bs-primary);
+  font-size: 1.6rem;
+  z-index: 1;
+  flex-shrink: 0;
+  transition: background .3s, color .3s;
+}
+/* Ripple rings — absolutely inside the 96px wrap, centered */
 .mp-wait-ring {
   position: absolute;
-  inset: 0;
+  top: 50%; left: 50%;
+  width: 56px; height: 56px;
+  margin-top: -28px; margin-left: -28px;
   border-radius: 50%;
-  border: 2px solid var(--bs-primary);
+  border: 2.5px solid var(--bs-primary);
   opacity: 0;
-  animation: mp-ripple 2.4s ease-out infinite;
+  animation: mp-ripple 2.1s cubic-bezier(.2,.6,.4,1) infinite;
+  pointer-events: none;
 }
-.mp-wait-ring-2 { animation-delay: .8s; }
-.mp-wait-ring-3 { animation-delay: 1.6s; }
+.mp-wait-ring-2 { animation-delay: .7s; }
+.mp-wait-ring-3 { animation-delay: 1.4s; }
 @keyframes mp-ripple {
-  0%   { transform: scale(.45); opacity: .7; }
-  100% { transform: scale(1.15); opacity: 0; }
+  0%   { transform: scale(1);   opacity: .65; }
+  100% { transform: scale(2.6); opacity: 0; }
 }
 
-/* State variants — icon color changes when mail lands or analysis is done */
-.mp-wait-icon[data-state="received"] { color: var(--bs-warning); }
-.mp-wait-icon[data-state="received"] .mp-wait-ring { border-color: var(--bs-warning); animation: none; opacity: 0; }
-.mp-wait-icon[data-state="ready"]    { color: var(--bs-success); }
-.mp-wait-icon[data-state="ready"]    .mp-wait-ring { border-color: var(--bs-success); animation: none; opacity: 0; }
+/* State variants */
+.mp-wait-wrap[data-state="received"] .mp-wait-icon { background: rgba(var(--bs-warning-rgb), .12); color: var(--bs-warning); }
+.mp-wait-wrap[data-state="received"] .mp-wait-ring  { animation: none; opacity: 0; }
+.mp-wait-wrap[data-state="ready"]    .mp-wait-icon { background: rgba(var(--bs-success-rgb), .12); color: var(--bs-success); }
+.mp-wait-wrap[data-state="ready"]    .mp-wait-ring  { animation: none; opacity: 0; }
 
 /* Legacy dot (kept so old markup doesn't break) */
 .status-dot {
@@ -218,15 +240,17 @@ body,
 /* Address box — clickable, copies on click */
 .mp-addr-box {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: .75rem;
-  padding: .875rem 1.25rem;
+  gap: .5rem;
+  padding: 1.1rem 1.5rem .9rem;
   background-color: var(--bs-secondary-bg);
   border: 1px solid var(--bs-border-color);
   border-radius: var(--bs-border-radius);
   cursor: pointer;
   user-select: none;
   transition: border-color .15s, background-color .15s, box-shadow .15s;
+  text-align: center;
 }
 .mp-addr-box:hover {
   border-color: var(--bs-primary);
@@ -234,18 +258,17 @@ body,
   box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb), .12);
 }
 .mp-addr-box:active { background-color: rgba(var(--bs-primary-rgb), .12); }
-/* Flash on successful copy */
 .mp-addr-box.mp-copied {
   border-color: var(--bs-success);
   background-color: rgba(var(--bs-success-rgb), .08);
   box-shadow: 0 0 0 3px rgba(var(--bs-success-rgb), .18);
 }
 .mp-addr-text {
-  flex: 1;
-  min-width: 0;
+  display: block;
+  width: 100%;
   font-family: 'Cascadia Code', 'JetBrains Mono', ui-monospace, Consolas, monospace;
-  font-size: clamp(.875rem, 2.2vw, 1.0625rem);
-  font-weight: 600;
+  font-size: clamp(1rem, 3vw, 1.35rem);
+  font-weight: 700;
   color: var(--bs-body-color);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -254,14 +277,18 @@ body,
   border: 0;
   padding: 0;
   pointer-events: none;
+  letter-spacing: .01em;
 }
 .mp-addr-copy-hint {
   color: var(--bs-secondary-color);
-  font-size: 1rem;
-  flex-shrink: 0;
+  font-size: .78rem;
   pointer-events: none;
   transition: color .15s;
+  display: flex;
+  align-items: center;
+  gap: .25rem;
 }
+.mp-addr-copy-hint::before { content: ''; }
 .mp-addr-box:hover .mp-addr-copy-hint { color: var(--bs-primary); }
 .mp-addr-box.mp-copied .mp-addr-copy-hint { color: var(--bs-success); }
 

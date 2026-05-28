@@ -58,12 +58,15 @@ async function copyAddress() {
   // Visual flash on the clickable box (home page)
   const box = document.querySelector('.mp-addr-box');
   if (box && ok) {
-    const hint = box.querySelector('.mp-addr-copy-hint i');
-    if (hint) { hint.className = 'bi bi-check2'; }
+    const hintIcon = box.querySelector('.mp-addr-copy-hint i');
+    const hintSpan = box.querySelector('.mp-addr-copy-hint');
+    if (hintIcon) { hintIcon.className = 'bi bi-check2-circle me-1'; }
+    if (hintSpan) { hintSpan.lastChild.textContent = 'Kopiert!'; }
     box.classList.add('mp-copied');
     setTimeout(() => {
       box.classList.remove('mp-copied');
-      if (hint) { hint.className = 'bi bi-clipboard'; }
+      if (hintIcon) { hintIcon.className = 'bi bi-clipboard me-1'; }
+      if (hintSpan) { hintSpan.lastChild.textContent = 'Klicken zum Kopieren'; }
     }, 1800);
   }
 
