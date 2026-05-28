@@ -350,19 +350,18 @@ function setupCheckFilter() {
   const bar = document.getElementById('check-filter-bar');
   if (!bar) return;
 
-  bar.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-filter]');
-    if (!btn) return;
+  const allBtn      = bar.querySelector('[data-filter="all"]');
+  const filterBtns  = [...bar.querySelectorAll('[data-filter]:not([data-filter="all"])')];
 
-    // Toggle active button
-    bar.querySelectorAll('[data-filter]').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-
-    const filter = btn.dataset.filter;
+  function applyFilter() {
+    const active = new Set(
+      filterBtns.filter((b) => b.classList.contains('active')).map((b) => b.dataset.filter)
+    );
+    const showAll = active.size === 0;
 
     // Show / hide individual check items
     document.querySelectorAll('.mp-check-item').forEach((item) => {
-      const visible = filter === 'all' || item.dataset.status === filter;
+      const visible = showAll || active.has(item.dataset.status);
       if (!visible) {
         // Collapse any open accordion before hiding
         const collapseEl = item.querySelector('.accordion-collapse.show');
@@ -390,6 +389,24 @@ function setupCheckFilter() {
       const visibleItems = accordion.querySelectorAll('.mp-check-item:not(.mp-filter-hidden)');
       card.classList.toggle('d-none', allItems.length > 0 && visibleItems.length === 0);
     });
+
+    // Keep "All" button in sync: active when nothing else is selected
+    if (allBtn) allBtn.classList.toggle('active', showAll);
+  }
+
+  bar.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-filter]');
+    if (!btn) return;
+
+    if (btn.dataset.filter === 'all') {
+      // "All" clears every other selection
+      filterBtns.forEach((b) => b.classList.remove('active'));
+    } else {
+      // Toggle the clicked status button
+      btn.classList.toggle('active');
+    }
+
+    applyFilter();
   });
 }
 
