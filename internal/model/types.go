@@ -26,6 +26,12 @@ type Message struct {
 	SizeBytes   int64
 }
 
+// DocLink is a labelled reference shown below a check recommendation.
+type DocLink struct {
+	Title string `json:"title"`
+	URL   string `json:"url"`
+}
+
 type CheckResult struct {
 	ID               string            `json:"id"`
 	Name             string            `json:"name"`
@@ -36,6 +42,7 @@ type CheckResult struct {
 	TechnicalDetails map[string]string `json:"technical_details,omitempty"`
 	Explanation      string            `json:"explanation,omitempty"`
 	Recommendation   string            `json:"recommendation,omitempty"`
+	DocLinks         []DocLink         `json:"doc_links,omitempty"`
 	Severity         string            `json:"severity,omitempty"`
 	Category         string            `json:"category,omitempty"`
 }

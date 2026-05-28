@@ -343,19 +343,52 @@ function startMailboxPollingFallback(token, onStatus) {
   mailboxPollTimer = setInterval(run, 5000);
 }
 
-// ── Report: auto-open first fail/warn check ───────────────────────────────────
+// ── Report: check filter bar ──────────────────────────────────────────────────
 
-function autoOpenFirstFailedCheck() {
-  document.querySelectorAll('.mp-check-accordion').forEach((accordion) => {
-    const firstBad = accordion.querySelector('.accordion-item.fail, .accordion-item.warn');
-    if (!firstBad) return;
-    const btn = firstBad.querySelector('.accordion-button');
-    const collapse = firstBad.querySelector('.accordion-collapse');
-    if (btn && collapse) {
-      btn.classList.remove('collapsed');
-      btn.setAttribute('aria-expanded', 'true');
-      collapse.classList.add('show');
-    }
+function setupCheckFilter() {
+  const bar = document.getElementById('check-filter-bar');
+  if (!bar) return;
+
+  bar.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-filter]');
+    if (!btn) return;
+
+    // Toggle active button
+    bar.querySelectorAll('[data-filter]').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const filter = btn.dataset.filter;
+
+    // Show / hide individual check items
+    document.querySelectorAll('.mp-check-item').forEach((item) => {
+      const visible = filter === 'all' || item.dataset.status === filter;
+      if (!visible) {
+        // Collapse any open accordion before hiding
+        const collapseEl = item.querySelector('.accordion-collapse.show');
+        if (collapseEl) {
+          if (typeof bootstrap !== 'undefined') {
+            const inst = bootstrap.Collapse.getInstance(collapseEl);
+            if (inst) { inst.hide(); } else { collapseEl.classList.remove('show'); }
+          } else {
+            collapseEl.classList.remove('show');
+          }
+          const aBtn = item.querySelector('.accordion-button');
+          if (aBtn) { aBtn.classList.add('collapsed'); aBtn.setAttribute('aria-expanded', 'false'); }
+        }
+        item.classList.add('mp-filter-hidden');
+      } else {
+        item.classList.remove('mp-filter-hidden');
+      }
+    });
+
+    // Hide group cards whose every item is now hidden
+    document.querySelectorAll('.card').forEach((card) => {
+      const accordion = card.querySelector('.mp-check-accordion');
+      if (!accordion) return;
+      const allItems     = accordion.querySelectorAll('.mp-check-item');
+      const visibleItems = accordion.querySelectorAll('.mp-check-item:not(.mp-filter-hidden)');
+      card.classList.toggle('d-none', allItems.length > 0 && visibleItems.length === 0);
+    });
   });
 }
 
@@ -391,6 +424,6 @@ setupNewAddressButton();
 setupCopyButtons();
 localizeStaticTimes();
 setupMailboxPolling();
-autoOpenFirstFailedCheck();
+setupCheckFilter();
 colorScoreDeltas();
 colorScoreMinis();

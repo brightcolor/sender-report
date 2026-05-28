@@ -125,6 +125,16 @@
           </div>
         </div>
 
+        <!-- ── Check filter bar ───────────────────────────────────────── -->
+        <div class="d-flex gap-2 flex-wrap align-items-center mb-3" id="check-filter-bar">
+          <span class="small fw-semibold text-secondary me-1">Anzeigen:</span>
+          <button class="mp-filter-btn active" data-filter="all"  type="button">Alle</button>
+          <button class="mp-filter-btn pass"   data-filter="pass" type="button">&#10003; Bestanden</button>
+          <button class="mp-filter-btn warn"   data-filter="warn" type="button">&#33; Warnungen</button>
+          <button class="mp-filter-btn fail"   data-filter="fail" type="button">&#10007; Fehler</button>
+          <button class="mp-filter-btn info"   data-filter="info" type="button">&#x2139; Info</button>
+        </div>
+
         <!-- ── Two-column report layout ───────────────────────────────── -->
         <div class="row g-3">
 
@@ -148,7 +158,7 @@
               <div class="card-body p-0">
                 <div class="accordion accordion-flush mp-check-accordion" id="checks-{{$groupID}}">
                   {{range .Checks}}
-                  <div class="accordion-item mp-check-item {{.Status}}" id="chk-{{safeID .ID}}">
+                  <div class="accordion-item mp-check-item {{.Status}}" id="chk-{{safeID .ID}}" data-status="{{.Status}}">
                     <h2 class="accordion-header">
                       <button class="accordion-button collapsed"
                               type="button"
@@ -231,6 +241,22 @@
                       </div>
                       {{end}}
 
+                      {{if .DocLinks}}
+                      <div class="mt-3">
+                        <h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">
+                          <i class="bi bi-link-45deg me-1"></i>Quellen &amp; Tools
+                        </h6>
+                        <div class="d-flex flex-wrap gap-2">
+                          {{range .DocLinks}}
+                          <a href="{{.URL}}" target="_blank" rel="noopener noreferrer"
+                             class="btn btn-sm btn-outline-secondary">
+                            {{.Title}}<i class="bi bi-box-arrow-up-right ms-1" style="font-size:.65rem"></i>
+                          </a>
+                          {{end}}
+                        </div>
+                      </div>
+                      {{end}}
+
                       {{else}}
                       {{/* ── Standard-Check-Darstellung ──────────────────────────────────── */}}
 
@@ -280,6 +306,22 @@
                             </button>
                           </div>
                           <p class="mb-0">{{.Recommendation}}</p>
+                        </div>
+                        {{end}}
+
+                        {{if .DocLinks}}
+                        <div class="mt-3">
+                          <h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">
+                            <i class="bi bi-link-45deg me-1"></i>Quellen &amp; Tools
+                          </h6>
+                          <div class="d-flex flex-wrap gap-2">
+                            {{range .DocLinks}}
+                            <a href="{{.URL}}" target="_blank" rel="noopener noreferrer"
+                               class="btn btn-sm btn-outline-secondary">
+                              {{.Title}}<i class="bi bi-box-arrow-up-right ms-1" style="font-size:.65rem"></i>
+                            </a>
+                            {{end}}
+                          </div>
                         </div>
                         {{end}}
 

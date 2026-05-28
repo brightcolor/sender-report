@@ -447,6 +447,7 @@ func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult 
 		c.TechnicalDetails["spf_records"] = joinOrNone(ctx.SPFRecords)
 		c.Explanation = "SPF legt fest, welche Server im Namen der Envelope-From- oder Bounce-Domain senden duerfen. Empfaenger pruefen dabei die sendende IP gegen den SPF-TXT-Record dieser Domain. Gmail, Outlook, Yahoo und grosse Gateways gewichten SPF besonders stark, wenn DMARC aktiv ist oder die IP-Reputation noch schwach ist."
 		c.Recommendation = spfRecommendation(ctx)
+		c.DocLinks = spfDocLinks()
 	case "dkim":
 		c.TechnicalDetails["header_from_domain"] = emptyFallback(ctx.FromDomain, "none")
 		c.TechnicalDetails["dkim_result"] = emptyFallback(ctx.DKIMResult, "none")
@@ -454,6 +455,7 @@ func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult 
 		c.TechnicalDetails["dkim_signature"] = emptyFallback(ctx.Headers.Get("DKIM-Signature"), "none")
 		c.Explanation = "DKIM signiert relevante Header und Body-Inhalte kryptografisch. Der empfangende Server prueft den Public Key per DNS unter dem Selector der DKIM-Signatur. Gmail, Outlook, Yahoo und Apple Mail nutzen DKIM stark, um Manipulationen, Weiterleitungsprobleme und Domain-Spoofing zu erkennen."
 		c.Recommendation = dkimRecommendation(ctx)
+		c.DocLinks = dkimDocLinks()
 	case "dmarc":
 		c.TechnicalDetails["header_from_domain"] = emptyFallback(ctx.FromDomain, "none")
 		c.TechnicalDetails["spf_result"] = emptyFallback(ctx.SPFResult, "none")
@@ -465,6 +467,7 @@ func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult 
 		c.TechnicalDetails["policy"] = emptyFallback(ctx.DMARCPolicy, "none")
 		c.Explanation = "DMARC verbindet SPF und DKIM mit der sichtbaren From-Domain. Eine Nachricht besteht DMARC, wenn SPF oder DKIM erfolgreich ist und die jeweilige Domain zur From-Domain passt. Moderne Provider erwarten fuer serioese Versanddomains mindestens eine DMARC-Policy; fuer Bulk-Mail ist DMARC praktisch Pflicht."
 		c.Recommendation = dmarcRecommendation(ctx)
+		c.DocLinks = dmarcDocLinks()
 	case "ptr":
 		c.TechnicalDetails["remote_ip"] = emptyFallback(ctx.Message.RemoteIP, "unknown")
 		c.TechnicalDetails["helo_ehlo"] = emptyFallback(ctx.Message.HELO, "unknown")
@@ -716,23 +719,113 @@ func defaultRecommendation(c model.CheckResult, ctx checkContext) string {
 
 func spfRecommendation(ctx checkContext) string {
 	domain := emptyFallback(ctx.EnvelopeDomain, "example.org")
+	ip := emptyFallback(ctx.Message.RemoteIP, "203.0.113.10")
 	if len(ctx.SPFRecords) == 0 {
-		return fmt.Sprintf("In der DNS-Zone der Envelope-From-Domain einen SPF-TXT-Record setzen. Beispiel: `%s. TXT \"v=spf1 ip4:%s -all\"`. Wenn ueber Dienstleister gesendet wird, dessen include-Mechanismus verwenden.", domain, emptyFallback(ctx.Message.RemoteIP, "203.0.113.10"))
+		return fmt.Sprintf(`Keinen SPF-Record auf der Envelope-From-Domain gefunden. DNS-TXT-Record anlegen:
+
+  Name:  %s   (oder @ im DNS-Manager)
+  Typ:   TXT
+  Wert:  "v=spf1 ip4:%s -all"
+
+Wenn ein Versanddienst genutzt wird (Google Workspace, Mailchimp, SendGrid…):
+  "v=spf1 include:_spf.google.com -all"
+  "v=spf1 include:sendgrid.net -all"
+
+Qualifier:
+  -all  → Hard Fail  (empfohlen für Produktion)
+  ~all  → Soft Fail  (toleranter; für den Einstieg geeignet)
+
+Prüfen: dig TXT %s +short`, domain, ip, domain)
 	}
-	return fmt.Sprintf("SPF-Record fuer %s pruefen und sicherstellen, dass die sendende IP %s oder der verwendete Versanddienst erlaubt ist. Aktuelle Records: %s", domain, emptyFallback(ctx.Message.RemoteIP, "<sender-ip>"), strings.Join(ctx.SPFRecords, " | "))
+	return fmt.Sprintf(`SPF-Record für %s vorhanden, aber die sendende IP %s ist nicht berechtigt.
+
+Aktueller Record: %s
+
+Häufige Ursachen:
+  • IP nicht in ip4:/ip6:-Mechanismus gelistet
+  • Kein passendes include: für den Versanddienst
+  • SPF-Lookup-Limit überschritten (max. 10 DNS-Lookups pro Prüfung)
+
+Fix: IP oder include: ergänzen, bei zu vielen Lookups ein SPF-Flattening-Tool nutzen.
+Prüfen: dig TXT %s +short`, domain, ip, strings.Join(ctx.SPFRecords, " | "), domain)
+}
+
+func spfDocLinks() []model.DocLink {
+	return []model.DocLink{
+		{Title: "RFC 7208 – Sender Policy Framework", URL: "https://www.rfc-editor.org/rfc/rfc7208"},
+		{Title: "SPF-Record prüfen – MXToolbox", URL: "https://mxtoolbox.com/spf.aspx"},
+		{Title: "SPF-Wizard – dmarcian", URL: "https://dmarcian.com/spf-wizard/"},
+		{Title: "SPF-Lookup-Limit erklären – Google", URL: "https://support.google.com/a/answer/10684623"},
+	}
 }
 
 func dkimRecommendation(ctx checkContext) string {
 	domain := emptyFallback(ctx.FromDomain, "example.org")
-	return fmt.Sprintf("DKIM im ausgehenden MTA oder Versanddienst aktivieren. In der DNS-Zone einen Selector-TXT-Record setzen, z. B. `selector1._domainkey.%s. TXT \"v=DKIM1; k=rsa; p=<public-key>\"`, und mit `d=%s` signieren.", domain, domain)
+	return fmt.Sprintf(`DKIM-Schlüsselpaar erzeugen und DNS-TXT-Record anlegen.
+
+1. Schlüssel erzeugen (2048 Bit empfohlen):
+   openssl genrsa -out dkim_private.pem 2048
+   openssl rsa -in dkim_private.pem -pubout -out dkim_public.pem
+
+2. DNS-Eintrag:
+   Name:  mail._domainkey.%s
+   Typ:   TXT
+   Wert:  "v=DKIM1; k=rsa; p=<Base64-Inhalt von dkim_public.pem ohne Header>"
+
+3. MTA konfigurieren – Beispiel Postfix + OpenDKIM (/etc/opendkim.conf):
+   Domain         %s
+   Selector       mail
+   KeyFile        /etc/dkim/dkim_private.pem
+
+4. Prüfen: dig TXT mail._domainkey.%s +short`, domain, domain, domain)
+}
+
+func dkimDocLinks() []model.DocLink {
+	return []model.DocLink{
+		{Title: "RFC 6376 – DomainKeys Identified Mail", URL: "https://www.rfc-editor.org/rfc/rfc6376"},
+		{Title: "DKIM-Record prüfen – MXToolbox", URL: "https://mxtoolbox.com/dkim.aspx"},
+		{Title: "DKIM-Schlüssel generieren – EasyDMARC", URL: "https://easydmarc.com/tools/dkim-record-generator"},
+		{Title: "OpenDKIM Installationsanleitung", URL: "https://www.opendkim.org/"},
+	}
 }
 
 func dmarcRecommendation(ctx checkContext) string {
 	domain := emptyFallback(ctx.FromDomain, "example.org")
 	if len(ctx.DMARCRecords) == 0 {
-		return fmt.Sprintf("In der DNS-Zone einen DMARC-Record setzen. Einstieg: `_dmarc.%s. TXT \"v=DMARC1; p=none; rua=mailto:dmarc@%s\"`. Nach Stabilisierung auf `quarantine` oder `reject` erhoehen.", domain, domain)
+		return fmt.Sprintf(`Keinen DMARC-Record für %s gefunden. DNS-TXT-Record anlegen:
+
+  Name:  _dmarc.%s
+  Typ:   TXT
+
+Einstieg (p=none – nur Monitoring, kein Einfluss auf Zustellung):
+  "v=DMARC1; p=none; rua=mailto:dmarc@%s"
+
+Empfohlen für Produktion (Quarantäne):
+  "v=DMARC1; p=quarantine; pct=100; rua=mailto:dmarc@%s"
+
+Streng (Ablehnung – nur wenn SPF + DKIM stabil laufen):
+  "v=DMARC1; p=reject; pct=100; rua=mailto:dmarc@%s"
+
+Voraussetzungen: SPF und DKIM müssen aligned bestehen.
+Vorgehen: p=none → Berichte analysieren → p=quarantine → p=reject`, domain, domain, domain, domain, domain)
 	}
-	return fmt.Sprintf("DMARC fuer %s pruefen: SPF oder DKIM muss aligned bestehen. Aktuelle Policy: %s.", domain, emptyFallback(ctx.DMARCPolicy, "none"))
+	return fmt.Sprintf(`DMARC für %s ist gesetzt (Policy: %s), aber SPF oder DKIM besteht nicht aligned.
+
+Checkliste:
+  ✓ SPF muss für die Envelope-From-Domain bestehen und aligned zur From-Domain sein
+  ✓ DKIM muss mit d=%s signieren
+  ✓ Beide Mechanismen separat mit dig und Mail-Tests prüfen
+
+Aktuelle Records: %s`, domain, emptyFallback(ctx.DMARCPolicy, "none"), domain, strings.Join(ctx.DMARCRecords, " | "))
+}
+
+func dmarcDocLinks() []model.DocLink {
+	return []model.DocLink{
+		{Title: "RFC 7489 – DMARC", URL: "https://www.rfc-editor.org/rfc/rfc7489"},
+		{Title: "DMARC-Einstiegsguide – dmarc.org", URL: "https://dmarc.org/overview/"},
+		{Title: "DMARC-Record prüfen – MXToolbox", URL: "https://mxtoolbox.com/dmarc.aspx"},
+		{Title: "DMARC-Analyzer – dmarcian", URL: "https://dmarcian.com/dmarc-inspector/"},
+	}
 }
 
 func joinOrNone(values []string) string {

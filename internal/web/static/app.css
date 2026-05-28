@@ -284,8 +284,35 @@ body,
 .mp-check-item {
   border-left: 3px solid transparent !important;
 }
-.mp-check-item.fail { border-left-color: var(--bs-danger) !important; }
+.mp-check-item.fail { border-left-color: var(--bs-danger)  !important; }
 .mp-check-item.warn { border-left-color: var(--bs-warning) !important; }
+.mp-check-item.pass { border-left-color: var(--bs-success) !important; }
+.mp-check-item.info { border-left-color: var(--bs-info)    !important; }
+
+/* ── Filter hidden ──────────────────────────────────────────────────────── */
+.mp-filter-hidden { display: none !important; }
+
+/* ── Check filter bar ───────────────────────────────────────────────────── */
+.mp-filter-btn {
+  border: 1px solid var(--bs-border-color);
+  background: var(--bs-body-bg);
+  color: var(--bs-secondary-color);
+  font-weight: 600;
+  font-size: .75rem;
+  padding: .3rem .75rem;
+  border-radius: 99px;
+  transition: background .14s, color .14s, border-color .14s;
+}
+.mp-filter-btn:hover { background: var(--bs-secondary-bg); color: var(--bs-body-color); }
+.mp-filter-btn.active {
+  background: var(--bs-primary);
+  border-color: var(--bs-primary);
+  color: #fff;
+}
+.mp-filter-btn.pass.active { background: var(--bs-success); border-color: var(--bs-success); }
+.mp-filter-btn.warn.active { background: var(--bs-warning); border-color: var(--bs-warning); color: #212529; }
+.mp-filter-btn.fail.active { background: var(--bs-danger);  border-color: var(--bs-danger); }
+.mp-filter-btn.info.active { background: var(--bs-info);    border-color: var(--bs-info); }
 
 /* Inner grid inside accordion button */
 .mp-check-accordion .accordion-button {
