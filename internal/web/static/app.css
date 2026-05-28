@@ -491,6 +491,96 @@ body,
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Check-group status badges ──────────────────────────────────────────── */
+.mp-grp-badge {
+  font-size: .7rem;
+  font-weight: 700;
+  padding: .25rem .5rem;
+  border-radius: 99px;
+  letter-spacing: .03em;
+}
+.mp-grp-badge.pass { background-color: rgba(var(--bs-success-rgb), .12); color: var(--bs-success); }
+.mp-grp-badge.warn { background-color: rgba(var(--bs-warning-rgb), .12); color: var(--bs-warning); }
+.mp-grp-badge.fail { background-color: rgba(var(--bs-danger-rgb),  .12); color: var(--bs-danger); }
+.mp-grp-badge.info { background-color: rgba(var(--bs-info-rgb),    .12); color: var(--bs-info); }
+
+/* ── Rspamd check panel ─────────────────────────────────────────────────── */
+.mp-rspamd-hero {
+  padding: 1rem 1rem .75rem;
+  background: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+}
+
+.mp-rspamd-action-badge {
+  font-size: .8125rem !important;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: .35rem .85rem !important;
+  border-radius: 99px !important;
+}
+
+.mp-rspamd-progress {
+  height: 5px;
+  border-radius: 99px;
+  background: var(--bs-border-color);
+}
+
+/* ── Rspamd symbol table ────────────────────────────────────────────────── */
+.mp-symbol-table {
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  overflow: hidden;
+}
+
+.mp-symbol-row {
+  display: grid;
+  grid-template-columns: minmax(140px, .4fr) 3.5rem 1fr;
+  gap: .75rem;
+  align-items: center;
+  padding: .375rem .75rem;
+  border-bottom: 1px solid var(--bs-border-color);
+  font-size: .8125rem;
+  line-height: 1.4;
+  transition: background .12s;
+}
+.mp-symbol-row:last-child { border-bottom: 0; }
+.mp-symbol-row:hover { background: var(--bs-tertiary-bg, var(--bs-secondary-bg)); }
+
+.mp-symbol-row.sym-pos { border-left: 3px solid var(--bs-danger); }
+.mp-symbol-row.sym-neg { border-left: 3px solid var(--bs-success); }
+.mp-symbol-row.sym-zero { border-left: 3px solid transparent; }
+
+.mp-sym-name {
+  font-size: .75rem;
+  font-weight: 600;
+  word-break: break-all;
+  color: var(--bs-body-color);
+  background: none;
+  padding: 0;
+}
+.mp-sym-score {
+  font-size: .8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.mp-symbol-row.sym-pos .mp-sym-score { color: var(--bs-danger); }
+.mp-symbol-row.sym-neg .mp-sym-score { color: var(--bs-success); }
+.mp-symbol-row.sym-zero .mp-sym-score { color: var(--bs-secondary-color); }
+
+.mp-sym-desc {
+  color: var(--bs-secondary-color);
+  font-size: .775rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .mp-chk-inner .mp-pill,

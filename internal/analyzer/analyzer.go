@@ -1391,27 +1391,28 @@ func rspamdHeuristic(ctx context.Context, endpointURL, password, raw string) mod
 	}
 
 	action := strings.ToLower(strings.TrimSpace(parsed.Action))
-	topSymbols := topRspamdSymbols(parsed.Symbols, 4)
-	topSummary := ""
-	if len(topSymbols) > 0 {
-		chunks := make([]string, 0, len(topSymbols))
-		for _, s := range topSymbols {
-			if s.Description != "" {
-				chunks = append(chunks, fmt.Sprintf("%s(+%.2f): %s", s.Name, s.Score, s.Description))
-			} else {
-				chunks = append(chunks, fmt.Sprintf("%s(+%.2f)", s.Name, s.Score))
-			}
-		}
-		topSummary = " top=[" + strings.Join(chunks, "; ") + "]"
-	}
-	summary := fmt.Sprintf("Rspamd action=%s score=%.2f required=%.2f symbols=%d%s", emptyFallback(action, "unknown"), parsed.Score, parsed.RequiredScore, len(parsed.Symbols), topSummary)
+	topSymbols := topRspamdSymbols(parsed.Symbols, 4) // kept for suggestion generation
+	allSyms := allRspamdSymbols(parsed.Symbols)
+
+	actionDisplay := emptyFallback(action, "unknown")
+	summary := fmt.Sprintf("Score %.2f / %.2f · Aktion: %s · %d Symbole analysiert",
+		parsed.Score, parsed.RequiredScore, actionDisplay, len(parsed.Symbols))
 	suggestion := rspamdSuggestionFor(topSymbols, action)
+
 	details := map[string]string{
-		"action":         emptyFallback(action, "unknown"),
+		"action":         actionDisplay,
 		"score":          fmt.Sprintf("%.2f", parsed.Score),
 		"required_score": fmt.Sprintf("%.2f", parsed.RequiredScore),
 		"symbol_count":   strconv.Itoa(len(parsed.Symbols)),
-		"top_symbols":    emptyFallback(strings.TrimPrefix(strings.TrimSuffix(topSummary, "]"), " top=["), "none"),
+	}
+	// Add top symbols (by absolute weight) for structured display in the UI.
+	// Value format: "<score>|<description>" so the template can split and colour them.
+	maxSyms := 15
+	if len(allSyms) < maxSyms {
+		maxSyms = len(allSyms)
+	}
+	for _, s := range allSyms[:maxSyms] {
+		details["sym:"+s.Name] = fmt.Sprintf("%+.2f|%s", s.Score, s.Description)
 	}
 
 	switch action {
@@ -1453,6 +1454,31 @@ func topRspamdSymbols(raw map[string]json.RawMessage, n int) []rspamdSymbol {
 	if n > 0 && len(symbols) > n {
 		return symbols[:n]
 	}
+	return symbols
+}
+
+// allRspamdSymbols returns every symbol sorted by absolute score descending,
+// so the most impactful entries (positive spam signals and negative ham signals)
+// appear first regardless of direction.
+func allRspamdSymbols(raw map[string]json.RawMessage) []rspamdSymbol {
+	symbols := make([]rspamdSymbol, 0, len(raw))
+	for name, payload := range raw {
+		score, desc := parseRspamdSymbolPayload(payload)
+		symbols = append(symbols, rspamdSymbol{Name: name, Score: score, Description: desc})
+	}
+	sort.SliceStable(symbols, func(i, j int) bool {
+		ai, aj := symbols[i].Score, symbols[j].Score
+		if ai < 0 {
+			ai = -ai
+		}
+		if aj < 0 {
+			aj = -aj
+		}
+		if ai != aj {
+			return ai > aj
+		}
+		return symbols[i].Name < symbols[j].Name
+	})
 	return symbols
 }
 

@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -82,9 +83,90 @@ type ReportData struct {
 }
 
 type ReportCheckGroup struct {
-	Name   string
-	Hint   string
-	Checks []model.CheckResult
+	Name      string
+	Hint      string
+	Checks    []model.CheckResult
+	PassCount int
+	WarnCount int
+	FailCount int
+	InfoCount int
+}
+
+// RspamdSymbolRow is returned by the rspamdSymbols template function.
+type RspamdSymbolRow struct {
+	Name  string
+	Score float64
+	Desc  string
+}
+
+func rspamdSymbolsFn(details map[string]string) []RspamdSymbolRow {
+	var out []RspamdSymbolRow
+	for k, v := range details {
+		if !strings.HasPrefix(k, "sym:") {
+			continue
+		}
+		name := strings.TrimPrefix(k, "sym:")
+		parts := strings.SplitN(v, "|", 2)
+		score, _ := strconv.ParseFloat(parts[0], 64)
+		desc := ""
+		if len(parts) > 1 {
+			desc = parts[1]
+		}
+		out = append(out, RspamdSymbolRow{Name: name, Score: score, Desc: desc})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		ai, aj := out[i].Score, out[j].Score
+		if ai < 0 {
+			ai = -ai
+		}
+		if aj < 0 {
+			aj = -aj
+		}
+		if ai != aj {
+			return ai > aj
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
+}
+
+func rspamdMetaFn(details map[string]string) map[string]string {
+	out := make(map[string]string, len(details))
+	for k, v := range details {
+		if !strings.HasPrefix(k, "sym:") {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func rspamdActionClass(action string) string {
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "no action":
+		return "success"
+	case "add header", "rewrite subject", "greylist":
+		return "warning"
+	case "reject", "soft reject":
+		return "danger"
+	default:
+		return "secondary"
+	}
+}
+
+func rspamdScorePercent(details map[string]string) float64 {
+	score, _ := strconv.ParseFloat(details["score"], 64)
+	required, _ := strconv.ParseFloat(details["required_score"], 64)
+	if required <= 0 {
+		return 0
+	}
+	pct := score / required * 100
+	if pct > 100 {
+		pct = 100
+	}
+	if pct < 0 {
+		pct = 0
+	}
+	return pct
 }
 
 type ReportLinkGroup struct {
@@ -101,12 +183,16 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		metrics = telemetry.New()
 	}
 	t, err := template.New("").Funcs(template.FuncMap{
-		"msgref":       messageReference,
-		"statusIcon":   statusIcon,
-		"statusLabel":  statusLabel,
-		"detailsText":  detailsText,
-		"safeID":       safeID,
-		"scorePercent": scorePercent,
+		"msgref":              messageReference,
+		"statusIcon":          statusIcon,
+		"statusLabel":         statusLabel,
+		"detailsText":         detailsText,
+		"safeID":              safeID,
+		"scorePercent":        scorePercent,
+		"rspamdSymbols":       rspamdSymbolsFn,
+		"rspamdMeta":          rspamdMetaFn,
+		"rspamdActionClass":   rspamdActionClass,
+		"rspamdScorePercent":  rspamdScorePercent,
 	}).ParseGlob(filepath.Join("internal", "web", "templates", "*.html"))
 	if err != nil {
 		return nil, err
@@ -894,7 +980,20 @@ func groupReportChecks(checks []model.CheckResult) []ReportCheckGroup {
 		if len(grouped[name]) == 0 {
 			continue
 		}
-		out = append(out, ReportCheckGroup{Name: name, Hint: hints[name], Checks: grouped[name]})
+		grp := ReportCheckGroup{Name: name, Hint: hints[name], Checks: grouped[name]}
+		for _, c := range grouped[name] {
+			switch c.Status {
+			case "pass":
+				grp.PassCount++
+			case "warn":
+				grp.WarnCount++
+			case "fail":
+				grp.FailCount++
+			default:
+				grp.InfoCount++
+			}
+		}
+		out = append(out, grp)
 	}
 	return out
 }

@@ -133,9 +133,17 @@
             {{range .CheckGroups}}
             {{$groupID := safeID .Name}}
             <div class="card mb-3">
-              <div class="card-header">
-                <h3 class="card-title mb-0">{{.Name}}</h3>
-                {{if .Hint}}<p class="text-secondary small mt-1 mb-0">{{.Hint}}</p>{{end}}
+              <div class="card-header d-flex align-items-start justify-content-between gap-2 flex-wrap">
+                <div>
+                  <h3 class="card-title mb-0">{{.Name}}</h3>
+                  {{if .Hint}}<p class="text-secondary small mt-1 mb-0">{{.Hint}}</p>{{end}}
+                </div>
+                <div class="d-flex gap-1 flex-shrink-0 align-items-center pt-1">
+                  {{if gt .PassCount 0}}<span class="badge mp-grp-badge pass">{{.PassCount}} ✓</span>{{end}}
+                  {{if gt .WarnCount 0}}<span class="badge mp-grp-badge warn">{{.WarnCount}} !</span>{{end}}
+                  {{if gt .FailCount 0}}<span class="badge mp-grp-badge fail">{{.FailCount}} ✗</span>{{end}}
+                  {{if gt .InfoCount 0}}<span class="badge mp-grp-badge info">{{.InfoCount}} i</span>{{end}}
+                </div>
               </div>
               <div class="card-body p-0">
                 <div class="accordion accordion-flush mp-check-accordion" id="checks-{{$groupID}}">
@@ -161,6 +169,70 @@
                     </h2>
                     <div id="chk-body-{{safeID .ID}}" class="accordion-collapse collapse">
                       <div class="accordion-body">
+
+                      {{if eq .ID "rspamd"}}
+                      {{/* ── Rspamd – strukturierte Darstellung ───────────────────────────── */}}
+                      {{$action := index .TechnicalDetails "action"}}
+                      {{$cls   := rspamdActionClass $action}}
+                      {{$pct   := rspamdScorePercent .TechnicalDetails}}
+
+                      <div class="mp-rspamd-hero mb-3">
+                        <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
+                          <span class="badge text-bg-{{$cls}} mp-rspamd-action-badge">
+                            {{$action}}
+                          </span>
+                          <div class="small">
+                            Score
+                            <strong class="text-{{$cls}}">{{index .TechnicalDetails "score"}}</strong>
+                            / {{index .TechnicalDetails "required_score"}}
+                            <span class="text-secondary ms-2">· {{index .TechnicalDetails "symbol_count"}} Symbole total</span>
+                          </div>
+                        </div>
+                        <div class="progress mp-rspamd-progress" title="{{printf "%.0f" $pct}}% des Spam-Schwellwerts">
+                          <div class="progress-bar bg-{{$cls}}" style="width:{{printf "%.1f" $pct}}%" role="progressbar"></div>
+                        </div>
+                        <p class="text-secondary small mt-1 mb-0">{{printf "%.0f" $pct}}% des Spam-Schwellwerts erreicht</p>
+                      </div>
+
+                      {{$syms := rspamdSymbols .TechnicalDetails}}
+                      {{if $syms}}
+                      <div class="mb-3">
+                        <h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">
+                          Symbole <span class="text-body fw-normal">(nach Gewicht)</span>
+                        </h6>
+                        <div class="mp-symbol-table">
+                          {{range $syms}}
+                          <div class="mp-symbol-row {{if gt .Score 0.0}}sym-pos{{else if lt .Score 0.0}}sym-neg{{else}}sym-zero{{end}}">
+                            <code class="mp-sym-name">{{.Name}}</code>
+                            <span class="mp-sym-score">{{printf "%+.2f" .Score}}</span>
+                            {{if .Desc}}<span class="mp-sym-desc">{{.Desc}}</span>{{end}}
+                          </div>
+                          {{end}}
+                        </div>
+                      </div>
+                      {{end}}
+
+                      {{if .Explanation}}
+                      <div class="mb-3">
+                        <h6 class="text-uppercase small fw-bold text-secondary mb-1" style="letter-spacing:.06em">Erklärung</h6>
+                        <p class="mb-0">{{.Explanation}}</p>
+                      </div>
+                      {{end}}
+
+                      {{if and .Recommendation (or (eq .Status "warn") (eq .Status "fail"))}}
+                      <div class="mp-fix-box">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                          <h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>Empfehlung</h6>
+                          <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="{{.Recommendation}}">
+                            <i class="bi bi-clipboard me-1"></i>Kopieren
+                          </button>
+                        </div>
+                        <p class="mb-0">{{.Recommendation}}</p>
+                      </div>
+                      {{end}}
+
+                      {{else}}
+                      {{/* ── Standard-Check-Darstellung ──────────────────────────────────── */}}
 
                         <div class="mb-3">
                           <h6 class="text-uppercase small fw-bold text-secondary mb-1"
@@ -210,6 +282,8 @@
                           <p class="mb-0">{{.Recommendation}}</p>
                         </div>
                         {{end}}
+
+                      {{end}}
 
                       </div>
                     </div>
