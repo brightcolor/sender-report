@@ -723,9 +723,16 @@ body,
 }
 
 /* ── Page footer ────────────────────────────────────────────────────────── */
+.app-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.app-main { flex: 1; }
+
 .mp-page-footer {
   text-align: center;
-  padding: 1.25rem 1rem 2rem;
+  padding: 1rem 1rem 1.5rem;
   font-size: .75rem;
   color: var(--bs-secondary-color);
   opacity: .7;
