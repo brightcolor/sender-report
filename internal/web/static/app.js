@@ -491,6 +491,41 @@ function scoreClass(score) {
   return 'score-fail';
 }
 
+// Format remaining time until `isoDate` in a sensible unit (live countdown)
+function formatTimeRemaining(isoDate) {
+  if (!isoDate) return '';
+  const diff = new Date(isoDate) - Date.now();
+  if (diff <= 0) return 'abgelaufen';
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (days >= 2)  return `noch ${days} Tage`;
+  if (hours >= 1) return `noch ${hours} Std.`;
+  if (mins >= 1)  return `noch ${mins} Min.`;
+  return 'läuft gleich ab';
+}
+
+// Format exact datetime for tooltip
+function formatExactDate(isoDate) {
+  if (!isoDate) return '';
+  try {
+    return new Date(isoDate).toLocaleString('de-DE', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch (_) { return isoDate; }
+}
+
+// Refresh all countdown labels every 60 s
+function startPrevMbCountdown() {
+  clearInterval(window._mpCountdownTimer);
+  window._mpCountdownTimer = setInterval(() => {
+    document.querySelectorAll('[data-mb-expires]').forEach((el) => {
+      el.textContent = formatTimeRemaining(el.dataset.mbExpires);
+    });
+  }, 60000);
+}
+
 async function loadPreviousMailboxes() {
   if (getConsentState() !== 'granted') return;
   const section = document.getElementById('prev-mailboxes-section');
@@ -509,7 +544,7 @@ async function loadPreviousMailboxes() {
     if (res.status === 'fulfilled') {
       items.push({ token: others[i], data: res.value });
     } else {
-      removeFromHistory(others[i]); // stale / deleted mailbox
+      removeFromHistory(others[i]); // abgelaufene / gelöschte Mailbox entfernen
     }
   });
 
@@ -517,7 +552,11 @@ async function loadPreviousMailboxes() {
   section.classList.remove('d-none');
 
   list.innerHTML = items.map(({ token, data }) => {
-    const expired   = data.expires_at && new Date(data.expires_at) < new Date();
+    const expired    = data.expires_at && new Date(data.expires_at) < new Date();
+    const ttlLabel   = formatTimeRemaining(data.expires_at);
+    const ttlTooltip = formatExactDate(data.expires_at);
+    const ttlClass   = expired ? 'text-danger' : (ttlLabel.includes('Min') ? 'text-warning' : 'text-secondary');
+
     const scoreHtml = data.latest_score != null
       ? `<span class="mp-score-mini ${scoreClass(data.latest_score)}">` +
         `<strong>${Number(data.latest_score).toFixed(1)}</strong><span>/10</span></span>`
@@ -525,14 +564,103 @@ async function loadPreviousMailboxes() {
     const reportBtn = data.latest_report_path
       ? `<a href="${data.latest_report_path}" class="btn btn-sm btn-primary py-0 px-2">Report</a>`
       : '';
-    return `<div class="d-flex align-items-center gap-2 py-2 px-3 rounded border mp-prev-mb-item${expired ? ' opacity-50' : ''}">
+
+    return `<div class="d-flex align-items-center gap-2 py-2 px-3 rounded border mp-prev-mb-item${expired ? ' mp-prev-mb-expired' : ''}"
+                 data-token="${token}">
       <i class="bi bi-envelope-at text-secondary flex-shrink-0"></i>
       <code class="flex-grow-1 text-truncate mp-prev-mb-addr">${data.mailbox || token}</code>
       ${scoreHtml}
+      <span class="${ttlClass} small mp-ttl-label"
+            data-mb-expires="${data.expires_at || ''}"
+            title="${ttlTooltip}"
+            style="white-space:nowrap">${ttlLabel}</span>
       ${reportBtn}
       <a href="/mailbox/${token}" class="btn btn-sm btn-outline-secondary py-0 px-2">Öffnen</a>
+      <button class="btn btn-sm btn-outline-danger py-0 px-2 mp-delete-mb-btn"
+              data-token="${token}"
+              data-addr="${data.mailbox || token}"
+              data-count="${data.message_count || 0}"
+              title="Mailbox löschen"
+              type="button">
+        <i class="bi bi-trash3"></i>
+      </button>
     </div>`;
   }).join('');
+
+  // Bootstrap-Tooltips für Ablaufzeiten initialisieren
+  list.querySelectorAll('[title]').forEach((el) => {
+    if (typeof bootstrap !== 'undefined') {
+      new bootstrap.Tooltip(el, { trigger: 'hover', placement: 'top' });
+    }
+  });
+
+  // Lösch-Buttons verdrahten
+  list.querySelectorAll('.mp-delete-mb-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openDeleteModal(btn.dataset.token, btn.dataset.addr, parseInt(btn.dataset.count, 10) || 0);
+    });
+  });
+
+  startPrevMbCountdown();
+}
+
+// ── Mailbox-Löschung ──────────────────────────────────────────────────────────
+
+let _deleteTarget = null;
+
+function openDeleteModal(token, addr, msgCount) {
+  _deleteTarget = token;
+  const addrEl    = document.getElementById('mp-delete-addr');
+  const warnEl    = document.getElementById('mp-delete-msg-warn');
+  const countEl   = document.getElementById('mp-delete-msg-count');
+  if (addrEl)  addrEl.textContent = addr;
+  if (warnEl && countEl) {
+    if (msgCount > 0) {
+      countEl.textContent = msgCount === 1
+        ? 'Es befindet sich noch 1 E-Mail in dieser Mailbox, die ebenfalls gelöscht wird.'
+        : `Es befinden sich noch ${msgCount} E-Mails in dieser Mailbox, die ebenfalls gelöscht werden.`;
+      warnEl.classList.remove('d-none');
+    } else {
+      warnEl.classList.add('d-none');
+    }
+  }
+  const modal = document.getElementById('mp-delete-modal');
+  if (modal && typeof bootstrap !== 'undefined') {
+    bootstrap.Modal.getOrCreate(modal).show();
+  }
+}
+
+async function confirmDeleteMailbox() {
+  const token = _deleteTarget;
+  if (!token) return;
+
+  const modal = document.getElementById('mp-delete-modal');
+  if (modal && typeof bootstrap !== 'undefined') bootstrap.Modal.getInstance(modal)?.hide();
+
+  try {
+    const res = await fetch(`/api/mailboxes/${token}/delete`, { method: 'POST', cache: 'no-store' });
+    if (!res.ok && res.status !== 404) throw new Error('Löschen fehlgeschlagen');
+  } catch (_) {
+    // Auch bei Fehler aus dem lokalen Verlauf entfernen
+  }
+  removeFromHistory(token);
+
+  // Zeile animiert ausblenden
+  const row = document.querySelector(`[data-token="${token}"].mp-prev-mb-item`);
+  if (row) {
+    row.style.transition = 'opacity .3s';
+    row.style.opacity = '0';
+    setTimeout(() => {
+      row.remove();
+      const list = document.getElementById('prev-mailboxes-list');
+      if (list && list.children.length === 0) {
+        document.getElementById('prev-mailboxes-section')?.classList.add('d-none');
+      }
+    }, 320);
+  }
+  _deleteTarget = null;
 }
 
 function setupCookieConsent() {
@@ -572,3 +700,6 @@ setupCheckFilter();
 setupCookieConsent();
 colorScoreDeltas();
 colorScoreMinis();
+
+// Lösch-Bestätigung im Modal
+document.getElementById('mp-delete-confirm-btn')?.addEventListener('click', confirmDeleteMailbox);

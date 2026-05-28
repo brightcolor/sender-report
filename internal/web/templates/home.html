@@ -44,30 +44,31 @@
   <!-- ── Main ───────────────────────────────────────────────────────────── -->
   <main class="app-main">
     <div class="app-content pt-4">
-      <div class="container" style="max-width:780px">
+      <div class="container" style="max-width:800px">
 
-        <!-- Hero copy -->
-        <div class="text-center mb-4">
+        <!-- Hero -->
+        <div class="text-center mb-5">
           <span class="mp-hero-badge mb-3 d-inline-flex">
             <span class="hdot"></span>Self-hosted &middot; Open Source
           </span>
           <h1 class="display-5 fw-bold mb-3" style="letter-spacing:-.03em">
-            Teste deine E-Mail,<br>bevor sie sendet.
+            Deine E-Mail auf dem Prüfstand.
           </h1>
-          <p class="lead text-secondary mx-auto" style="max-width:560px">
-            Schicke eine Testmail an die temporäre Adresse unten. MailProbe prüft
-            SPF, DKIM, DMARC, PTR, Spam-Signale und mehr &ndash; sofort, live, ohne Account.
+          <p class="lead text-secondary mx-auto" style="max-width:580px">
+            Schicke eine Testmail an die temporäre Mailbox-Adresse unten.
+            MailProbe analysiert sofort, ob deine Mail zuverlässig zugestellt
+            wird – ohne Account, ohne Tracking.
           </p>
         </div>
 
-        <!-- Address card -->
+        <!-- Mailbox card -->
         <div class="card shadow mb-4"
              id="check-panel"
              data-token="{{.Mailbox.Token}}"
              data-public-url="{{.PublicURL}}">
           <div class="card-header py-3">
             <span class="fw-semibold">
-              <i class="bi bi-envelope-at me-1 text-primary"></i>Temporäre Empfängeradresse
+              <i class="bi bi-envelope-at me-1 text-primary"></i>Temporäre Mailbox-Adresse
             </span>
           </div>
           <div class="card-body px-4 pt-4 pb-3">
@@ -83,7 +84,7 @@
                 <i class="bi bi-play-fill me-1"></i>Check starten
               </button>
               <button id="new-address-btn" class="btn btn-secondary px-4" type="button">
-                <i class="bi bi-arrow-clockwise me-1"></i>Neue Adresse
+                <i class="bi bi-arrow-clockwise me-1"></i>Neue Mailbox
               </button>
             </div>
 
@@ -91,13 +92,13 @@
               <div id="check-loader" class="mp-scan-dots d-none justify-content-center mb-1" aria-hidden="true">
                 <span></span><span></span><span></span>
               </div>
-              <p id="check-status" class="mb-0">Bereit &ndash; noch keine E-Mail für diese Adresse geprüft.</p>
+              <p id="check-status" class="mb-0">Bereit &ndash; noch keine E-Mail für diese Mailbox geprüft.</p>
             </div>
 
           </div>
           <div class="card-footer">
             <dl class="row mb-0 small">
-              <dt class="col-sm-2 text-secondary">Ablauf</dt>
+              <dt class="col-sm-2 text-secondary">Gültig bis</dt>
               <dd class="col-sm-10 mb-1 mb-sm-0"
                   id="mail-expires-at"
                   data-time="{{.Mailbox.ExpiresAt.Format "2006-01-02T15:04:05Z07:00"}}">
@@ -115,65 +116,135 @@
           </div>
         </div>
 
-        <!-- Previous mailboxes (shown by JS when localStorage has entries) -->
+        <!-- Frühere Mailboxen (JS zeigt diesen Block wenn localStorage-Einträge vorhanden) -->
         <div id="prev-mailboxes-section" class="d-none mb-4">
           <h6 class="text-secondary small fw-semibold text-uppercase mb-2" style="letter-spacing:.05em">
-            <i class="bi bi-clock-history me-1"></i>Frühere Testadressen
+            <i class="bi bi-clock-history me-1"></i>Frühere Mailboxen
           </h6>
           <div id="prev-mailboxes-list" class="d-flex flex-column gap-2"></div>
         </div>
 
-        <!-- Feature info-boxes -->
-        <div class="row g-3 pb-5">
-          <div class="col-6 col-md-3">
-            <div class="info-box border shadow-none mb-0">
-              <span class="info-box-icon text-bg-success rounded-start-2">
-                <i class="bi bi-shield-check fs-4"></i>
-              </span>
-              <div class="info-box-content">
-                <span class="info-box-text">Authentifizierung</span>
-                <span class="info-box-number" style="font-size:.75rem">SPF · DKIM · DMARC</span>
+        <!-- Was MailProbe prüft – 2×2 -->
+        <div class="row g-3 pb-5 mt-1">
+
+          <div class="col-12 col-md-6">
+            <div class="card border h-100 mp-feature-card">
+              <div class="card-body p-4">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                  <span class="mp-feat-icon text-bg-success"><i class="bi bi-shield-check"></i></span>
+                  <h6 class="mb-0 fw-semibold">Authentifizierung</h6>
+                </div>
+                <p class="text-secondary small mb-3">
+                  Überprüft, ob dein Mailserver korrekt autorisiert ist – ein
+                  häufiger Grund warum Mails im Spam landen oder gar nicht ankommen.
+                </p>
+                <ul class="mp-feat-list mb-0">
+                  <li><strong>SPF</strong> – Ist deine Absender-IP im DNS erlaubt?</li>
+                  <li><strong>DKIM</strong> – Ist die Signatur gültig und vertrauenswürdig?</li>
+                  <li><strong>DMARC</strong> – Greift die Domain-Policy korrekt?</li>
+                </ul>
               </div>
             </div>
           </div>
-          <div class="col-6 col-md-3">
-            <div class="info-box border shadow-none mb-0">
-              <span class="info-box-icon text-bg-info rounded-start-2">
-                <i class="bi bi-hdd-network fs-4"></i>
-              </span>
-              <div class="info-box-content">
-                <span class="info-box-text">Infrastruktur</span>
-                <span class="info-box-number" style="font-size:.75rem">PTR · HELO · MX · TLS</span>
+
+          <div class="col-12 col-md-6">
+            <div class="card border h-100 mp-feature-card">
+              <div class="card-body p-4">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                  <span class="mp-feat-icon text-bg-info"><i class="bi bi-hdd-network"></i></span>
+                  <h6 class="mb-0 fw-semibold">Server &amp; Infrastruktur</h6>
+                </div>
+                <p class="text-secondary small mb-3">
+                  Prüft die technische Konfiguration deines Mailservers auf
+                  gängige Konfigurationsfehler, die Zustellbarkeit verschlechtern.
+                </p>
+                <ul class="mp-feat-list mb-0">
+                  <li><strong>PTR / rDNS</strong> – Stimmt der Reverse-DNS-Eintrag?</li>
+                  <li><strong>HELO / EHLO</strong> – Meldet sich der Server korrekt an?</li>
+                  <li><strong>TLS</strong> – Wird die Verbindung verschlüsselt übertragen?</li>
+                </ul>
               </div>
             </div>
           </div>
-          <div class="col-6 col-md-3">
-            <div class="info-box border shadow-none mb-0">
-              <span class="info-box-icon text-bg-warning rounded-start-2">
-                <i class="bi bi-file-earmark-text fs-4"></i>
-              </span>
-              <div class="info-box-content">
-                <span class="info-box-text">Content</span>
-                <span class="info-box-number" style="font-size:.75rem">MIME · Links · Spam</span>
+
+          <div class="col-12 col-md-6">
+            <div class="card border h-100 mp-feature-card">
+              <div class="card-body p-4">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                  <span class="mp-feat-icon text-bg-warning"><i class="bi bi-file-earmark-text"></i></span>
+                  <h6 class="mb-0 fw-semibold">Inhalt &amp; Spam-Signale</h6>
+                </div>
+                <p class="text-secondary small mb-3">
+                  Analysiert den Inhalt der Mail auf Merkmale, die Spam-Filter
+                  anschlagen lassen – bevor sie beim Empfänger ankommt.
+                </p>
+                <ul class="mp-feat-list mb-0">
+                  <li><strong>Spam-Score</strong> – SpamAssassin &amp; Rspamd (optional)</li>
+                  <li><strong>MIME-Struktur</strong> – Korrekte Content-Types &amp; Encoding</li>
+                  <li><strong>Blacklists</strong> – IP-Reputations-Prüfung via DNSBL/RBL</li>
+                </ul>
               </div>
             </div>
           </div>
-          <div class="col-6 col-md-3">
-            <div class="info-box border shadow-none mb-0">
-              <span class="info-box-icon text-bg-secondary rounded-start-2">
-                <i class="bi bi-code-slash fs-4"></i>
-              </span>
-              <div class="info-box-content">
-                <span class="info-box-text">Rohdaten</span>
-                <span class="info-box-number" style="font-size:.75rem">Header · Source · JSON</span>
+
+          <div class="col-12 col-md-6">
+            <div class="card border h-100 mp-feature-card">
+              <div class="card-body p-4">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                  <span class="mp-feat-icon text-bg-secondary"><i class="bi bi-code-slash"></i></span>
+                  <h6 class="mb-0 fw-semibold">Rohdaten &amp; Report</h6>
+                </div>
+                <p class="text-secondary small mb-3">
+                  Alle Prüfergebnisse als übersichtlicher Score-Report – inklusive
+                  vollständigem Zugriff auf Header, Quelltext und Rohdaten.
+                </p>
+                <ul class="mp-feat-list mb-0">
+                  <li><strong>Score 0–10</strong> – Gesamtbewertung auf einen Blick</li>
+                  <li><strong>Header-Analyse</strong> – Received-Chain &amp; alle Mail-Header</li>
+                  <li><strong>JSON-Export</strong> – Maschinenlesbare Report-Ausgabe</li>
+                </ul>
               </div>
             </div>
           </div>
+
         </div>
 
       </div>
     </div>
   </main>
+
+  <!-- Bestätigungs-Modal für Mailbox-Löschung -->
+  <div class="modal fade" id="mp-delete-modal" tabindex="-1" aria-labelledby="mp-delete-modal-label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header border-bottom-0 pb-0">
+          <h5 class="modal-title text-danger" id="mp-delete-modal-label">
+            <i class="bi bi-trash3 me-2"></i>Mailbox löschen?
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+        </div>
+        <div class="modal-body pt-2">
+          <p class="mb-2">
+            Die Mailbox <strong id="mp-delete-addr" class="text-break"></strong> wird
+            dauerhaft gelöscht.
+          </p>
+          <div id="mp-delete-msg-warn" class="alert alert-warning d-none py-2 mb-2" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+            <span id="mp-delete-msg-count"></span>
+          </div>
+          <p class="text-secondary small mb-0">
+            <i class="bi bi-x-circle text-danger me-1"></i>Diese Aktion kann <strong>nicht rückgängig</strong> gemacht werden.
+          </p>
+        </div>
+        <div class="modal-footer border-top-0 pt-0">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-danger" id="mp-delete-confirm-btn">
+            <i class="bi bi-trash3 me-1"></i>Endgültig löschen
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   {{template "consent-banner" .}}
   {{template "page-footer" .}}
