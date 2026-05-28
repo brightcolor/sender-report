@@ -16,6 +16,7 @@ import (
 	"github.com/brightcolor/mailprobev2/internal/analyzer"
 	"github.com/brightcolor/mailprobev2/internal/cleanup"
 	"github.com/brightcolor/mailprobev2/internal/config"
+	"github.com/brightcolor/mailprobev2/internal/envmigrate"
 	"github.com/brightcolor/mailprobev2/internal/db"
 	"github.com/brightcolor/mailprobev2/internal/model"
 	"github.com/brightcolor/mailprobev2/internal/ratelimit"
@@ -29,6 +30,19 @@ func main() {
 	slogHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
 	slogLogger := slog.New(slogHandler)
 	logger := slog.NewLogLogger(slogHandler, slog.LevelInfo)
+
+	// Env migration: append any missing variables to the mounted .env before
+	// loading config so that operators see them on the very next restart.
+	if envFile := strings.TrimSpace(os.Getenv("ENV_FILE")); envFile != "" {
+		added, migrateErr := envmigrate.MigrateFile(envFile)
+		if migrateErr != nil {
+			slogLogger.Warn("env migration failed", "file", envFile, "error", migrateErr)
+		} else if len(added) > 0 {
+			slogLogger.Info("env migration: new variables appended to .env — review and restart to apply",
+				"file", envFile, "count", len(added), "vars", added)
+		}
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		slogLogger.Error("config error", "error", err)

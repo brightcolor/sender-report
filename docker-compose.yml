@@ -8,8 +8,14 @@ services:
     ports:
       - "${HTTP_PORT:-9090}:8080"
       - "${SMTP_PORT:-25}:2525"
+    environment:
+      # Tell the binary where to find the mounted .env so it can auto-append
+      # new variables on every container start (e.g. after a Watchtower pull).
+      - ENV_FILE=/config/.env
     volumes:
       - ./data:/data
+      # Mount the .env file read-write so the binary can append missing variables.
+      - ./.env:/config/.env:rw
       # Mount certificates only when ENABLE_TLS=true, then set TLS_CERT_FILE/TLS_KEY_FILE in .env.
       # - ./certs:/certs:ro
     restart: unless-stopped
