@@ -781,7 +781,7 @@ function openDeleteModal(token, addr, msgCount) {
   }
   const modal = document.getElementById('mp-delete-modal');
   if (modal && typeof bootstrap !== 'undefined') {
-    bootstrap.Modal.getOrCreate(modal).show();
+    bootstrap.Modal.getOrCreateInstance(modal).show();
   }
 }
 
