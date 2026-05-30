@@ -146,6 +146,36 @@ body,
 .mp-inbox-anim[data-state="ready"]    .mp-inbox-spinner { display: none; }
 .mp-inbox-anim[data-state="ready"]    .mp-inbox-env-icon { color: #198754 !important; }
 
+/* ── Analysis step list (home page check loop) ──────────────────────────── */
+.mp-check-steps {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  max-height: 260px;
+  overflow: hidden;
+}
+.mp-check-step {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .8125rem;
+  color: var(--bs-secondary-color);
+  transition: color .2s;
+}
+.mp-check-step.active {
+  color: var(--bs-primary);
+  font-weight: 500;
+}
+.mp-check-step.done {
+  color: var(--bs-success);
+}
+.mp-step-spin {
+  width: 11px !important;
+  height: 11px !important;
+  border-width: 1.5px !important;
+  flex-shrink: 0;
+}
+
 /* Legacy dot (kept so old markup doesn't break) */
 .status-dot {
   width: 9px; height: 9px; border-radius: 50%;

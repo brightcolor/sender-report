@@ -154,7 +154,8 @@ async function createNewAddress() {
     const data = await createMailbox();
     updateMailboxIdentity(data);
     saveMbToHistory(data.token);        // track new token if consented
-    setCheckUIState(false, 'Neue Testadresse bereit.', 'ok');
+    _stopStepAnimation();
+    setCheckUIState(false, 'Neue Mailbox bereit.', 'ok');
     setupMailboxPolling();
   } catch (_) {
     setTransientStatus('Neue Adresse konnte nicht erzeugt werden.', 'warn');
@@ -246,37 +247,109 @@ function setTransientStatus(message, tone) {
 
 // ── Check loop (home page) ────────────────────────────────────────────────────
 
+const ANALYSIS_STEPS = [
+  { icon: 'bi-envelope-open',   label: 'E-Mail wird empfangen'           },
+  { icon: 'bi-shield-check',    label: 'SPF-Record wird geprüft'         },
+  { icon: 'bi-pen',             label: 'DKIM-Signatur wird verifiziert'  },
+  { icon: 'bi-diagram-3',       label: 'DMARC-Policy wird analysiert'    },
+  { icon: 'bi-hdd-network',     label: 'PTR / Reverse-DNS wird geprüft' },
+  { icon: 'bi-person-badge',    label: 'HELO-Identität wird validiert'   },
+  { icon: 'bi-lock',            label: 'TLS-Verbindung wird geprüft'     },
+  { icon: 'bi-list-check',      label: 'Blacklists werden abgefragt'     },
+  { icon: 'bi-file-earmark',    label: 'MIME-Struktur wird analysiert'   },
+  { icon: 'bi-funnel',          label: 'Spam-Score wird berechnet'       },
+  { icon: 'bi-code-square',     label: 'Header-Chain wird ausgewertet'   },
+  { icon: 'bi-bar-chart-line',  label: 'Report wird finalisiert'         },
+];
+
+let _stepTimer   = null;
+let _stepIdx     = 0;
+let _stepDone    = false;
+let _pendingHref = null;
+
+function _renderSteps(upTo) {
+  const el = document.getElementById('check-steps');
+  if (!el) return;
+  el.innerHTML = ANALYSIS_STEPS.slice(0, upTo + 1).map((s, i) => {
+    if (i < upTo) {
+      return `<div class="mp-check-step done">
+        <i class="bi bi-check2-circle text-success"></i>
+        <span>${s.label}</span>
+      </div>`;
+    }
+    return `<div class="mp-check-step active">
+      <span class="spinner-border spinner-border-sm text-primary mp-step-spin" role="status"></span>
+      <span>${s.label} …</span>
+    </div>`;
+  }).join('');
+  // scroll last step into view inside the card
+  el.lastElementChild?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function _startStepAnimation() {
+  _stepIdx   = 0;
+  _stepDone  = false;
+  _pendingHref = null;
+  _renderSteps(0);
+
+  _stepTimer = setInterval(() => {
+    _stepIdx++;
+    if (_stepIdx >= ANALYSIS_STEPS.length) {
+      clearInterval(_stepTimer);
+      _stepTimer = null;
+      _stepDone  = true;
+      if (_pendingHref) { window.location.href = _pendingHref; }
+      return;
+    }
+    _renderSteps(_stepIdx);
+  }, 580); // 12 × 580 ms ≈ 7 s
+}
+
+function _stopStepAnimation() {
+  if (_stepTimer) { clearInterval(_stepTimer); _stepTimer = null; }
+  _stepDone = false;
+  _pendingHref = null;
+  const el = document.getElementById('check-steps');
+  if (el) el.innerHTML = '';
+}
+
 function handleCheckStatusEvent(data) {
   if (data.latest_report_path) {
-    setCheckUIState(false, 'Report bereit – Weiterleitung …', 'ok');
-    window.location.href = data.latest_report_path;
+    // Warte bis die Schritte fertig sind, dann weiterleiten
+    if (_stepDone || !_stepTimer) {
+      window.location.href = data.latest_report_path;
+    } else {
+      _pendingHref = data.latest_report_path;
+    }
     return;
   }
   if (data.latest_message_id) {
-    setCheckUIState(true, 'Mail eingegangen – Analyse läuft …', 'warn');
+    // Mail da, noch kein Report → Animation läuft weiter
     return;
   }
-  setCheckUIState(true, 'Noch keine Mail eingegangen – ich warte weiter …', 'warn');
+  // Noch keine Mail — Animation läuft weiter, nach Ablauf Status zeigen
+  if (_stepDone) {
+    setCheckUIState(true, 'Noch keine Mail eingegangen – ich warte weiter …', 'warn');
+  }
 }
 
 function startCheckLoop() {
   const token = document.getElementById('check-panel')?.dataset?.token;
   if (!token) return;
 
-  setCheckUIState(true, 'Prüfe Eingang …', 'warn');
+  setCheckUIState(true, '', 'warn');
+  _startStepAnimation();
   if (mailboxPollTimer) clearInterval(mailboxPollTimer);
 
   const run = async () => {
     try {
       const data = await fetchMailboxStatus(token);
       handleCheckStatusEvent(data);
-      if (data.latest_report_path) {
+      if (data.latest_report_path && _stepDone) {
         clearInterval(mailboxPollTimer);
         mailboxPollTimer = null;
       }
-    } catch (_) {
-      setCheckUIState(true, 'Statusabfrage fehlgeschlagen – ich versuche es weiter …', 'warn');
-    }
+    } catch (_) { /* still waiting */ }
   };
   run();
   mailboxPollTimer = setInterval(run, 2500);

@@ -113,15 +113,23 @@
                   </button>
                 </div>
 
-                <!-- Wartezustand (sichtbar während Polling) -->
-                <div id="check-loader" class="d-none text-center py-2">
-                  <div class="mp-inbox-anim mx-auto mb-3">
-                    <div class="mp-inbox-spinner spinner-border text-primary" role="status">
-                      <span class="visually-hidden">Warte…</span>
+                <!-- Analyse-Zustand (sichtbar während Polling) -->
+                <div id="check-loader" class="d-none py-2">
+                  <div class="d-flex align-items-start gap-4">
+                    <!-- Spinner links -->
+                    <div class="mp-inbox-anim flex-shrink-0 mt-1">
+                      <div class="mp-inbox-spinner spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Analysiere…</span>
+                      </div>
+                      <i class="mp-inbox-env-icon bi bi-envelope text-primary"></i>
                     </div>
-                    <i class="mp-inbox-env-icon bi bi-envelope text-primary"></i>
+                    <!-- Schritt-Liste rechts -->
+                    <div class="flex-grow-1 min-w-0">
+                      <p class="mb-2 fw-semibold small text-secondary">Analysiere deine E-Mail …</p>
+                      <div id="check-steps" class="mp-check-steps"></div>
+                    </div>
                   </div>
-                  <p id="check-status" class="mb-0 fw-semibold"></p>
+                  <p id="check-status" class="mb-0 text-secondary small mt-2 text-center d-none"></p>
                 </div>
 
                 <!-- Ruhezustand Status -->
