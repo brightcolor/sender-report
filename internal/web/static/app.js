@@ -247,25 +247,76 @@ function setTransientStatus(message, tone) {
 
 // ── Check loop (home page) ────────────────────────────────────────────────────
 
+// matchIds: which check IDs from the report map to this step
+// "worst" status (fail > warn > info > pass) across all matched checks is shown
 const ANALYSIS_STEPS = [
-  { icon: 'bi-envelope-open',   label: 'E-Mail wird empfangen'           },
-  { icon: 'bi-shield-check',    label: 'SPF-Record wird geprüft'         },
-  { icon: 'bi-pen',             label: 'DKIM-Signatur wird verifiziert'  },
-  { icon: 'bi-diagram-3',       label: 'DMARC-Policy wird analysiert'    },
-  { icon: 'bi-hdd-network',     label: 'PTR / Reverse-DNS wird geprüft' },
-  { icon: 'bi-person-badge',    label: 'HELO-Identität wird validiert'   },
-  { icon: 'bi-lock',            label: 'TLS-Verbindung wird geprüft'     },
-  { icon: 'bi-list-check',      label: 'Blacklists werden abgefragt'     },
-  { icon: 'bi-file-earmark',    label: 'MIME-Struktur wird analysiert'   },
-  { icon: 'bi-funnel',          label: 'Spam-Score wird berechnet'       },
-  { icon: 'bi-code-square',     label: 'Header-Chain wird ausgewertet'   },
-  { icon: 'bi-bar-chart-line',  label: 'Report wird finalisiert'         },
+  { label: 'E-Mail wird empfangen',           matchIds: [] },
+  { label: 'SPF-Record wird geprüft',         matchIds: ['spf', 'spf_alignment'] },
+  { label: 'DKIM-Signatur wird verifiziert',  matchIds: ['dkim', 'dkim_alignment'] },
+  { label: 'DMARC-Policy wird analysiert',    matchIds: ['dmarc', 'dmarc_alignment'] },
+  { label: 'PTR / Reverse-DNS wird geprüft',  matchIds: ['ptr'] },
+  { label: 'HELO-Identität wird validiert',   matchIds: ['helo', 'from_alignment'] },
+  { label: 'TLS-Verbindung wird geprüft',     matchIds: ['tls_transport'] },
+  { label: 'Blacklists werden abgefragt',     matchIds: ['rbl'] },
+  { label: 'MIME-Struktur wird analysiert',   matchIds: ['mime_parse','mime_ct','mime_boundary','plain_text','html','html_validity','hidden_html','body_read'] },
+  { label: 'Spam-Score wird berechnet',       matchIds: ['spamassassin','rspamd'] },
+  { label: 'Header-Chain wird ausgewertet',   matchIds: ['mx_records','address_records','received_chain','date','date_skew','subject','subject_exclaim','subject_caps','links','tracking_links','shortener'] },
+  { label: 'Report wird finalisiert',         matchIds: [] },
 ];
 
-let _stepTimer   = null;
-let _stepIdx     = 0;
-let _stepDone    = false;
-let _pendingHref = null;
+const STATUS_RANK = { fail: 3, warn: 2, info: 1, pass: 0 };
+
+function _worstStatus(checks, ids) {
+  if (!checks || !ids.length) return null;
+  let worst = null;
+  for (const c of checks) {
+    if (!ids.includes(c.id)) continue;
+    if (worst === null || (STATUS_RANK[c.status] ?? 0) > (STATUS_RANK[worst] ?? 0)) {
+      worst = c.status;
+    }
+  }
+  return worst;
+}
+
+function _statusIcon(status) {
+  switch (status) {
+    case 'fail': return '<i class="bi bi-x-circle text-danger"></i>';
+    case 'warn': return '<i class="bi bi-exclamation-triangle text-warning"></i>';
+    case 'info': return '<i class="bi bi-info-circle text-info"></i>';
+    default:     return '<i class="bi bi-check2-circle text-success"></i>';
+  }
+}
+
+function _statusClass(status) {
+  switch (status) {
+    case 'fail': return 'mp-check-step result-fail';
+    case 'warn': return 'mp-check-step result-warn';
+    case 'info': return 'mp-check-step result-info';
+    default:     return 'mp-check-step done';
+  }
+}
+
+let _stepTimer    = null;
+let _stepIdx      = 0;
+let _stepDone     = false;
+let _pendingHref  = null;
+let _reportChecks = null;
+
+function _reportApiUrl(reportPath) {
+  const m = String(reportPath).match(/\/report\/([^?/]+)\?msg=([^&]+)/);
+  return m ? `/api/reports/${m[1]}/${m[2]}` : null;
+}
+
+async function _fetchReportChecks(reportPath) {
+  const url = _reportApiUrl(reportPath);
+  if (!url) return;
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    _reportChecks = data.report?.checks ?? null;
+  } catch (_) {}
+}
 
 function _renderSteps(upTo) {
   const el = document.getElementById('check-steps');
@@ -282,19 +333,46 @@ function _renderSteps(upTo) {
       <span>${s.label} …</span>
     </div>`;
   }).join('');
-  // scroll last step into view inside the card
   el.lastElementChild?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
+function _renderStepsWithResults(checks) {
+  const el = document.getElementById('check-steps');
+  if (!el) return;
+  el.innerHTML = ANALYSIS_STEPS.map((s) => {
+    const status = _worstStatus(checks, s.matchIds) || 'pass';
+    return `<div class="${_statusClass(status)}">
+      ${_statusIcon(status)}
+      <span>${s.label}</span>
+    </div>`;
+  }).join('');
+}
+
 function _stepDelay() {
-  // Random pause per step: 380–820 ms → total 4.5–9.8 s across 12 steps
   return Math.floor(Math.random() * 440) + 380;
 }
 
+function _onAnimationComplete() {
+  const doRedirect = () => { if (_pendingHref) window.location.href = _pendingHref; };
+
+  if (_reportChecks) {
+    _renderStepsWithResults(_reportChecks);
+    setTimeout(doRedirect, 1800);
+  } else if (_pendingHref) {
+    // Fetch might still be in flight — give it 600 ms then redirect anyway
+    setTimeout(() => {
+      if (_reportChecks) _renderStepsWithResults(_reportChecks);
+      setTimeout(doRedirect, _reportChecks ? 1800 : 0);
+    }, 600);
+  }
+  // If no report yet, just stay in "waiting" state — poll will trigger again
+}
+
 function _startStepAnimation() {
-  _stepIdx     = 0;
-  _stepDone    = false;
-  _pendingHref = null;
+  _stepIdx      = 0;
+  _stepDone     = false;
+  _pendingHref  = null;
+  _reportChecks = null;
   _renderSteps(0);
 
   function scheduleNext() {
@@ -303,7 +381,7 @@ function _startStepAnimation() {
       if (_stepIdx >= ANALYSIS_STEPS.length) {
         _stepTimer = null;
         _stepDone  = true;
-        if (_pendingHref) { window.location.href = _pendingHref; }
+        _onAnimationComplete();
         return;
       }
       _renderSteps(_stepIdx);
@@ -315,24 +393,26 @@ function _startStepAnimation() {
 
 function _stopStepAnimation() {
   if (_stepTimer) { clearTimeout(_stepTimer); _stepTimer = null; }
-  _stepDone = false;
-  _pendingHref = null;
+  _stepDone = false; _pendingHref = null; _reportChecks = null;
   const el = document.getElementById('check-steps');
   if (el) el.innerHTML = '';
 }
 
 function handleCheckStatusEvent(data) {
   if (data.latest_report_path) {
-    // Weiterleiten — aber erst wenn Schritte fertig sind
-    if (_stepDone || (!_stepTimer && _stepIdx === 0)) {
-      window.location.href = data.latest_report_path;
+    // Fetch report data in background so results can be shown in the step list
+    if (!_reportChecks && !_pendingHref) {
+      _fetchReportChecks(data.latest_report_path);
+    }
+    if (_stepDone) {
+      _onAnimationComplete();
     } else {
       _pendingHref = data.latest_report_path;
     }
     return;
   }
   if (data.latest_message_id) {
-    // Mail empfangen — jetzt erst Schritt-Animation starten (einmalig)
+    // Mail empfangen — Schritt-Animation starten (einmalig)
     if (!_stepTimer && !_stepDone) {
       document.getElementById('check-wait-msg')?.classList.add('d-none');
       document.getElementById('check-steps')?.classList.remove('d-none');
@@ -340,7 +420,6 @@ function handleCheckStatusEvent(data) {
     }
     return;
   }
-  // Noch keine Mail
 }
 
 function startCheckLoop() {

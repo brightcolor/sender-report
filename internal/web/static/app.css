@@ -167,9 +167,10 @@ body,
   color: var(--bs-primary);
   font-weight: 600;
 }
-.mp-check-step.done {
-  color: var(--bs-success);
-}
+.mp-check-step.done      { color: var(--bs-success); }
+.mp-check-step.result-fail { color: var(--bs-danger); }
+.mp-check-step.result-warn { color: var(--bs-warning); }
+.mp-check-step.result-info { color: var(--bs-info); }
 .mp-step-spin {
   width: 12px !important;
   height: 12px !important;
