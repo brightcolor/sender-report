@@ -350,6 +350,141 @@ body,
   font-size: 1.15rem;
 }
 
+/* ── Hero chips + live dot ──────────────────────────────────────────────── */
+.mp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .3rem .7rem;
+  border-radius: 99px;
+  font-size: .78rem;
+  font-weight: 500;
+  color: var(--bs-secondary-color);
+  background: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+}
+.mp-chip i { color: var(--bs-primary); font-size: .85rem; }
+
+.mp-live-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+  animation: mp-pulse 2s ease-in-out infinite;
+}
+
+/* ── Trust strip ────────────────────────────────────────────────────────── */
+.mp-trust-strip {
+  background: var(--bs-body-bg);
+  border-bottom: 1px solid var(--bs-border-color);
+}
+.mp-trust-item {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  justify-content: center;
+}
+@media (min-width: 576px) { .mp-trust-item { justify-content: flex-start; } }
+.mp-trust-item > i {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+
+/* ── Section badge (pill heading) ───────────────────────────────────────── */
+.mp-section-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: .3rem .85rem;
+  border-radius: 99px;
+  font-size: .78rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: var(--bs-primary);
+  background: rgba(var(--bs-primary-rgb), .1);
+  border: 1px solid rgba(var(--bs-primary-rgb), .22);
+}
+
+/* ── Privacy section ────────────────────────────────────────────────────── */
+.mp-privacy-section {
+  background: var(--bs-body-bg);
+  border-top: 1px solid var(--bs-border-color);
+}
+.mp-privacy-list {
+  list-style: none;
+  padding: 0; margin: 0 0 .5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.mp-privacy-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: .85rem;
+}
+.mp-privacy-list li > i {
+  font-size: 1.15rem;
+  color: var(--bs-primary);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.mp-privacy-list strong { font-weight: 600; }
+
+/* Lifecycle visual */
+.mp-privacy-visual {
+  background: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 16px;
+  padding: 2rem 1.75rem;
+}
+.mp-lifecycle { display: flex; flex-direction: column; }
+.mp-lifecycle-step {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.mp-lifecycle-icon {
+  width: 46px; height: 46px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+.mp-lifecycle-line {
+  width: 2px;
+  height: 26px;
+  margin-left: 22px;
+  background: linear-gradient(var(--bs-border-color), var(--bs-border-color));
+  opacity: .8;
+}
+
+/* ── FAQ ────────────────────────────────────────────────────────────────── */
+.mp-faq-section {
+  background: var(--bs-secondary-bg);
+  border-top: 1px solid var(--bs-border-color);
+}
+.mp-faq .accordion-item {
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 12px !important;
+  margin-bottom: .6rem;
+  overflow: hidden;
+}
+.mp-faq .accordion-button {
+  font-weight: 600;
+  background: var(--bs-body-bg);
+  border-radius: 12px !important;
+}
+.mp-faq .accordion-button:not(.collapsed) {
+  color: var(--bs-primary);
+  background: rgba(var(--bs-primary-rgb), .05);
+  box-shadow: none;
+}
+.mp-faq .accordion-button:focus {
+  box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .15);
+}
+
 /* Address box — clickable, copies on click */
 .mp-addr-box {
   display: flex;

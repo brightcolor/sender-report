@@ -26,6 +26,9 @@
         <li class="nav-item d-none d-md-block">
           <span class="badge text-bg-primary">{{.Domain}}</span>
         </li>
+        <li class="nav-item d-none d-sm-block">
+          <a class="nav-link text-secondary small py-0" href="/privacy">Datenschutz</a>
+        </li>
         <li class="nav-item">
           <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
             <span class="theme-icon">AUTO</span>
@@ -38,7 +41,7 @@
   <!-- ── Main ───────────────────────────────────────────────────────────── -->
   <main class="app-main">
 
-    <!-- ══ Hero-Section ══════════════════════════════════════════════════ -->
+    <!-- ══ Hero ══════════════════════════════════════════════════════════ -->
     <section class="mp-hero-section">
       <div class="container-xl px-4 mp-home-container">
         <div class="row align-items-center g-5 py-5">
@@ -49,16 +52,17 @@
               <span class="hdot"></span>Self-hosted &middot; Open Source
             </span>
             <h1 class="mp-hero-h1 mb-4">
-              Deine Mail.<br>Dein Check.<br>Sofort.
+              Landet deine Mail<br>im Posteingang –<br>oder im Spam?
             </h1>
-            <p class="text-secondary mb-5" style="font-size:1.05rem; line-height:1.7">
-              Schick eine Testmail — MailProbe analysiert in Sekunden,
-              warum deine Mails im Spam landen oder nicht ankommen.
-              Kein Account, kein Tracking.
+            <p class="text-secondary mb-4" style="font-size:1.075rem; line-height:1.7">
+              Schick eine Testmail an die Adresse rechts. MailProbe prüft in
+              Sekunden über 20 Zustellbarkeits-Signale und sagt dir genau,
+              <strong class="text-body">warum</strong> deine Mails ankommen –
+              oder eben nicht.
             </p>
 
             <!-- Steps -->
-            <ol class="mp-steps mb-0">
+            <ol class="mp-steps mb-4">
               <li>
                 <span class="mp-step-num">1</span>
                 <div>
@@ -70,17 +74,23 @@
                 <span class="mp-step-num">2</span>
                 <div>
                   <strong>Testmail senden</strong>
-                  <span class="text-secondary d-block" style="font-size:.85rem">Mit deinem eigenen Mailserver oder Client</span>
+                  <span class="text-secondary d-block" style="font-size:.85rem">Von deinem eigenen Mailserver oder Client</span>
                 </div>
               </li>
               <li>
                 <span class="mp-step-num">3</span>
                 <div>
                   <strong>Report öffnen</strong>
-                  <span class="text-secondary d-block" style="font-size:.85rem">SPF, DKIM, DMARC, Score & mehr auf einen Blick</span>
+                  <span class="text-secondary d-block" style="font-size:.85rem">SPF, DKIM, DMARC, Score &amp; mehr auf einen Blick</span>
                 </div>
               </li>
             </ol>
+
+            <div class="d-flex flex-wrap gap-2">
+              <span class="mp-chip"><i class="bi bi-person-x"></i>Kein Account</span>
+              <span class="mp-chip"><i class="bi bi-shield-lock"></i>Keine Tracking-Cookies</span>
+              <span class="mp-chip"><i class="bi bi-lightning-charge"></i>Sofort-Ergebnis</span>
+            </div>
           </div>
 
           <!-- Right: mailbox widget -->
@@ -92,8 +102,10 @@
 
               <div class="card-header py-3 d-flex align-items-center gap-2">
                 <i class="bi bi-envelope-at text-primary"></i>
-                <span class="fw-semibold">Temporäre Mailbox-Adresse</span>
-                <span class="badge text-bg-success ms-auto" style="font-size:.7rem">Bereit</span>
+                <span class="fw-semibold">Deine Test-Mailbox</span>
+                <span class="badge text-bg-success ms-auto d-inline-flex align-items-center gap-1" style="font-size:.7rem">
+                  <span class="mp-live-dot"></span>Bereit
+                </span>
               </div>
 
               <div class="card-body p-4">
@@ -115,8 +127,6 @@
 
                 <!-- Wartezustand (sichtbar nach "Check starten") -->
                 <div id="check-loader" class="d-none text-center py-3">
-
-                  <!-- SVG ring spinner + icon -->
                   <div class="mp-inbox-anim mx-auto mb-3">
                     <svg class="mp-spinner-svg" viewBox="0 0 72 72" fill="none" aria-hidden="true">
                       <circle cx="36" cy="36" r="30" stroke="currentColor" stroke-width="4.5" opacity="0.18"/>
@@ -129,21 +139,16 @@
                     </svg>
                     <i class="mp-inbox-env-icon bi bi-envelope"></i>
                   </div>
-
-                  <!-- Phase 1: Warten auf Mail -->
                   <p id="check-wait-msg" class="text-secondary small mb-0">
                     Warte auf eingehende E-Mail &hellip;
                   </p>
-
-                  <!-- Phase 2: Mail empfangen → Schritt-Animation (zentriert) -->
                   <div id="check-steps" class="mp-check-steps d-none mt-3 mx-auto"></div>
-
                   <p id="check-status" class="mb-0 text-secondary small mt-2 d-none"></p>
                 </div>
 
                 <!-- Ruhezustand Status -->
                 <p id="check-status-idle" class="mb-0 text-center text-secondary small">
-                  Bereit &ndash; noch keine E-Mail für diese Mailbox geprüft.
+                  <i class="bi bi-info-circle me-1"></i>Noch keine E-Mail für diese Mailbox geprüft.
                 </p>
               </div>
 
@@ -171,9 +176,53 @@
       </div>
     </section>
 
+    <!-- ══ Trust-Leiste ══════════════════════════════════════════════════ -->
+    <section class="mp-trust-strip">
+      <div class="container-xl px-4 mp-home-container">
+        <div class="row g-4 py-4 text-center text-sm-start">
+          <div class="col-6 col-lg-3">
+            <div class="mp-trust-item">
+              <i class="bi bi-lightning-charge-fill text-primary"></i>
+              <div>
+                <strong class="d-block">Sofort-Analyse</strong>
+                <span class="text-secondary small">Ergebnis Sekunden nach Mail-Eingang</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="mp-trust-item">
+              <i class="bi bi-incognito text-primary"></i>
+              <div>
+                <strong class="d-block">Ohne Anmeldung</strong>
+                <span class="text-secondary small">Kein Account, keine E-Mail-Adresse nötig</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="mp-trust-item">
+              <i class="bi bi-hourglass-split text-primary"></i>
+              <div>
+                <strong class="d-block">Selbstzerstörend</strong>
+                <span class="text-secondary small">Mailboxen laufen automatisch ab</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="mp-trust-item">
+              <i class="bi bi-git text-primary"></i>
+              <div>
+                <strong class="d-block">Open Source</strong>
+                <span class="text-secondary small">Self-hosted &amp; voll transparent</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ══ Frühere Mailboxen ══════════════════════════════════════════════ -->
     <div id="prev-mailboxes-section" class="d-none">
-      <div class="container-xl px-4 pb-4 mp-home-container">
+      <div class="container-xl px-4 pt-4 mp-home-container">
         <h6 class="text-secondary small fw-semibold text-uppercase mb-3" style="letter-spacing:.06em">
           <i class="bi bi-clock-history me-1"></i>Frühere Mailboxen
         </h6>
@@ -186,9 +235,10 @@
       <div class="container-xl px-4 py-5 mp-home-container">
 
         <div class="text-center mb-5">
-          <h2 class="fw-bold mb-2" style="font-size:1.5rem">Was MailProbe prüft</h2>
-          <p class="text-secondary mb-0" style="max-width:520px;margin:auto">
-            Über 20 automatische Checks direkt nach Mail-Empfang — keine Konfiguration nötig.
+          <span class="mp-section-badge mb-3"><i class="bi bi-check2-circle me-1"></i>20+ automatische Checks</span>
+          <h2 class="fw-bold mb-2" style="font-size:1.65rem">Was MailProbe prüft</h2>
+          <p class="text-secondary mb-0 mx-auto" style="max-width:540px">
+            Vier Dimensionen der Zustellbarkeit – vollständig automatisch, ohne dass du etwas konfigurieren musst.
           </p>
         </div>
 
@@ -235,7 +285,7 @@
                 Inhalt und IP-Reputation — was Spam-Filter wirklich entscheiden lässt.
               </p>
               <ul class="mp-feat-list">
-                <li><strong>SpamAssassin</strong> – Score & Regeldetails</li>
+                <li><strong>SpamAssassin</strong> – Score &amp; Regeldetails</li>
                 <li><strong>Rspamd</strong> – Symbol-Analyse (optional)</li>
                 <li><strong>DNSBL / RBL</strong> – IP auf Blacklists?</li>
               </ul>
@@ -259,6 +309,130 @@
           </div>
         </div>
 
+      </div>
+    </section>
+
+    <!-- ══ Privatsphäre ══════════════════════════════════════════════════ -->
+    <section class="mp-privacy-section">
+      <div class="container-xl px-4 py-5 mp-home-container">
+        <div class="row align-items-center g-5">
+          <div class="col-lg-6">
+            <span class="mp-section-badge mb-3"><i class="bi bi-shield-lock me-1"></i>Privacy by Design</span>
+            <h2 class="fw-bold mb-3" style="font-size:1.65rem">Deine Testmails bleiben deine Sache</h2>
+            <p class="text-secondary mb-4">
+              MailProbe ist als Wegwerf-Werkzeug gebaut: keine Konten, keine Profile,
+              keine Weitergabe. Was du testest, verschwindet von selbst.
+            </p>
+            <ul class="mp-privacy-list">
+              <li><i class="bi bi-link-45deg"></i><div><strong>Der Link ist der Schlüssel.</strong> Nur wer die Mailbox-URL kennt, sieht den Inhalt – nichts ist öffentlich auffindbar.</div></li>
+              <li><i class="bi bi-trash3"></i><div><strong>Automatische Löschung.</strong> Mailboxen und Mails werden nach Ablauf der Gültigkeit restlos entfernt.</div></li>
+              <li><i class="bi bi-hdd-stack"></i><div><strong>Keine externen Dienste.</strong> Alle Skripte, Schriften und Styles kommen vom eigenen Server – keine CDNs, keine Tracker.</div></li>
+              <li><i class="bi bi-people"></i><div><strong>Keine Weitergabe.</strong> Inhalte gehen an keine Werbe- oder Tracking-Dritten. Punkt.</div></li>
+            </ul>
+            <a href="/privacy" class="btn btn-outline-secondary btn-sm mt-2">
+              <i class="bi bi-file-earmark-text me-1"></i>Zur Datenschutzerklärung
+            </a>
+          </div>
+          <div class="col-lg-6">
+            <div class="mp-privacy-visual">
+              <div class="mp-lifecycle">
+                <div class="mp-lifecycle-step">
+                  <span class="mp-lifecycle-icon text-bg-primary"><i class="bi bi-envelope-arrow-down"></i></span>
+                  <div><strong>Mail empfangen</strong><span class="text-secondary small d-block">Analyse läuft sofort</span></div>
+                </div>
+                <div class="mp-lifecycle-line"></div>
+                <div class="mp-lifecycle-step">
+                  <span class="mp-lifecycle-icon text-bg-info"><i class="bi bi-clipboard-data"></i></span>
+                  <div><strong>Report bereitgestellt</strong><span class="text-secondary small d-block">Nur über deinen Link erreichbar</span></div>
+                </div>
+                <div class="mp-lifecycle-line"></div>
+                <div class="mp-lifecycle-step">
+                  <span class="mp-lifecycle-icon text-bg-secondary"><i class="bi bi-fire"></i></span>
+                  <div><strong>Automatisch gelöscht</strong><span class="text-secondary small d-block">Wenn die Mailbox abläuft</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ FAQ ═══════════════════════════════════════════════════════════ -->
+    <section class="mp-faq-section">
+      <div class="container-xl px-4 py-5 mp-home-container" style="max-width:760px">
+        <div class="text-center mb-4">
+          <h2 class="fw-bold mb-2" style="font-size:1.65rem">Häufige Fragen</h2>
+          <p class="text-secondary mb-0">Kurz und ehrlich beantwortet.</p>
+        </div>
+        <div class="accordion mp-faq" id="mp-faq">
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                Brauche ich einen Account?
+              </button>
+            </h3>
+            <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
+              <div class="accordion-body text-secondary">
+                Nein. Es wird automatisch eine temporäre Mailbox erzeugt – ohne Registrierung,
+                ohne E-Mail-Adresse, ohne Passwort.
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                Was passiert mit meinen Testmails?
+              </button>
+            </h3>
+            <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
+              <div class="accordion-body text-secondary">
+                Sie werden ausschließlich für die Analyse verarbeitet und nach Ablauf der
+                Mailbox automatisch und vollständig gelöscht. Es findet keine Weitergabe an
+                Dritte statt.
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                Wie lange ist eine Mailbox gültig?
+              </button>
+            </h3>
+            <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
+              <div class="accordion-body text-secondary">
+                Standardmäßig 24 Stunden. In der Mailbox-Ansicht kannst du die Gültigkeit bei
+                Bedarf verlängern (bis zum vom Betreiber konfigurierten Maximum).
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                Welche Prüfungen werden durchgeführt?
+              </button>
+            </h3>
+            <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
+              <div class="accordion-body text-secondary">
+                Über 20 Checks aus vier Bereichen: Authentifizierung (SPF, DKIM, DMARC),
+                Server &amp; Netz (PTR, HELO, TLS, MX), Spam-Signale (SpamAssassin, Rspamd,
+                DNSBL) sowie Inhalt &amp; MIME-Struktur. Das Ergebnis fasst ein Score von 0–10 zusammen.
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                Kann ich MailProbe selbst hosten?
+              </button>
+            </h3>
+            <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
+              <div class="accordion-body text-secondary">
+                Ja. MailProbe ist Open Source und läuft als einzelnes Docker-Image inklusive
+                Web-UI, SMTP-Empfang und Datenbank – komplett auf deiner eigenen Infrastruktur.
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
