@@ -103,7 +103,8 @@
                   <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren</span>
                 </div>
 
-                <div class="d-flex gap-2 justify-content-center mb-4">
+                <!-- Buttons (sichtbar im Ruhezustand) -->
+                <div id="check-actions" class="d-flex gap-2 justify-content-center mb-3">
                   <button id="check-btn" class="btn btn-primary px-4" type="button">
                     <i class="bi bi-play-fill me-1"></i>Check starten
                   </button>
@@ -112,12 +113,21 @@
                   </button>
                 </div>
 
-                <div class="text-center">
-                  <div id="check-loader" class="mp-scan-dots d-none justify-content-center mb-1" aria-hidden="true">
-                    <span></span><span></span><span></span>
+                <!-- Wartezustand (sichtbar während Polling) -->
+                <div id="check-loader" class="d-none text-center py-2">
+                  <div class="mp-inbox-anim mx-auto mb-3">
+                    <div class="mp-inbox-spinner spinner-border text-primary" role="status">
+                      <span class="visually-hidden">Warte…</span>
+                    </div>
+                    <i class="mp-inbox-env-icon bi bi-envelope text-primary"></i>
                   </div>
-                  <p id="check-status" class="mb-0">Bereit &ndash; noch keine E-Mail geprüft.</p>
+                  <p id="check-status" class="mb-0 fw-semibold"></p>
                 </div>
+
+                <!-- Ruhezustand Status -->
+                <p id="check-status-idle" class="mb-0 text-center text-secondary small">
+                  Bereit &ndash; noch keine E-Mail für diese Mailbox geprüft.
+                </p>
               </div>
 
               <div class="card-footer px-4 py-3">

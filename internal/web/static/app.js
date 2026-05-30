@@ -197,22 +197,32 @@ function updateMailboxStatusText(data) {
 }
 
 function setCheckUIState(active, message, tone) {
-  const status = document.getElementById('check-status');
-  const loader = document.getElementById('check-loader');
-  const button = document.getElementById('check-btn');
-  if (!status || !loader || !button) return;
-
-  status.textContent = message;
-  status.classList.remove('is-ok', 'is-warn');
-  if (tone === 'ok')   status.classList.add('is-ok');
-  if (tone === 'warn') status.classList.add('is-warn');
+  const status     = document.getElementById('check-status');
+  const statusIdle = document.getElementById('check-status-idle');
+  const loader     = document.getElementById('check-loader');
+  const actions    = document.getElementById('check-actions');
+  const button     = document.getElementById('check-btn');
+  if (!loader) return;
 
   if (active) {
+    // Zeige Spinner-Wartezustand
     loader.classList.remove('d-none');
-    button.disabled = true;
+    if (actions)    actions.classList.add('d-none');
+    if (statusIdle) statusIdle.classList.add('d-none');
+    if (button)     button.disabled = true;
   } else {
+    // Zurück zu Buttons
     loader.classList.add('d-none');
-    button.disabled = false;
+    if (actions)    actions.classList.remove('d-none');
+    if (statusIdle) statusIdle.classList.remove('d-none');
+    if (button)     button.disabled = false;
+  }
+
+  if (status) {
+    status.textContent = message;
+    status.classList.remove('is-ok', 'is-warn');
+    if (tone === 'ok')   status.classList.add('is-ok');
+    if (tone === 'warn') status.classList.add('is-warn');
   }
 }
 
