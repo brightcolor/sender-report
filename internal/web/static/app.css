@@ -189,6 +189,13 @@ body,
    HOME PAGE
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Home page width cap (80 % on large screens) ───────────────────────── */
+@media (min-width: 992px) {
+  .mp-home-container {
+    max-width: 80% !important;
+  }
+}
+
 /* ── Hero section ───────────────────────────────────────────────────────── */
 .mp-hero-section {
   background:
