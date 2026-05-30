@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/brightcolor/mailprobev2.git}"
+REPO_URL="${REPO_URL:-https://github.com/brightcolor/sender-report.git}"
 BRANCH="${BRANCH:-main}"
-INSTALL_DIR="${INSTALL_DIR:-/opt/mailprobe}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/sender-report}"
 HTTP_PORT="${HTTP_PORT:-9090}"
 SMTP_PORT="${SMTP_PORT:-25}"   # External mail servers connect on port 25
-MAILPROBE_IMAGE="${MAILPROBE_IMAGE:-ghcr.io/brightcolor/mailprobev2:latest}"
+SENDER_REPORT_IMAGE="${SENDER_REPORT_IMAGE:-ghcr.io/brightcolor/sender-report:latest}"
 SMTP_DOMAIN="${SMTP_DOMAIN:-}"
 PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-}"
 ENABLE_TLS="${ENABLE_TLS:-false}"
@@ -169,7 +169,7 @@ setup_env_file() {
   set_env_key "TLS_KEY_FILE"    "$TLS_KEY_FILE"
   set_env_key "FORCE_HTTPS"     "$FORCE_HTTPS"
   set_env_key "HEALTHCHECK_URL" "$HEALTHCHECK_URL"
-  set_env_key "MAILPROBE_IMAGE" "$MAILPROBE_IMAGE"
+  set_env_key "SENDER_REPORT_IMAGE" "$SENDER_REPORT_IMAGE"
   set_env_key "ENABLE_RSPAMD"   "$ENABLE_RSPAMD"
   set_env_key "ENABLE_REDIS"    "$ENABLE_REDIS"
   set_env_key "REDIS_ADDR"      "redis:6379"
@@ -195,7 +195,7 @@ YAML
     cat >> "$override_file" <<'YAML'
   rspamd:
     image: rspamd/rspamd:latest
-    container_name: mailprobe-rspamd
+    container_name: sender-report-rspamd
     restart: unless-stopped
     expose:
       - "11334"
@@ -209,7 +209,7 @@ YAML
     cat >> "$override_file" <<'YAML'
   redis:
     image: redis:7-alpine
-    container_name: mailprobe-redis
+    container_name: sender-report-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
     expose:
@@ -234,7 +234,7 @@ start_stack() {
   log "Pulling container image"
   docker_cmd compose pull
 
-  log "Starting MailProbe stack"
+  log "Starting Sender-Report stack"
   docker_cmd compose up -d
 }
 
@@ -258,7 +258,7 @@ main() {
   cat <<EOF
 
 ══════════════════════════════════════════════
-  MailProbe setup complete
+  Sender-Report setup complete
 ══════════════════════════════════════════════
 
   Install path : $INSTALL_DIR
@@ -283,7 +283,7 @@ Next steps:
 EOF
 
   if [[ "$ENABLE_REDIS" == "true" ]]; then
-    echo "Note: Redis is optional and not used by the core MailProbe code path."
+    echo "Note: Redis is optional and not used by the core Sender-Report code path."
     echo ""
   fi
 }

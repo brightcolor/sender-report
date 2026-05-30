@@ -1,5 +1,5 @@
 /*
- * MailProbe client-side cryptography.
+ * Sender-Report client-side cryptography.
  *
  * Implements the browser half of the end-to-end encryption described in
  * docs/ENCRYPTION.md. The byte layout matches internal/sealedbox (Go) exactly.
@@ -11,7 +11,7 @@
  *
  * Requires tweetnacl.min.js (global `nacl`) to be loaded first.
  *
- * Public API (global `MailProbeCrypto`):
+ * Public API (global `SenderReportCrypto`):
  *   await generateToken()          -> { token, secret, public, identifier }
  *   await fromToken(token)         -> { secret, public, identifier }
  *   await identifier(publicBytes)  -> "abc...16chars"
@@ -161,18 +161,18 @@
       var id = await identifier(nacl.scalarMult.base(secret));
       var ok = text === VECTOR.plaintext && id === VECTOR.identifier;
       if (ok) {
-        console.log('[MailProbe] crypto self-test PASSED (Go↔JS interop verified)');
+        console.log('[Sender-Report] crypto self-test PASSED (Go↔JS interop verified)');
       } else {
-        console.error('[MailProbe] crypto self-test FAILED', { text: text, id: id });
+        console.error('[Sender-Report] crypto self-test FAILED', { text: text, id: id });
       }
       return ok;
     } catch (e) {
-      console.error('[MailProbe] crypto self-test ERROR', e);
+      console.error('[Sender-Report] crypto self-test ERROR', e);
       return false;
     }
   }
 
-  root.MailProbeCrypto = {
+  root.SenderReportCrypto = {
     generateToken: generateToken,
     fromToken: fromToken,
     identifier: identifier,

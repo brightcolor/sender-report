@@ -22,14 +22,14 @@ func TestRenderPrometheusIncludesCounters(t *testing.T) {
 
 	out := c.RenderPrometheus()
 	want := []string{
-		"mailprobe_http_requests_total 1",
-		"mailprobe_mailboxes_created_total 1",
-		"mailprobe_mails_received_total 1",
-		"mailprobe_reports_generated_total 1",
-		"mailprobe_analyzer_errors_total 1",
-		"mailprobe_inbound_errors_total 1",
-		"mailprobe_web_ratelimit_blocked_total 1",
-		"mailprobe_smtp_ratelimit_blocked_total 1",
+		"sender_report_http_requests_total 1",
+		"sender_report_mailboxes_created_total 1",
+		"sender_report_mails_received_total 1",
+		"sender_report_reports_generated_total 1",
+		"sender_report_analyzer_errors_total 1",
+		"sender_report_inbound_errors_total 1",
+		"sender_report_web_ratelimit_blocked_total 1",
+		"sender_report_smtp_ratelimit_blocked_total 1",
 	}
 	for _, needle := range want {
 		if !strings.Contains(out, needle) {

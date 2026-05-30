@@ -1,7 +1,7 @@
 ﻿services:
   spamd:
     image: kaiofelixde/spamassassin:latest
-    container_name: mailprobe-spamd
+    container_name: sender-report-spamd
     restart: unless-stopped
     expose:
       - "783"

@@ -13,17 +13,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/brightcolor/mailprobev2/internal/analyzer"
-	"github.com/brightcolor/mailprobev2/internal/cleanup"
-	"github.com/brightcolor/mailprobev2/internal/config"
-	"github.com/brightcolor/mailprobev2/internal/envmigrate"
-	"github.com/brightcolor/mailprobev2/internal/db"
-	"github.com/brightcolor/mailprobev2/internal/model"
-	"github.com/brightcolor/mailprobev2/internal/ratelimit"
-	"github.com/brightcolor/mailprobev2/internal/smtp"
-	"github.com/brightcolor/mailprobev2/internal/store"
-	"github.com/brightcolor/mailprobev2/internal/telemetry"
-	"github.com/brightcolor/mailprobev2/internal/web"
+	"github.com/brightcolor/sender-report/internal/analyzer"
+	"github.com/brightcolor/sender-report/internal/cleanup"
+	"github.com/brightcolor/sender-report/internal/config"
+	"github.com/brightcolor/sender-report/internal/envmigrate"
+	"github.com/brightcolor/sender-report/internal/db"
+	"github.com/brightcolor/sender-report/internal/model"
+	"github.com/brightcolor/sender-report/internal/ratelimit"
+	"github.com/brightcolor/sender-report/internal/smtp"
+	"github.com/brightcolor/sender-report/internal/store"
+	"github.com/brightcolor/sender-report/internal/telemetry"
+	"github.com/brightcolor/sender-report/internal/web"
 )
 
 func main() {
@@ -240,7 +240,7 @@ func smtpGreetingDomain(cfg config.Config) string {
 	if domain := strings.TrimSpace(cfg.SMTPDomain); domain != "" {
 		return domain
 	}
-	return "mailprobe.local"
+	return "sender-report.local"
 }
 
 func headerBlock(raw string) string {

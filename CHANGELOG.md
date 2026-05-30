@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **Renamed the project from MailProbe to Sender-Report** (complete rename): display name, Go module path (`github.com/brightcolor/sender-report`), `cmd/` folder, binary, Docker image (`ghcr.io/brightcolor/sender-report`), `SENDER_REPORT_IMAGE` env var, Prometheus metric prefix (`sender_report_*`), and the brand mark (`SR`). Internal storage keys, cookies, the SQLite filename and cryptographic protocol constants are intentionally kept stable for backward compatibility.
+
 ### Added
 - Added provider-specific RBL/DNSBL delisting guidance, lookup evidence, TXT evidence, and pre-delisting remediation steps.
 - Added optional built-in HTTPS serving via `ENABLE_TLS`, `TLS_CERT_FILE`, and `TLS_KEY_FILE`.
@@ -47,7 +50,7 @@ All notable changes to this project will be documented in this file.
 ## [0.1.0] - 2026-04-22
 
 ### Added
-- Initial self-hosted MailProbe implementation.
+- Initial self-hosted Sender-Report implementation.
 - Single-binary Go backend with integrated SMTP receiver and web UI.
 - SQLite persistence for mailboxes, messages, and reports.
 - Deliverability and spam heuristics (SPF, DKIM, DMARC, PTR, HELO, MIME, links, headers, newsletter checks, Unicode checks, optional RBL).
@@ -57,6 +60,6 @@ All notable changes to this project will be documented in this file.
 - Documentation, environment template, and MIT license.
 - GitHub Actions CI for tests and multi-arch container publishing to GHCR.
 - Optional Rspamd integration via controller API (`/checkv2`) with report scoring.
-- Added `scripts/quickstart.sh` to install Docker/Compose (if missing) and deploy MailProbe in one command.
+- Added `scripts/quickstart.sh` to install Docker/Compose (if missing) and deploy Sender-Report in one command.
 - Quickstart now prompts for optional `rspamd` and `redis`, writes `.env` flags, and generates `docker-compose.override.yml` accordingly.
 - Rspamd analysis now surfaces top positive symbols and concrete remediation guidance in report checks.

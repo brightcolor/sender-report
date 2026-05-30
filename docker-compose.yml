@@ -1,8 +1,8 @@
 services:
-  mailprobe:
-    image: ${MAILPROBE_IMAGE:-ghcr.io/brightcolor/mailprobev2:latest}
+  sender-report:
+    image: ${SENDER_REPORT_IMAGE:-ghcr.io/brightcolor/sender-report:latest}
     pull_policy: always
-    container_name: mailprobe
+    container_name: sender-report
     env_file:
       - .env
     ports:

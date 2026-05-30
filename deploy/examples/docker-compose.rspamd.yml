@@ -1,7 +1,7 @@
 services:
   rspamd:
     image: rspamd/rspamd:latest
-    container_name: mailprobe-rspamd
+    container_name: sender-report-rspamd
     restart: unless-stopped
     expose:
       - "11334"

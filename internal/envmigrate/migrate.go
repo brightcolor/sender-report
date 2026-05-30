@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brightcolor/mailprobev2/internal/version"
+	"github.com/brightcolor/sender-report/internal/version"
 )
 
 // VarDef describes one environment variable.
@@ -37,14 +37,14 @@ type VarDef struct {
 //nolint:gochecknoglobals
 var All = []VarDef{
 	// ── App ──────────────────────────────────────────────────────────────────
-	{Group: "App", Key: "APP_NAME", Default: "MailProbe", Comment: "Application display name"},
+	{Group: "App", Key: "APP_NAME", Default: "Sender-Report", Comment: "Application display name"},
 
 	// ── Listen addresses ─────────────────────────────────────────────────────
 	{Group: "Listen addresses (do NOT change when using Docker)", Key: "HTTP_LISTEN_ADDR", Default: ":8080", Comment: "Internal HTTP listen address inside the container"},
 	{Key: "SMTP_LISTEN_ADDR", Default: ":2525", Comment: "Internal SMTP listen address inside the container"},
 
 	// ── Public URLs ───────────────────────────────────────────────────────────
-	{Group: "Public URLs", Key: "PUBLIC_BASE_URL", Default: "", Comment: "Override auto-detected public base URL, e.g. https://mailprobe.example.com"},
+	{Group: "Public URLs", Key: "PUBLIC_BASE_URL", Default: "", Comment: "Override auto-detected public base URL, e.g. https://sender-report.example.com"},
 	{Key: "SMTP_DOMAIN", Default: "", Comment: "SMTP domain for generated addresses; defaults to request host"},
 
 	// ── TLS ───────────────────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ var All = []VarDef{
 	{Key: "FORCE_HTTPS", Default: "false", Comment: "Redirect plain HTTP to HTTPS"},
 
 	// ── Docker / Compose ─────────────────────────────────────────────────────
-	{Group: "Docker / Compose", Key: "MAILPROBE_IMAGE", Default: "ghcr.io/brightcolor/mailprobev2:latest", Comment: "Container image used by docker-compose"},
+	{Group: "Docker / Compose", Key: "SENDER_REPORT_IMAGE", Default: "ghcr.io/brightcolor/sender-report:latest", Comment: "Container image used by docker-compose"},
 	{Key: "HTTP_PORT", Default: "9090", Comment: "Host port mapped to the web UI (container always uses :8080)"},
 	{Key: "SMTP_PORT", Default: "25", Comment: "Host port for inbound SMTP (use 25 in production)"},
 	{Key: "HEALTHCHECK_URL", Default: "http://127.0.0.1:9090/healthz", Comment: "Health-check URL used by the compose healthcheck"},
@@ -145,7 +145,7 @@ func MigrateFile(path string) (added []string, err error) {
 	header := []string{
 		"",
 		"# ══════════════════════════════════════════════════════════════════════════════",
-		fmt.Sprintf("# Auto-added by MailProbe %s on %s", version.Version, time.Now().UTC().Format("2006-01-02")),
+		fmt.Sprintf("# Auto-added by Sender-Report %s on %s", version.Version, time.Now().UTC().Format("2006-01-02")),
 		"# New variables were found that are not yet in this file.",
 		"# Review the values below and restart the container when done.",
 		"# ══════════════════════════════════════════════════════════════════════════════",

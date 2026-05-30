@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brightcolor/mailprobev2/internal/config"
-	"github.com/brightcolor/mailprobev2/internal/model"
+	"github.com/brightcolor/sender-report/internal/config"
+	"github.com/brightcolor/sender-report/internal/model"
 )
 
 func TestRandomTokenHexLength(t *testing.T) {
@@ -157,12 +157,12 @@ func TestRequestURLUsesTrustedForwardedHeaders(t *testing.T) {
 	req := httptest.NewRequest("GET", "http://internal:8080/", nil)
 	req.RemoteAddr = "10.1.2.3:12345"
 	req.Header.Set("X-Forwarded-Proto", "https")
-	req.Header.Set("X-Forwarded-Host", "mailprobe.example.test")
+	req.Header.Set("X-Forwarded-Host", "sender-report.example.test")
 
-	if got := srv.publicBaseURL(req); got != "https://mailprobe.example.test" {
+	if got := srv.publicBaseURL(req); got != "https://sender-report.example.test" {
 		t.Fatalf("expected forwarded public URL, got %q", got)
 	}
-	if got := srv.requestSMTPDomain(req); got != "mailprobe.example.test" {
+	if got := srv.requestSMTPDomain(req); got != "sender-report.example.test" {
 		t.Fatalf("expected forwarded smtp domain, got %q", got)
 	}
 }

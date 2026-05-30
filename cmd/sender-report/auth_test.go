@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brightcolor/mailprobev2/internal/config"
-	"github.com/brightcolor/mailprobev2/internal/smtp"
+	"github.com/brightcolor/sender-report/internal/config"
+	"github.com/brightcolor/sender-report/internal/smtp"
 )
 
 func TestEnrichWithReceiverAuthHeadersAddsAuthBlocks(t *testing.T) {
@@ -24,9 +24,9 @@ func TestEnrichWithReceiverAuthHeadersAddsAuthBlocks(t *testing.T) {
 	want := []string{
 		"Authentication-Results:",
 		"Received-SPF:",
-		"X-MailProbe-SPF-Detail:",
-		"X-MailProbe-DKIM-Detail:",
-		"X-MailProbe-DMARC-Detail:",
+		"X-Sender-Report-SPF-Detail:",
+		"X-Sender-Report-DKIM-Detail:",
+		"X-Sender-Report-DMARC-Detail:",
 		"\r\nSubject: Demo\r\n",
 	}
 	for _, needle := range want {

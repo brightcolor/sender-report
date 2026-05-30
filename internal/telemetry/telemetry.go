@@ -40,41 +40,41 @@ func (c *Counters) IncSMTPRateLimited()  { c.smtpRateLimitBlocked.Add(1) }
 func (c *Counters) RenderPrometheus() string {
 	uptimeSeconds := time.Since(c.startedAt).Seconds()
 	var b strings.Builder
-	b.WriteString("# HELP mailprobe_uptime_seconds Process uptime in seconds\n")
-	b.WriteString("# TYPE mailprobe_uptime_seconds gauge\n")
-	b.WriteString(fmt.Sprintf("mailprobe_uptime_seconds %.0f\n", uptimeSeconds))
+	b.WriteString("# HELP sender_report_uptime_seconds Process uptime in seconds\n")
+	b.WriteString("# TYPE sender_report_uptime_seconds gauge\n")
+	b.WriteString(fmt.Sprintf("sender_report_uptime_seconds %.0f\n", uptimeSeconds))
 
-	b.WriteString("# HELP mailprobe_http_requests_total Total HTTP requests\n")
-	b.WriteString("# TYPE mailprobe_http_requests_total counter\n")
-	b.WriteString(fmt.Sprintf("mailprobe_http_requests_total %d\n", c.httpRequestsTotal.Load()))
+	b.WriteString("# HELP sender_report_http_requests_total Total HTTP requests\n")
+	b.WriteString("# TYPE sender_report_http_requests_total counter\n")
+	b.WriteString(fmt.Sprintf("sender_report_http_requests_total %d\n", c.httpRequestsTotal.Load()))
 
-	b.WriteString("# HELP mailprobe_mailboxes_created_total Total created mailboxes\n")
-	b.WriteString("# TYPE mailprobe_mailboxes_created_total counter\n")
-	b.WriteString(fmt.Sprintf("mailprobe_mailboxes_created_total %d\n", c.mailboxesCreated.Load()))
+	b.WriteString("# HELP sender_report_mailboxes_created_total Total created mailboxes\n")
+	b.WriteString("# TYPE sender_report_mailboxes_created_total counter\n")
+	b.WriteString(fmt.Sprintf("sender_report_mailboxes_created_total %d\n", c.mailboxesCreated.Load()))
 
-	b.WriteString("# HELP mailprobe_mails_received_total Total inbound mails received\n")
-	b.WriteString("# TYPE mailprobe_mails_received_total counter\n")
-	b.WriteString(fmt.Sprintf("mailprobe_mails_received_total %d\n", c.mailsReceived.Load()))
+	b.WriteString("# HELP sender_report_mails_received_total Total inbound mails received\n")
+	b.WriteString("# TYPE sender_report_mails_received_total counter\n")
+	b.WriteString(fmt.Sprintf("sender_report_mails_received_total %d\n", c.mailsReceived.Load()))
 
-	b.WriteString("# HELP mailprobe_reports_generated_total Total analysis reports generated\n")
-	b.WriteString("# TYPE mailprobe_reports_generated_total counter\n")
-	b.WriteString(fmt.Sprintf("mailprobe_reports_generated_total %d\n", c.reportsGenerated.Load()))
+	b.WriteString("# HELP sender_report_reports_generated_total Total analysis reports generated\n")
+	b.WriteString("# TYPE sender_report_reports_generated_total counter\n")
+	b.WriteString(fmt.Sprintf("sender_report_reports_generated_total %d\n", c.reportsGenerated.Load()))
 
-	b.WriteString("# HELP mailprobe_analyzer_errors_total Total analyzer/report persistence errors\n")
-	b.WriteString("# TYPE mailprobe_analyzer_errors_total counter\n")
-	b.WriteString(fmt.Sprintf("mailprobe_analyzer_errors_total %d\n", c.analyzerErrors.Load()))
+	b.WriteString("# HELP sender_report_analyzer_errors_total Total analyzer/report persistence errors\n")
+	b.WriteString("# TYPE sender_report_analyzer_errors_total counter\n")
+	b.WriteString(fmt.Sprintf("sender_report_analyzer_errors_total %d\n", c.analyzerErrors.Load()))
 
-	b.WriteString("# HELP mailprobe_inbound_errors_total Total inbound processing errors\n")
-	b.WriteString("# TYPE mailprobe_inbound_errors_total counter\n")
-	b.WriteString(fmt.Sprintf("mailprobe_inbound_errors_total %d\n", c.inboundErrors.Load()))
+	b.WriteString("# HELP sender_report_inbound_errors_total Total inbound processing errors\n")
+	b.WriteString("# TYPE sender_report_inbound_errors_total counter\n")
+	b.WriteString(fmt.Sprintf("sender_report_inbound_errors_total %d\n", c.inboundErrors.Load()))
 
-	b.WriteString("# HELP mailprobe_web_ratelimit_blocked_total Total web requests blocked by rate limiting\n")
-	b.WriteString("# TYPE mailprobe_web_ratelimit_blocked_total counter\n")
-	b.WriteString(fmt.Sprintf("mailprobe_web_ratelimit_blocked_total %d\n", c.webRateLimitBlocked.Load()))
+	b.WriteString("# HELP sender_report_web_ratelimit_blocked_total Total web requests blocked by rate limiting\n")
+	b.WriteString("# TYPE sender_report_web_ratelimit_blocked_total counter\n")
+	b.WriteString(fmt.Sprintf("sender_report_web_ratelimit_blocked_total %d\n", c.webRateLimitBlocked.Load()))
 
-	b.WriteString("# HELP mailprobe_smtp_ratelimit_blocked_total Total SMTP sessions blocked by rate limiting\n")
-	b.WriteString("# TYPE mailprobe_smtp_ratelimit_blocked_total counter\n")
-	b.WriteString(fmt.Sprintf("mailprobe_smtp_ratelimit_blocked_total %d\n", c.smtpRateLimitBlocked.Load()))
+	b.WriteString("# HELP sender_report_smtp_ratelimit_blocked_total Total SMTP sessions blocked by rate limiting\n")
+	b.WriteString("# TYPE sender_report_smtp_ratelimit_blocked_total counter\n")
+	b.WriteString(fmt.Sprintf("sender_report_smtp_ratelimit_blocked_total %d\n", c.smtpRateLimitBlocked.Load()))
 
 	return b.String()
 }

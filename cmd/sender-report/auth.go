@@ -12,8 +12,8 @@ import (
 	"github.com/emersion/go-msgauth/dkim"
 	"github.com/emersion/go-msgauth/dmarc"
 
-	"github.com/brightcolor/mailprobev2/internal/config"
-	"github.com/brightcolor/mailprobev2/internal/smtp"
+	"github.com/brightcolor/sender-report/internal/config"
+	"github.com/brightcolor/sender-report/internal/smtp"
 )
 
 type authResults struct {
@@ -35,9 +35,9 @@ func enrichWithReceiverAuthHeaders(ctx context.Context, cfg config.Config, rm sm
 	detailHeaders := []string{
 		authHeader,
 		receivedSPF,
-		"X-MailProbe-SPF-Detail: " + safeAuthValue(emptyFallback(res.SPFDetail, "none")),
-		"X-MailProbe-DKIM-Detail: " + safeAuthValue(emptyFallback(res.DKIMDetail, "none")),
-		"X-MailProbe-DMARC-Detail: " + safeAuthValue(emptyFallback(res.DMARCDetail, "none")),
+		"X-Sender-Report-SPF-Detail: " + safeAuthValue(emptyFallback(res.SPFDetail, "none")),
+		"X-Sender-Report-DKIM-Detail: " + safeAuthValue(emptyFallback(res.DKIMDetail, "none")),
+		"X-Sender-Report-DMARC-Detail: " + safeAuthValue(emptyFallback(res.DMARCDetail, "none")),
 	}
 	return prependHeaders(raw, detailHeaders)
 }
@@ -68,7 +68,7 @@ func evaluateAuthResults(ctx context.Context, rm smtp.ReceivedMail, raw string) 
 
 func buildAuthenticationResultsHeader(authServID string, res authResults) string {
 	if strings.TrimSpace(authServID) == "" {
-		authServID = "mailprobe.local"
+		authServID = "sender-report.local"
 	}
 	spfDomain := safeAuthValue(emptyFallback(res.SPFDomain, "unknown"))
 	dkimDomain := safeAuthValue(emptyFallback(res.DKIMDomain, "unknown"))
@@ -94,7 +94,7 @@ func buildReceivedSPFHeader(receiver string, rm smtp.ReceivedMail, spfResult str
 		safeAuthValue(rm.RemoteIP),
 		safeAuthValue(emptyFallback(rm.MailFrom, "<>")),
 		safeAuthValue(emptyFallback(rm.HELO, "unknown")),
-		safeAuthValue(emptyFallback(receiver, "mailprobe.local")),
+		safeAuthValue(emptyFallback(receiver, "sender-report.local")),
 	)
 }
 

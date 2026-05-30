@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/brightcolor/mailprobev2/internal/config"
-	"github.com/brightcolor/mailprobev2/internal/db"
-	"github.com/brightcolor/mailprobev2/internal/model"
-	"github.com/brightcolor/mailprobev2/internal/store"
+	"github.com/brightcolor/sender-report/internal/config"
+	"github.com/brightcolor/sender-report/internal/db"
+	"github.com/brightcolor/sender-report/internal/model"
+	"github.com/brightcolor/sender-report/internal/store"
 )
 
 func TestReportUsesTokenURLAndInlineRawAccordion(t *testing.T) {
@@ -83,7 +83,7 @@ func TestHomeGeneratesNewMailboxOnEachOpen(t *testing.T) {
 
 	st := store.New(sqlDB)
 	cfg := config.Config{
-		AppName:              "MailProbe",
+		AppName:              "Sender-Report",
 		PublicBaseURL:        "http://localhost:8080",
 		SMTPDomain:           "example.test",
 		MailboxTTL:           time.Hour,
@@ -150,7 +150,7 @@ func TestCreateMailboxJSONReturnsNewAddressWithoutRedirect(t *testing.T) {
 
 	st := store.New(sqlDB)
 	cfg := config.Config{
-		AppName:              "MailProbe",
+		AppName:              "Sender-Report",
 		PublicBaseURL:        "http://localhost:8080",
 		SMTPDomain:           "example.test",
 		MailboxTTL:           time.Hour,
@@ -366,7 +366,7 @@ func prepareWebTestFixture(t *testing.T) (*Server, *store.Store, model.Mailbox, 
 	}
 
 	cfg := config.Config{
-		AppName:            "MailProbe",
+		AppName:            "Sender-Report",
 		PublicBaseURL:      "http://localhost:8080",
 		SMTPDomain:         "example.test",
 		MailboxTTL:         time.Hour,

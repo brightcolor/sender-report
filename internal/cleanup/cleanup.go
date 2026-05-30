@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/brightcolor/mailprobev2/internal/store"
+	"github.com/brightcolor/sender-report/internal/store"
 )
 
 func Start(ctx context.Context, logger *log.Logger, st *store.Store, interval, retention time.Duration) {

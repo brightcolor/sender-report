@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/brightcolor/mailprobev2/internal/ratelimit"
+	"github.com/brightcolor/sender-report/internal/ratelimit"
 )
 
 type ReceivedMail struct {
@@ -94,7 +94,7 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	}
 
 	_ = conn.SetDeadline(time.Now().Add(3 * time.Minute))
-	writeLine(conn, "220 "+s.Domain+" MailProbe SMTP")
+	writeLine(conn, "220 "+s.Domain+" Sender-Report SMTP")
 
 	r := bufio.NewReader(conn)
 	var helo, mailFrom string

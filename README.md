@@ -1,11 +1,11 @@
-# MailProbe v2
+# Sender-Report v2
 
-[![CI](https://github.com/brightcolor/mailprobev2/actions/workflows/ci.yml/badge.svg)](https://github.com/brightcolor/mailprobev2/actions/workflows/ci.yml)
+[![CI](https://github.com/brightcolor/sender-report/actions/workflows/ci.yml/badge.svg)](https://github.com/brightcolor/sender-report/actions/workflows/ci.yml)
 [![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
-Quickstart: `bash <(curl -fsSL https://raw.githubusercontent.com/brightcolor/mailprobev2/main/scripts/quickstart.sh)`
+Quickstart: `bash <(curl -fsSL https://raw.githubusercontent.com/brightcolor/sender-report/main/scripts/quickstart.sh)`
 
-MailProbe is a self-hosted email deliverability test service.
+Sender-Report is a self-hosted email deliverability test service.
 It accepts test emails on temporary addresses, stores the raw message, runs transparent checks, and shows a report with score + findings.
 
 ## What's new in v2
@@ -36,8 +36,8 @@ This project is intentionally built for small VPS setups (including ~1 GB RAM en
 1. Open the web UI
 2. Generate a random temporary mailbox
 3. Send your campaign/test email to that address
-4. MailProbe receives and stores the message
-5. MailProbe analyzes the message and creates a report
+4. Sender-Report receives and stores the message
+5. Sender-Report analyzes the message and creates a report
 6. Open the report with score, checks, warnings, and suggestions
 
 ## Features
@@ -120,7 +120,7 @@ This is stored in the report JSON and visible in the web UI. Existing API consum
 
 ## Architecture
 
-- `cmd/mailprobe/main.go`: bootstrap and service wiring
+- `cmd/sender-report/main.go`: bootstrap and service wiring
 - `internal/smtp`: lightweight SMTP receiver
 - `internal/analyzer`: parsing + checks + scoring
 - `internal/store`, `internal/db`: SQLite persistence layer
@@ -133,7 +133,7 @@ Bundled UI vendor assets:
 - `internal/web/static/vendor/vvveb/fonts/inter/*`
 - `internal/web/static/vendor/vvveb/LICENSE`
 
-The Vvveb Admin Template assets are Apache-2.0 licensed. MailProbe keeps them local to avoid third-party CDN calls.
+The Vvveb Admin Template assets are Apache-2.0 licensed. Sender-Report keeps them local to avoid third-party CDN calls.
 
 Data path:
 
@@ -155,7 +155,7 @@ Data path:
 Fully automatic (installs Docker + Docker Compose if missing, no SSL/reverse-proxy setup):
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/brightcolor/mailprobev2/main/scripts/quickstart.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/brightcolor/sender-report/main/scripts/quickstart.sh)
 ```
 
 The installer asks whether optional `rspamd` and `redis` services should be enabled.
@@ -164,7 +164,7 @@ Based on your choice it generates `docker-compose.override.yml` (instead of edit
 Optional environment overrides for the script:
 
 ```bash
-INSTALL_DIR=/opt/mailprobev2 \
+INSTALL_DIR=/opt/sender-report \
 HTTP_PORT=8080 \
 SMTP_PORT=2525 \
 SMTP_DOMAIN= \
@@ -173,14 +173,14 @@ ENABLE_TLS=false \
 FORCE_HTTPS=false \
 ENABLE_RSPAMD=false \
 ENABLE_REDIS=false \
-bash <(curl -fsSL https://raw.githubusercontent.com/brightcolor/mailprobev2/main/scripts/quickstart.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/brightcolor/sender-report/main/scripts/quickstart.sh)
 ```
 
 Manual setup:
 
 ```bash
 cp .env.example .env
-# edit: MAILPROBE_IMAGE, ports, optional TLS/proxy settings
+# edit: SENDER_REPORT_IMAGE, ports, optional TLS/proxy settings
 
 docker compose pull
 docker compose up -d
@@ -194,8 +194,8 @@ Open UI:
 
 Example records:
 
-- `A mailprobe.example.org -> <server-ip>`
-- `MX mx-test.example.org 10 mailprobe.example.org`
+- `A sender-report.example.org -> <server-ip>`
+- `MX mx-test.example.org 10 sender-report.example.org`
 
 Recommended runtime setup:
 
@@ -216,7 +216,7 @@ Copy `.env.example` and adjust.
 
 Important variables:
 
-- `MAILPROBE_IMAGE` (default: `ghcr.io/brightcolor/mailprobev2:latest`; pin a version tag for production)
+- `SENDER_REPORT_IMAGE` (default: `ghcr.io/brightcolor/sender-report:latest`; pin a version tag for production)
 - `PUBLIC_BASE_URL` (optional override; leave empty to derive scheme + host from the request)
 - `SMTP_DOMAIN` (optional override; leave empty to use the request host for generated mailbox domains)
 - `ENABLE_TLS`, `TLS_CERT_FILE`, `TLS_KEY_FILE` (optional direct TLS for the built-in web server)
@@ -241,7 +241,7 @@ Important variables:
 
 ### URL and domain autodetection
 
-By default, MailProbe no longer needs `PUBLIC_BASE_URL` or `SMTP_DOMAIN` in `.env`.
+By default, Sender-Report no longer needs `PUBLIC_BASE_URL` or `SMTP_DOMAIN` in `.env`.
 The web server derives its public URL from the incoming request:
 
 - direct access: `Host` and whether the request is TLS
@@ -274,7 +274,7 @@ Mount the certificate directory in `docker-compose.yml`, for example:
 
 ```yaml
 volumes:
-  - mailprobe_data:/data
+  - sender_report_data:/data
   - ./certs:/certs:ro
 ```
 
@@ -282,7 +282,7 @@ Notes:
 
 - Certificate files are only required when `ENABLE_TLS=true`.
 - With `ENABLE_TLS=true`, the configured HTTP listener speaks HTTPS directly.
-- `FORCE_HTTPS=true` is mainly useful when MailProbe receives plain HTTP behind a trusted reverse proxy or when running HTTP-only and redirecting users to the public HTTPS URL.
+- `FORCE_HTTPS=true` is mainly useful when Sender-Report receives plain HTTP behind a trusted reverse proxy or when running HTTP-only and redirecting users to the public HTTPS URL.
 - For reverse proxy deployments, keep `ENABLE_TLS=false`, terminate TLS at the proxy, and set `TRUSTED_PROXY_CIDRS` so forwarded scheme/host headers are trusted.
 
 ## Security model
@@ -305,7 +305,7 @@ Operational recommendations:
 
 ## Persistence and backup
 
-Data is persisted in Docker volume `mailprobe_data`:
+Data is persisted in Docker volume `sender_report_data`:
 
 - SQLite database (`/data/mailprobe.db` + WAL/SHM)
 
@@ -336,7 +336,7 @@ Useful commands:
 
 ```bash
 docker compose ps
-docker compose logs -f mailprobe
+docker compose logs -f sender-report
 ```
 
 ## CI/CD and container publishing
@@ -352,7 +352,7 @@ GitHub Actions workflows are included:
 
 Published image target:
 
-- `ghcr.io/brightcolor/mailprobev2:<tag>`
+- `ghcr.io/brightcolor/sender-report:<tag>`
 
 Image tag strategy:
 
@@ -365,7 +365,7 @@ Image tag strategy:
 Recommended production pin:
 
 ```bash
-MAILPROBE_IMAGE=ghcr.io/brightcolor/mailprobev2:v0.2.0
+SENDER_REPORT_IMAGE=ghcr.io/brightcolor/sender-report:v0.2.0
 docker compose pull
 docker compose up -d
 ```
@@ -373,7 +373,7 @@ docker compose up -d
 Rollback to an older image:
 
 ```bash
-MAILPROBE_IMAGE=ghcr.io/brightcolor/mailprobev2:v0.1.0
+SENDER_REPORT_IMAGE=ghcr.io/brightcolor/sender-report:v0.1.0
 docker compose pull
 docker compose up -d
 ```

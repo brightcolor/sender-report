@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for contributing to MailProbe.
+Thanks for contributing to Sender-Report.
 
 ## Development Setup
 

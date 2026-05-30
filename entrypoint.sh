@@ -6,4 +6,4 @@ set -e
 # SQLite database and other runtime files.
 chown -R app:app /data 2>/dev/null || true
 
-exec su-exec app /app/mailprobe "$@"
+exec su-exec app /app/sender-report "$@"

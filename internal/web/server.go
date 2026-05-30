@@ -28,12 +28,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brightcolor/mailprobev2/internal/config"
-	"github.com/brightcolor/mailprobev2/internal/model"
-	"github.com/brightcolor/mailprobev2/internal/ratelimit"
-	"github.com/brightcolor/mailprobev2/internal/store"
-	"github.com/brightcolor/mailprobev2/internal/telemetry"
-	"github.com/brightcolor/mailprobev2/internal/version"
+	"github.com/brightcolor/sender-report/internal/config"
+	"github.com/brightcolor/sender-report/internal/model"
+	"github.com/brightcolor/sender-report/internal/ratelimit"
+	"github.com/brightcolor/sender-report/internal/store"
+	"github.com/brightcolor/sender-report/internal/telemetry"
+	"github.com/brightcolor/sender-report/internal/version"
 	htmlcharset "golang.org/x/net/html/charset"
 )
 
@@ -794,7 +794,7 @@ func (s *Server) mailboxByID(ctx context.Context, id int64) (model.Mailbox, erro
 func (s *Server) generateMailboxAddress(ctx context.Context, domain string) (token, address string, err error) {
 	domain = cleanDomain(domain)
 	if domain == "" {
-		domain = "mailprobe.local"
+		domain = "sender-report.local"
 	}
 	for i := 0; i < 8; i++ {
 		tok, e := randomToken(6)

@@ -24,7 +24,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/brightcolor/mailprobev2/internal/model"
+	"github.com/brightcolor/sender-report/internal/model"
 )
 
 type Options struct {

@@ -1,4 +1,4 @@
-module github.com/brightcolor/mailprobev2
+module github.com/brightcolor/sender-report
 
 go 1.23.0
 

@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/brightcolor/mailprobev2/internal/db"
-	"github.com/brightcolor/mailprobev2/internal/model"
-	"github.com/brightcolor/mailprobev2/internal/store"
+	"github.com/brightcolor/sender-report/internal/db"
+	"github.com/brightcolor/sender-report/internal/model"
+	"github.com/brightcolor/sender-report/internal/store"
 )
 
 func TestStartTriggersPeriodicCleanup(t *testing.T) {

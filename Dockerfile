@@ -21,13 +21,13 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
 COPY . .
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/mailprobe ./cmd/mailprobe
+    CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/sender-report ./cmd/sender-report
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates tzdata sqlite-libs su-exec
 WORKDIR /app
-COPY --from=builder /out/mailprobe        /app/mailprobe
+COPY --from=builder /out/sender-report        /app/sender-report
 COPY internal/web/templates               /app/internal/web/templates
 COPY internal/web/static                  /app/internal/web/static
 COPY entrypoint.sh                        /app/entrypoint.sh

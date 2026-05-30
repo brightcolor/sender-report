@@ -7,7 +7,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/brightcolor/mailprobev2/internal/model"
+	"github.com/brightcolor/sender-report/internal/model"
 )
 
 var ErrNotFound = errors.New("not found")
