@@ -873,7 +873,6 @@ body,
 .mp-delete-mb-btn {
   opacity: 0;
   transition: opacity .15s;
-  line-height: 1;
 }
 @media (hover: none) { .mp-delete-mb-btn { opacity: 1; } } /* immer sichtbar auf Touch */
 
