@@ -257,6 +257,164 @@
                       </div>
                       {{end}}
 
+                      {{else if eq .ID "rbl"}}
+                      {{/* ── RBL – strukturierte Darstellung ─────────────────────────────── */}}
+                      {{$hits      := rblHits .TechnicalDetails}}
+                      {{$impact    := index .TechnicalDetails "deliverability_impact"}}
+                      {{$remoteIP  := index .TechnicalDetails "remote_ip"}}
+                      {{$preChecks := splitLines (index .TechnicalDetails "pre_delisting_checks")}}
+                      {{$checked   := splitLines (index .TechnicalDetails "checked_providers")}}
+
+                      {{/* Impact-Banner */}}
+                      <div class="alert {{if $hits}}alert-danger{{else}}alert-success{{end}} py-2 mb-3 d-flex align-items-start gap-2">
+                        <i class="bi bi-{{if $hits}}exclamation-triangle-fill{{else}}check-circle-fill{{end}} flex-shrink-0 mt-1"></i>
+                        <span>{{$impact}}</span>
+                      </div>
+
+                      {{if $hits}}
+                      {{/* Gelistete Provider */}}
+                      <h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">
+                        <i class="bi bi-list-check me-1"></i>Gelistet auf
+                      </h6>
+                      <div class="d-flex flex-column gap-2 mb-3">
+                        {{range $i, $h := $hits}}
+                        <div class="mp-rbl-hit">
+                          <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+                            <div>
+                              <strong>{{$h.Provider}}</strong>
+                              {{if and $h.Response (ne $h.Response "none")}}
+                              <code class="text-danger small ms-2">→ {{$h.Response}}</code>
+                              {{end}}
+                            </div>
+                            {{if and $h.DelistURL (ne $h.DelistURL "")}}
+                            <a href="{{$h.DelistURL}}" target="_blank" rel="noopener noreferrer"
+                               class="btn btn-sm btn-outline-danger flex-shrink-0">
+                              <i class="bi bi-box-arrow-up-right me-1"></i>Delisting
+                            </a>
+                            {{end}}
+                          </div>
+                          {{if and $h.Delisting (ne $h.Delisting "none")}}
+                          <button class="btn btn-link btn-sm text-secondary p-0 mt-1"
+                                  type="button"
+                                  data-bs-toggle="collapse"
+                                  data-bs-target="#rbl-hint-{{$i}}">
+                            <i class="bi bi-info-circle me-1"></i>Delisting-Hinweise anzeigen
+                          </button>
+                          <div id="rbl-hint-{{$i}}" class="collapse mt-2">
+                            <p class="small text-secondary mb-0" style="white-space:pre-line">{{$h.Delisting}}</p>
+                          </div>
+                          {{end}}
+                        </div>
+                        {{end}}
+                      </div>
+
+                      {{/* Vor-Delisting-Checkliste */}}
+                      {{if $preChecks}}
+                      <h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">
+                        <i class="bi bi-card-checklist me-1"></i>Vor dem Delisting
+                      </h6>
+                      <ol class="mp-feat-list ps-3 mb-3">
+                        {{range $preChecks}}<li class="mb-1">{{.}}</li>{{end}}
+                      </ol>
+                      {{end}}
+
+                      {{/* Formulierungshilfe */}}
+                      <button class="btn btn-outline-secondary btn-sm mb-3"
+                              type="button"
+                              data-bs-toggle="collapse"
+                              data-bs-target="#rbl-formhilfe">
+                        <i class="bi bi-chat-left-text me-1"></i>Formulierungshilfe anzeigen (DE / EN)
+                      </button>
+                      <div id="rbl-formhilfe" class="collapse mb-3">
+                        <ul class="nav nav-tabs mb-0" id="rbl-lang-tabs" role="tablist">
+                          <li class="nav-item" role="presentation">
+                            <button class="nav-link active small" id="rbl-de-tab" data-bs-toggle="tab" data-bs-target="#rbl-de" type="button" role="tab">Deutsch</button>
+                          </li>
+                          <li class="nav-item" role="presentation">
+                            <button class="nav-link small" id="rbl-en-tab" data-bs-toggle="tab" data-bs-target="#rbl-en" type="button" role="tab">English</button>
+                          </li>
+                        </ul>
+                        <div class="tab-content border border-top-0 rounded-bottom p-3">
+                          <div class="tab-pane fade show active" id="rbl-de" role="tabpanel">
+                            <div class="d-flex justify-content-end mb-2">
+                              <button class="btn btn-sm btn-outline-secondary"
+                                      type="button"
+                                      data-copy="Sehr geehrte Damen und Herren,&#10;&#10;hiermit beantrage ich die Entfernung der IP-Adresse {{$remoteIP}} aus Ihrer Blockliste.&#10;&#10;Die Ursache für das Listing war: [bitte ergänzen].&#10;Wir haben folgende Maßnahmen ergriffen: [bitte ergänzen].&#10;&#10;Die IP-Adresse sendet seit [Datum] keinen unerwünschten Verkehr mehr. Ich bitte um Prüfung und Entfernung aus Ihrer Liste.&#10;&#10;Mit freundlichen Grüßen&#10;[Name / Unternehmen / Kontakt]">
+                                <i class="bi bi-clipboard me-1"></i>Kopieren
+                              </button>
+                            </div>
+                            <pre class="mp-raw-pre mb-0" style="font-size:.8rem">Sehr geehrte Damen und Herren,
+
+hiermit beantrage ich die Entfernung der IP-Adresse {{$remoteIP}} aus Ihrer Blockliste.
+
+Die Ursache für das Listing war: [bitte ergänzen].
+Wir haben folgende Maßnahmen ergriffen: [bitte ergänzen].
+
+Die IP-Adresse sendet seit [Datum] keinen unerwünschten Verkehr mehr.
+Ich bitte um Prüfung und Entfernung aus Ihrer Liste.
+
+Mit freundlichen Grüßen
+[Name / Unternehmen / Kontakt]</pre>
+                          </div>
+                          <div class="tab-pane fade" id="rbl-en" role="tabpanel">
+                            <div class="d-flex justify-content-end mb-2">
+                              <button class="btn btn-sm btn-outline-secondary"
+                                      type="button"
+                                      data-copy="Dear Sir or Madam,&#10;&#10;I am writing to request the removal of IP address {{$remoteIP}} from your blocklist.&#10;&#10;The reason for the listing was: [please describe].&#10;We have taken the following corrective actions: [please describe].&#10;&#10;The IP address has not generated any unsolicited traffic since [date]. Please review and remove it from your list.&#10;&#10;Kind regards,&#10;[Name / Company / Contact]">
+                                <i class="bi bi-clipboard me-1"></i>Copy
+                              </button>
+                            </div>
+                            <pre class="mp-raw-pre mb-0" style="font-size:.8rem">Dear Sir or Madam,
+
+I am writing to request the removal of IP address {{$remoteIP}} from your blocklist.
+
+The reason for the listing was: [please describe].
+We have taken the following corrective actions: [please describe].
+
+The IP address has not generated any unsolicited traffic since [date].
+Please review and remove it from your list.
+
+Kind regards,
+[Name / Company / Contact]</pre>
+                          </div>
+                        </div>
+                      </div>
+                      {{end}}{{/* end if $hits */}}
+
+                      {{if .Explanation}}
+                      <div class="mb-3">
+                        <h6 class="text-uppercase small fw-bold text-secondary mb-1" style="letter-spacing:.06em">Erklärung</h6>
+                        <p class="mb-0">{{.Explanation}}</p>
+                      </div>
+                      {{end}}
+
+                      {{if and .Recommendation (or (eq .Status "warn") (eq .Status "fail"))}}
+                      <div class="mp-fix-box">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                          <h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>Empfehlung</h6>
+                          <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="{{.Recommendation}}">
+                            <i class="bi bi-clipboard me-1"></i>Kopieren
+                          </button>
+                        </div>
+                        <p class="mb-0">{{.Recommendation}}</p>
+                      </div>
+                      {{end}}
+
+                      {{/* Geprüfte Provider (immer, zusammengeklappt) */}}
+                      {{if $checked}}
+                      <button class="btn btn-link btn-sm text-secondary p-0 mt-3"
+                              type="button"
+                              data-bs-toggle="collapse"
+                              data-bs-target="#rbl-all-providers">
+                        <i class="bi bi-code me-1"></i>Alle geprüften Provider anzeigen
+                      </button>
+                      <div id="rbl-all-providers" class="collapse mt-2">
+                        <ul class="list-unstyled mb-0">
+                          {{range $checked}}<li class="small text-secondary"><code>{{.}}</code></li>{{end}}
+                        </ul>
+                      </div>
+                      {{end}}
+
                       {{else}}
                       {{/* ── Standard-Check-Darstellung ──────────────────────────────────── */}}
 
@@ -265,25 +423,6 @@
                               style="letter-spacing:.06em">Kurzbewertung</h6>
                           <p class="mb-0">{{.Summary}}</p>
                         </div>
-
-                        {{if .TechnicalDetails}}
-                        <div class="mb-3">
-                          <div class="d-flex align-items-center justify-content-between mb-2">
-                            <h6 class="text-uppercase small fw-bold text-secondary mb-0"
-                                style="letter-spacing:.06em">Technische Details</h6>
-                            <button class="btn btn-sm btn-outline-secondary"
-                                    type="button"
-                                    data-copy="{{detailsText .TechnicalDetails}}">
-                              <i class="bi bi-clipboard me-1"></i>Kopieren
-                            </button>
-                          </div>
-                          <dl class="mp-tech-dl">
-                            {{range $k, $v := .TechnicalDetails}}
-                            <div><dt>{{$k}}</dt><dd><code>{{$v}}</code></dd></div>
-                            {{end}}
-                          </dl>
-                        </div>
-                        {{end}}
 
                         {{if .Explanation}}
                         <div class="mb-3">
@@ -306,6 +445,31 @@
                             </button>
                           </div>
                           <p class="mb-0">{{.Recommendation}}</p>
+                        </div>
+                        {{end}}
+
+                        {{if .TechnicalDetails}}
+                        <div class="mt-3">
+                          <button class="btn btn-link btn-sm text-secondary p-0"
+                                  type="button"
+                                  data-bs-toggle="collapse"
+                                  data-bs-target="#raw-{{safeID .ID}}">
+                            <i class="bi bi-code me-1"></i>Rohdaten anzeigen
+                          </button>
+                          <div id="raw-{{safeID .ID}}" class="collapse mt-2">
+                            <div class="d-flex justify-content-end mb-1">
+                              <button class="btn btn-sm btn-outline-secondary"
+                                      type="button"
+                                      data-copy="{{detailsText .TechnicalDetails}}">
+                                <i class="bi bi-clipboard me-1"></i>Kopieren
+                              </button>
+                            </div>
+                            <dl class="mp-tech-dl">
+                              {{range $k, $v := .TechnicalDetails}}
+                              <div><dt>{{$k}}</dt><dd><code>{{$v}}</code></dd></div>
+                              {{end}}
+                            </dl>
+                          </div>
                         </div>
                         {{end}}
 
@@ -403,6 +567,17 @@
         </div>
 
         <!-- ── Raw data accordion ──────────────────────────────────────── -->
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <button class="btn btn-outline-secondary btn-sm"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#raw-section"
+                  aria-expanded="false"
+                  aria-controls="raw-section">
+            <i class="bi bi-code me-1"></i>E-Mail-Quelltext &amp; Rohdaten anzeigen
+          </button>
+        </div>
+        <div id="raw-section" class="collapse mb-1">
         <div class="card mb-3">
           <div class="card-header d-flex align-items-center justify-content-between">
             <h3 class="card-title mb-0">
@@ -520,6 +695,7 @@
             </div>
           </div>
         </div>
+        </div>{{/* end #raw-section collapse */}}
 
         <!-- ── Links section ───────────────────────────────────────────── -->
         <div class="card mb-3">

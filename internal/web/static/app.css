@@ -755,6 +755,15 @@ body,
 .mp-fix-box h4 { color: var(--bs-success); }
 .mp-fix-box p  { font-size: .9375rem; line-height: 1.65; margin: 0; }
 
+/* ── RBL hit card ───────────────────────────────────────────────────────── */
+.mp-rbl-hit {
+  padding: .75rem 1rem;
+  border: 1px solid rgba(var(--bs-danger-rgb), .25);
+  border-left: 3px solid var(--bs-danger);
+  border-radius: var(--bs-border-radius);
+  background-color: rgba(var(--bs-danger-rgb), .04);
+}
+
 /* ── Score mini (inbox list) ────────────────────────────────────────────── */
 .mp-score-mini {
   display: inline-flex;

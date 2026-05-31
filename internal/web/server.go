@@ -102,6 +102,60 @@ type ReportCheckGroup struct {
 	InfoCount int
 }
 
+// RBLHit is returned by the rblHits template function.
+type RBLHit struct {
+	Provider  string
+	Response  string
+	DelistURL string
+	Delisting string
+}
+
+// rblHitsFn parses the parallel slices stored in TechnicalDetails for a RBL
+// check result and returns one RBLHit per listed provider.
+func rblHitsFn(details map[string]string) []RBLHit {
+	listed := details["listed_providers"]
+	if listed == "" || listed == "none" {
+		return nil
+	}
+	providers := strings.Split(listed, "\n")
+	responses := strings.Split(details["listing_responses"], "\n")
+	urls := strings.Split(details["provider_delist_urls"], "\n")
+	steps := strings.Split(details["provider_delisting"], "\n\n")
+	var hits []RBLHit
+	for i, p := range providers {
+		if strings.TrimSpace(p) == "" {
+			continue
+		}
+		hit := RBLHit{Provider: strings.TrimSpace(p)}
+		if i < len(responses) {
+			hit.Response = strings.TrimSpace(responses[i])
+		}
+		if i < len(urls) {
+			hit.DelistURL = strings.TrimSpace(urls[i])
+		}
+		if i < len(steps) {
+			hit.Delisting = strings.TrimSpace(steps[i])
+		}
+		hits = append(hits, hit)
+	}
+	return hits
+}
+
+// splitLinesFn splits a newline-separated string into a slice, skipping blank
+// lines and the sentinel value "none".
+func splitLinesFn(s string) []string {
+	if s == "" || s == "none" {
+		return nil
+	}
+	var out []string
+	for _, line := range strings.Split(s, "\n") {
+		if t := strings.TrimSpace(line); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 // RspamdSymbolRow is returned by the rspamdSymbols template function.
 type RspamdSymbolRow struct {
 	Name  string
@@ -203,6 +257,8 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"rspamdMeta":          rspamdMetaFn,
 		"rspamdActionClass":   rspamdActionClass,
 		"rspamdScorePercent":  rspamdScorePercent,
+		"rblHits":             rblHitsFn,
+		"splitLines":          splitLinesFn,
 		"appVersion":          func() string { return version.Version },
 	}).ParseGlob(filepath.Join("internal", "web", "templates", "*.html"))
 	if err != nil {
