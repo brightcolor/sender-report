@@ -123,9 +123,9 @@ func (s *Store) SaveMessage(ctx context.Context, m model.Message) (model.Message
 		m.ReceivedAt = time.Now().UTC()
 	}
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO messages(mailbox_id, smtp_from, rcpt_to, remote_ip, helo, received_at, raw_source, header_block, subject, size_bytes)
-		VALUES(?,?,?,?,?,?,?,?,?,?)
-	`, m.MailboxID, m.SMTPFrom, m.RCPTTo, m.RemoteIP, m.HELO, m.ReceivedAt, m.RawSource, m.HeaderBlock, m.Subject, m.SizeBytes)
+		INSERT INTO messages(mailbox_id, smtp_from, rcpt_to, remote_ip, helo, received_at, raw_source, header_block, subject, size_bytes, payload_enc)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?)
+	`, m.MailboxID, m.SMTPFrom, m.RCPTTo, m.RemoteIP, m.HELO, m.ReceivedAt, m.RawSource, m.HeaderBlock, m.Subject, m.SizeBytes, m.PayloadEnc)
 	if err != nil {
 		return model.Message{}, err
 	}
@@ -135,11 +135,15 @@ func (s *Store) SaveMessage(ctx context.Context, m model.Message) (model.Message
 
 func (s *Store) GetMessage(ctx context.Context, id int64) (model.Message, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, mailbox_id, smtp_from, rcpt_to, remote_ip, helo, received_at, raw_source, header_block, subject, size_bytes
+		SELECT id, mailbox_id, smtp_from, rcpt_to, remote_ip, helo, received_at, raw_source, header_block, subject, size_bytes, COALESCE(payload_enc,'')
 		FROM messages WHERE id = ?
 	`, id)
+	return scanMessage(row)
+}
+
+func scanMessage(row *sql.Row) (model.Message, error) {
 	var m model.Message
-	if err := row.Scan(&m.ID, &m.MailboxID, &m.SMTPFrom, &m.RCPTTo, &m.RemoteIP, &m.HELO, &m.ReceivedAt, &m.RawSource, &m.HeaderBlock, &m.Subject, &m.SizeBytes); err != nil {
+	if err := row.Scan(&m.ID, &m.MailboxID, &m.SMTPFrom, &m.RCPTTo, &m.RemoteIP, &m.HELO, &m.ReceivedAt, &m.RawSource, &m.HeaderBlock, &m.Subject, &m.SizeBytes, &m.PayloadEnc); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return model.Message{}, ErrNotFound
 		}
@@ -153,7 +157,7 @@ func (s *Store) ListMessagesByMailbox(ctx context.Context, mailboxID int64, limi
 		limit = 20
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, mailbox_id, smtp_from, rcpt_to, remote_ip, helo, received_at, raw_source, header_block, subject, size_bytes
+		SELECT id, mailbox_id, smtp_from, rcpt_to, remote_ip, helo, received_at, raw_source, header_block, subject, size_bytes, COALESCE(payload_enc,'')
 		FROM messages WHERE mailbox_id = ? ORDER BY received_at DESC LIMIT ?
 	`, mailboxID, limit)
 	if err != nil {
@@ -164,7 +168,7 @@ func (s *Store) ListMessagesByMailbox(ctx context.Context, mailboxID int64, limi
 	out := make([]model.Message, 0)
 	for rows.Next() {
 		var m model.Message
-		if err := rows.Scan(&m.ID, &m.MailboxID, &m.SMTPFrom, &m.RCPTTo, &m.RemoteIP, &m.HELO, &m.ReceivedAt, &m.RawSource, &m.HeaderBlock, &m.Subject, &m.SizeBytes); err != nil {
+		if err := rows.Scan(&m.ID, &m.MailboxID, &m.SMTPFrom, &m.RCPTTo, &m.RemoteIP, &m.HELO, &m.ReceivedAt, &m.RawSource, &m.HeaderBlock, &m.Subject, &m.SizeBytes, &m.PayloadEnc); err != nil {
 			return nil, err
 		}
 		out = append(out, m)

@@ -90,6 +90,8 @@ type ReportData struct {
 	PlainTextBody   string
 	HTMLSourceBody  string
 	HTMLPreviewBody string
+	Encrypted       bool   // true when content is E2E-encrypted (Phase 3+4)
+	MsgRef          string // reference passed to /api/payload for decryption
 }
 
 type ReportCheckGroup struct {
@@ -293,6 +295,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/mailboxes", s.createMailbox)
 	mux.HandleFunc("/api/mailboxes/", s.mailboxAPI)
 	mux.HandleFunc("/api/reports/", s.reportAPI)
+	mux.HandleFunc("/api/payload/", s.payloadAPI)
 	mux.HandleFunc("/mailbox/", s.mailboxPage)
 	mux.HandleFunc("/report/", s.reportPage)
 	mux.HandleFunc("/raw/", s.rawPage)
@@ -558,7 +561,11 @@ func (s *Server) reportPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	plainText, htmlSource := messageBodyViews(selected.Message.RawSource)
+	encrypted := selected.Message.Encrypted()
+	var plainText, htmlSource string
+	if !encrypted {
+		plainText, htmlSource = messageBodyViews(selected.Message.RawSource)
+	}
 	statuses := map[string]int{"pass": 0, "warn": 0, "fail": 0, "info": 0}
 	sortChecks(selected.Report.Checks)
 	for _, c := range selected.Report.Checks {
@@ -566,6 +573,7 @@ func (s *Server) reportPage(w http.ResponseWriter, r *http.Request) {
 	}
 	checkGroups := groupReportChecks(selected.Report.Checks)
 	linkGroups := groupLinksByDomain(selected.Report.Links)
+	msgRef := messageReference(mb.Token, selected.Message.ID)
 	s.render(w, "report", ReportData{
 		AppName:         s.cfg.AppName,
 		Message:         selected.Message,
@@ -580,6 +588,8 @@ func (s *Server) reportPage(w http.ResponseWriter, r *http.Request) {
 		PlainTextBody:   plainText,
 		HTMLSourceBody:  htmlSource,
 		HTMLPreviewBody: htmlSource,
+		Encrypted:       encrypted,
+		MsgRef:          msgRef,
 	})
 }
 
@@ -720,6 +730,53 @@ func (s *Server) reportAPI(w http.ResponseWriter, r *http.Request) {
 			"size_bytes":  selected.Message.SizeBytes,
 		},
 		"report": selected.Report,
+	})
+}
+
+// payloadAPI serves the encrypted payload blob for a single message so the
+// browser can decrypt it client-side (Phase 4).
+// Route: GET /api/payload/{token}/{msgref}
+func (s *Server) payloadAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonResp(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/api/payload/"), "/", 2)
+	if len(parts) != 2 {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "bad path"})
+		return
+	}
+	token, msgRef := parts[0], parts[1]
+	ctx := r.Context()
+
+	mb, err := s.store.GetMailboxByToken(ctx, token)
+	if err != nil {
+		jsonResp(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	if mb.PublicKey == "" {
+		jsonResp(w, http.StatusNotFound, map[string]string{"error": "mailbox not encrypted"})
+		return
+	}
+
+	msgs, err := s.store.ListMessagesWithReports(ctx, mb.ID, 100)
+	if err != nil {
+		jsonResp(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
+	selected := selectMessageWithReport(token, msgs, msgRef)
+	if selected == nil {
+		jsonResp(w, http.StatusNotFound, map[string]string{"error": "message not found"})
+		return
+	}
+	if !selected.Message.Encrypted() {
+		jsonResp(w, http.StatusNotFound, map[string]string{"error": "message not encrypted"})
+		return
+	}
+
+	jsonResp(w, http.StatusOK, map[string]any{
+		"payload_enc": selected.Message.PayloadEnc,
+		"token":       token,
 	})
 }
 

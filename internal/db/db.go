@@ -78,9 +78,9 @@ CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at);
 	if _, err := db.Exec(schema); err != nil {
 		return err
 	}
-	// Phase-2 migration: add public_key column to existing databases.
-	// SQLite returns "duplicate column name" if the column already exists;
-	// we intentionally ignore that error so this migration is idempotent.
+	// Phase-2 migration: add public_key column (idempotent).
 	_, _ = db.Exec(`ALTER TABLE mailboxes ADD COLUMN public_key TEXT`)
+	// Phase-3 migration: add payload_enc column to messages for E2E encryption.
+	_, _ = db.Exec(`ALTER TABLE messages ADD COLUMN payload_enc TEXT`)
 	return nil
 }

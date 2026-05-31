@@ -25,7 +25,11 @@ type Message struct {
 	HeaderBlock string
 	Subject     string
 	SizeBytes   int64
+	PayloadEnc  string // hex-encoded sealed blob (Phase 3); empty for legacy messages
 }
+
+// Encrypted returns true if the message content is E2E-encrypted.
+func (m *Message) Encrypted() bool { return m.PayloadEnc != "" }
 
 // DocLink is a labelled reference shown below a check recommendation.
 type DocLink struct {

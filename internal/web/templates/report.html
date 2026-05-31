@@ -12,6 +12,11 @@
   <link rel="stylesheet" href="/static/vendor/overlayscrollbars.min.css">
   <link rel="stylesheet" href="/static/vendor/adminlte.min.css">
   <link rel="stylesheet" href="/static/app.css" />
+  {{if .Encrypted}}
+  <meta name="mp-encrypted" content="true"
+        data-token="{{.Mailbox.Token}}"
+        data-msgref="{{.MsgRef}}">
+  {{end}}
 </head>
 <body class="layout-fixed">
 <div class="app-wrapper">
@@ -60,7 +65,10 @@
               </div>
             </div>
             <div class="flex-grow-1">
-              <p class="text-uppercase fw-bold small text-secondary mb-1" style="letter-spacing:.06em">Gesamtscore</p>
+              <p class="text-uppercase fw-bold small text-secondary mb-1" style="letter-spacing:.06em">
+                Gesamtscore
+                {{if .Encrypted}}<span class="badge text-bg-secondary ms-2" style="font-size:.65rem; vertical-align:middle"><i class="bi bi-lock-fill me-1"></i>E2E verschlüsselt</span>{{end}}
+              </p>
               <h1 class="h2 fw-bold mb-1">{{.HeroTitle}}</h1>
               <p class="text-secondary mb-3">{{.HeroSubtitle}}</p>
               <div class="d-flex gap-2 flex-wrap">
@@ -125,6 +133,33 @@
           </div>
         </div>
 
+        {{if .Encrypted}}
+        <!-- ── E2E Decrypt panel ──────────────────────────────────────── -->
+        <div class="card mb-3" id="mp-e2e-panel">
+          <div class="card-body text-center py-5">
+            <div id="mp-e2e-locked">
+              <i class="bi bi-lock-fill text-secondary mb-3 d-block" style="font-size:2.5rem"></i>
+              <h5 class="fw-semibold mb-1">Inhalt Ende-zu-Ende verschlüsselt</h5>
+              <p class="text-secondary small mb-4">
+                Der Schlüssel steckt in deinem Mailbox-Link. Klicke auf „Entschlüsseln" um
+                den Bericht in deinem Browser zu entschlüsseln – der Schlüssel verlässt deinen Browser nicht.
+              </p>
+              <button class="btn btn-primary" id="mp-e2e-decrypt-btn" type="button">
+                <i class="bi bi-unlock-fill me-2"></i>Entschlüsseln
+              </button>
+              <p class="text-danger small mt-3 d-none" id="mp-e2e-error"></p>
+            </div>
+            <div id="mp-e2e-loading" class="d-none">
+              <div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>
+              <p class="text-secondary small mb-0">Entschlüssele &hellip;</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Decrypted content injected here by JS -->
+        <div id="mp-e2e-content" class="d-none"></div>
+
+        {{else}}
         <!-- ── Check filter bar ───────────────────────────────────────── -->
         <div class="d-flex gap-2 flex-wrap align-items-center mb-3" id="check-filter-bar">
           <span class="small fw-semibold text-secondary me-1">Anzeigen:</span>
@@ -134,7 +169,9 @@
           <button class="mp-filter-btn fail"   data-filter="fail" type="button">&#10007; Fehler</button>
           <button class="mp-filter-btn info"   data-filter="info" type="button">&#x2139; Info</button>
         </div>
+        {{end}}
 
+        {{if not .Encrypted}}
         <!-- ── Two-column report layout ───────────────────────────────── -->
         <div class="row g-3">
 
@@ -758,6 +795,7 @@ Kind regards,
             {{end}}
           </div>
         </div>
+        {{end}}{{/* end if not .Encrypted */}}
 
       </div>
     </div>
@@ -771,7 +809,162 @@ Kind regards,
 <script src="/static/vendor/bootstrap.min.js"></script>
 <script src="/static/vendor/overlayscrollbars.es5.min.js"></script>
 <script src="/static/vendor/adminlte.min.js"></script>
+{{if .Encrypted}}
+<script src="/static/vendor/tweetnacl.min.js"></script>
+<script src="/static/crypto.js"></script>
+{{end}}
 <script src="/static/app.js"></script>
+{{if .Encrypted}}
+<script>
+(async function() {
+  const meta    = document.querySelector('meta[name="mp-encrypted"]');
+  const token   = meta?.dataset.token;
+  const msgref  = meta?.dataset.msgref;
+  if (!token || !msgref) return;
+
+  const btn     = document.getElementById('mp-e2e-decrypt-btn');
+  const locked  = document.getElementById('mp-e2e-locked');
+  const loading = document.getElementById('mp-e2e-loading');
+  const errEl   = document.getElementById('mp-e2e-error');
+  const content = document.getElementById('mp-e2e-content');
+
+  btn?.addEventListener('click', async () => {
+    locked.classList.add('d-none');
+    loading.classList.remove('d-none');
+    errEl.classList.add('d-none');
+
+    try {
+      // Load secret from localStorage.
+      const storedToken = localStorage.getItem('sr:secret:' + token)
+                       || sessionStorage.getItem('sr:secret:' + token);
+      if (!storedToken) throw new Error('Schlüssel nicht im Browser gefunden. Öffne den originalen Mailbox-Link.');
+
+      const crypto = window.SenderReportCrypto;
+      const { secret } = await crypto.fromToken(storedToken);
+
+      // Fetch encrypted payload from server.
+      const res = await fetch('/api/payload/' + token + '/' + msgref, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Payload konnte nicht geladen werden (' + res.status + ').');
+      const { payload_enc } = await res.json();
+
+      // Decrypt.
+      const blobBytes = crypto._hexToBytes(payload_enc);
+      const ptBytes   = await crypto.open(blobBytes, secret);
+      const payload   = JSON.parse(crypto._fromUtf8(ptBytes));
+
+      // Render decrypted content.
+      content.innerHTML = renderDecryptedReport(payload);
+      content.classList.remove('d-none');
+      document.getElementById('mp-e2e-panel').classList.add('d-none');
+
+      // Re-init UI helpers for the newly rendered elements.
+      if (typeof setupCopyButtons === 'function') setupCopyButtons();
+      if (typeof colorScoreDeltas === 'function') colorScoreDeltas();
+
+    } catch (e) {
+      locked.classList.remove('d-none');
+      loading.classList.add('d-none');
+      errEl.textContent = 'Fehler: ' + e.message;
+      errEl.classList.remove('d-none');
+    }
+  });
+
+  function statusBadge(status) {
+    const map = { pass: ['success','✓'], warn: ['warning','!'], fail: ['danger','✗'], info: ['secondary','i'] };
+    const [cls, icon] = map[status] || ['secondary','?'];
+    return `<span class="badge text-bg-${cls}">${icon} ${status}</span>`;
+  }
+
+  function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function renderDecryptedReport(p) {
+    const r = p.report || {};
+    const checks = r.checks || [];
+
+    // Group checks by category.
+    const groups = {};
+    checks.forEach(c => {
+      const g = c.category || 'Allgemein';
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(c);
+    });
+
+    let html = '';
+
+    // Check groups.
+    html += '<div class="row g-3 mb-3"><div class="col-12">';
+    Object.entries(groups).forEach(([name, chks], gi) => {
+      html += `<div class="card mb-3"><div class="card-header"><h3 class="card-title mb-0">${escHtml(name)}</h3></div>`;
+      html += `<div class="card-body p-0"><div class="accordion accordion-flush" id="dec-grp-${gi}">`;
+      chks.forEach((c, ci) => {
+        const uid = `dec-${gi}-${ci}`;
+        const delta = c.score_delta ? (c.score_delta > 0 ? '+' : '') + c.score_delta.toFixed(1) : '';
+        html += `<div class="accordion-item mp-check-item ${escHtml(c.status)}" data-status="${escHtml(c.status)}">
+          <h2 class="accordion-header">
+            <button class="accordion-button ${c.status !== 'fail' ? 'collapsed' : ''}" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#${uid}">
+              <div class="mp-chk-inner">
+                <span class="mp-status-dot ${escHtml(c.status)}"></span>
+                <span class="mp-chk-name"><strong>${escHtml(c.name)}</strong><small>${escHtml(c.summary)}</small></span>
+                <span class="mp-pill ${escHtml(c.status)}">${escHtml(c.status)}</span>
+                <strong class="mp-delta">${escHtml(delta)}</strong>
+              </div>
+            </button>
+          </h2>
+          <div id="${uid}" class="accordion-collapse collapse ${c.status === 'fail' ? 'show' : ''}">
+            <div class="accordion-body">`;
+
+        if (c.explanation) html += `<div class="mb-3"><h6 class="text-uppercase small fw-bold text-secondary mb-1" style="letter-spacing:.06em">Erklärung</h6><p class="mb-0">${escHtml(c.explanation)}</p></div>`;
+        if (c.recommendation && (c.status === 'warn' || c.status === 'fail')) {
+          html += `<div class="mp-fix-box mb-3"><div class="d-flex align-items-center justify-content-between mb-2">
+            <h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>Empfehlung</h6>
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="${escHtml(c.recommendation)}"><i class="bi bi-clipboard me-1"></i>Kopieren</button>
+          </div><p class="mb-0" style="white-space:pre-line">${escHtml(c.recommendation)}</p></div>`;
+        }
+        if (c.technical_details && Object.keys(c.technical_details).length) {
+          html += `<button class="btn btn-link btn-sm text-secondary p-0 mb-1" type="button" data-bs-toggle="collapse" data-bs-target="#raw-${uid}">
+            <i class="bi bi-code me-1"></i>Rohdaten anzeigen</button>
+            <div id="raw-${uid}" class="collapse mt-2"><dl class="mp-tech-dl">`;
+          Object.entries(c.technical_details).forEach(([k, v]) => {
+            html += `<div><dt>${escHtml(k)}</dt><dd><code>${escHtml(v)}</code></dd></div>`;
+          });
+          html += `</dl></div>`;
+        }
+        if (c.doc_links?.length) {
+          html += `<div class="mt-3"><h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em"><i class="bi bi-link-45deg me-1"></i>Quellen &amp; Tools</h6><div class="d-flex flex-wrap gap-2">`;
+          c.doc_links.forEach(l => {
+            html += `<a href="${escHtml(l.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary">${escHtml(l.title)}<i class="bi bi-box-arrow-up-right ms-1" style="font-size:.65rem"></i></a>`;
+          });
+          html += `</div></div>`;
+        }
+        html += `</div></div></div>`;
+      });
+      html += `</div></div></div>`;
+    });
+
+    // Suggestions sidebar (if any).
+    if ((r.suggestions || []).length || (r.spam_signals || []).length) {
+      html += `<div class="row g-3 mb-3"><div class="col-12"><div class="card mb-3"><div class="card-header"><h3 class="card-title mb-0"><i class="bi bi-lightbulb me-1 text-warning"></i>Empfehlungen</h3></div><div class="card-body pt-3 pb-2"><ul class="mp-side-list">`;
+      (r.suggestions || []).forEach(s => { html += `<li>${escHtml(s)}</li>`; });
+      html += `</ul></div></div></div></div>`;
+    }
+
+    // Raw source.
+    if (p.raw_source && p.raw_source !== '[encrypted]') {
+      html += `<div class="card mb-3"><div class="card-header d-flex align-items-center justify-content-between">
+        <h3 class="card-title mb-0"><i class="bi bi-code me-1"></i>Vollständige Rohnachricht</h3>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="${escHtml(p.raw_source)}"><i class="bi bi-clipboard me-1"></i>Kopieren</button>
+      </div><div class="card-body p-0"><div class="accordion-body"><pre class="mp-raw-pre">${escHtml(p.raw_source)}</pre></div></div></div>`;
+    }
+
+    html += '</div>';
+    return html;
+  }
+})();
+</script>
+{{end}}
 </body>
 </html>
 {{end}}

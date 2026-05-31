@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"log"
 	"log/slog"
@@ -20,6 +22,7 @@ import (
 	"github.com/brightcolor/sender-report/internal/db"
 	"github.com/brightcolor/sender-report/internal/model"
 	"github.com/brightcolor/sender-report/internal/ratelimit"
+	"github.com/brightcolor/sender-report/internal/sealedbox"
 	"github.com/brightcolor/sender-report/internal/smtp"
 	"github.com/brightcolor/sender-report/internal/store"
 	"github.com/brightcolor/sender-report/internal/telemetry"
@@ -182,7 +185,9 @@ func processInbound(ctx context.Context, st *store.Store, engine *analyzer.Engin
 	headers := headerBlock(raw)
 	subject := headerField(headers, "Subject")
 
-	msg, err := st.SaveMessage(ctx, model.Message{
+	// Phase 3: run analysis on plaintext before any encryption.
+	// The analyzer needs cleartext; we encrypt only at storage time.
+	tmpMsg := model.Message{
 		MailboxID:   mb.ID,
 		SMTPFrom:    rm.MailFrom,
 		RCPTTo:      rcpt,
@@ -193,13 +198,36 @@ func processInbound(ctx context.Context, st *store.Store, engine *analyzer.Engin
 		HeaderBlock: headers,
 		Subject:     subject,
 		SizeBytes:   int64(len(rm.Data)),
-	})
+	}
+	report := engine.Analyze(ctx, analyzer.Input{Message: tmpMsg, SMTPDomain: cfg.SMTPDomain})
+
+	// Phase 3: if the mailbox has an E2E public key, encrypt all sensitive content
+	// into a single sealed payload and clear the plaintext fields before storage.
+	storeMsg := tmpMsg
+	if mb.PublicKey != "" {
+		pubBytes, hexErr := hex.DecodeString(mb.PublicKey)
+		if hexErr == nil && len(pubBytes) == 32 {
+			payload, encErr := buildEncryptedPayload(raw, headers, subject, report, pubBytes)
+			if encErr == nil {
+				storeMsg.PayloadEnc  = payload
+				storeMsg.RawSource   = "[encrypted]"
+				storeMsg.HeaderBlock = "[encrypted]"
+				storeMsg.Subject     = "[encrypted]"
+				// Strip sensitive check details; keep score cleartext via report.Score.
+				report = stripReportForStorage(report)
+			} else {
+				logger.Printf("smtp: encryption failed mailbox=%s: %v — storing plaintext", mb.Token, encErr)
+			}
+		}
+	}
+
+	msg, err := st.SaveMessage(ctx, storeMsg)
 	if err != nil {
 		return err
 	}
+	report.MessageID = msg.ID
 	metrics.IncMailsReceived()
 
-	report := engine.Analyze(ctx, analyzer.Input{Message: msg, SMTPDomain: cfg.SMTPDomain})
 	if _, err := st.SaveReport(ctx, report); err != nil {
 		metrics.IncAnalyzerErrors()
 		logger.Printf("analyze/store report error msg=%d: %v", msg.ID, err)
@@ -212,8 +240,58 @@ func processInbound(ctx context.Context, st *store.Store, engine *analyzer.Engin
 		metrics.IncReportsGenerated()
 	}
 	_ = st.TouchMailbox(ctx, mb.ID)
-	logger.Printf("smtp: received message mailbox=%s msg=%d size=%d", mb.Token, msg.ID, len(rm.Data))
+	logger.Printf("smtp: received message mailbox=%s msg=%d size=%d encrypted=%v", mb.Token, msg.ID, len(rm.Data), storeMsg.PayloadEnc != "")
 	return nil
+}
+
+// encryptedPayload is the JSON structure sealed into messages.payload_enc.
+type encryptedPayload struct {
+	RawSource   string              `json:"raw_source"`
+	HeaderBlock string              `json:"header_block"`
+	Subject     string              `json:"subject"`
+	Report      model.AnalysisReport `json:"report"`
+}
+
+// buildEncryptedPayload seals all sensitive message + report content with the
+// mailbox public key. Returns a hex-encoded sealed blob.
+func buildEncryptedPayload(raw, headers, subject string, report model.AnalysisReport, pubKey []byte) (string, error) {
+	p := encryptedPayload{
+		RawSource:   raw,
+		HeaderBlock: headers,
+		Subject:     subject,
+		Report:      report,
+	}
+	plainJSON, err := json.Marshal(p)
+	if err != nil {
+		return "", err
+	}
+	blob, err := sealedbox.Seal(plainJSON, pubKey)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(blob), nil
+}
+
+// stripReportForStorage removes sensitive check details from the report before
+// it is stored in cleartext. Score + score_label are preserved for display.
+func stripReportForStorage(r model.AnalysisReport) model.AnalysisReport {
+	stripped := model.AnalysisReport{
+		ID:         r.ID,
+		MessageID:  r.MessageID,
+		CreatedAt:  r.CreatedAt,
+		Score:      r.Score,
+		ScoreLabel: r.ScoreLabel,
+	}
+	// Keep minimal check status for the summary badges (pass/warn/fail counts).
+	for _, c := range r.Checks {
+		stripped.Checks = append(stripped.Checks, model.CheckResult{
+			ID:     c.ID,
+			Name:   c.Name,
+			Status: c.Status,
+			// ScoreDelta, Summary, Explanation, Recommendation, TechnicalDetails → encrypted
+		})
+	}
+	return stripped
 }
 
 func isAllowedRecipient(ctx context.Context, st *store.Store, cfg config.Config, rcpt string) bool {
