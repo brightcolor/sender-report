@@ -69,7 +69,10 @@ func TestReportUsesTokenURLAndInlineRawAccordion(t *testing.T) {
 	_ = st
 }
 
-func TestHomeGeneratesNewMailboxOnEachOpen(t *testing.T) {
+// TestHomeRendersWithoutServerSideMailbox verifies that since Phase 2 the home
+// page no longer creates a mailbox server-side or sets a mailbox cookie.
+// Mailbox creation is now delegated to the browser (client-side crypto).
+func TestHomeRendersWithoutServerSideMailbox(t *testing.T) {
 	restoreWD := chdirToRepoRoot(t)
 	defer restoreWD()
 
@@ -99,40 +102,18 @@ func TestHomeGeneratesNewMailboxOnEachOpen(t *testing.T) {
 	}
 	h := srv.Handler()
 
-	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req1.RemoteAddr = "203.0.113.10:12345"
-	rr1 := httptest.NewRecorder()
-	h.ServeHTTP(rr1, req1)
-	if rr1.Code != http.StatusOK {
-		t.Fatalf("first home request expected 200, got %d", rr1.Code)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "203.0.113.10:12345"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("home request expected 200, got %d", rr.Code)
 	}
-	cookies1 := rr1.Result().Cookies()
-	if len(cookies1) == 0 {
-		t.Fatal("expected mailbox cookie on first home response")
-	}
-	token1 := strings.TrimSpace(cookies1[0].Value)
-	if token1 == "" {
-		t.Fatal("expected non-empty mailbox token in first cookie")
-	}
-
-	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req2.RemoteAddr = "203.0.113.10:12345"
-	req2.AddCookie(&http.Cookie{Name: "mailprobe_mailbox", Value: token1})
-	rr2 := httptest.NewRecorder()
-	h.ServeHTTP(rr2, req2)
-	if rr2.Code != http.StatusOK {
-		t.Fatalf("second home request expected 200, got %d", rr2.Code)
-	}
-	cookies2 := rr2.Result().Cookies()
-	if len(cookies2) == 0 {
-		t.Fatal("expected mailbox cookie on second home response")
-	}
-	token2 := strings.TrimSpace(cookies2[0].Value)
-	if token2 == "" {
-		t.Fatal("expected non-empty mailbox token in second cookie")
-	}
-	if token2 == token1 {
-		t.Fatalf("expected fresh token on each home request, got same token %q", token2)
+	// Phase 2: no server-side mailbox creation, so no mailbox cookie is set.
+	for _, c := range rr.Result().Cookies() {
+		if c.Name == "mailprobe_mailbox" {
+			t.Fatalf("unexpected mailbox cookie on home response (Phase 2 uses client-side creation)")
+		}
 	}
 }
 
@@ -181,9 +162,8 @@ func TestCreateMailboxJSONReturnsNewAddressWithoutRedirect(t *testing.T) {
 	if payload["token"] == "" || payload["address"] == "" || payload["mailbox_url"] == "" {
 		t.Fatalf("missing mailbox fields: %#v", payload)
 	}
-	if len(rr.Result().Cookies()) == 0 {
-		t.Fatal("expected mailbox cookie for AJAX-created mailbox")
-	}
+	// Phase 2: JSON API (legacy empty-body path) no longer sets a cookie.
+	// Cookie is only set on the form-POST fallback path.
 }
 
 func TestMailboxStatusReturnsTokenizedReportPath(t *testing.T) {
