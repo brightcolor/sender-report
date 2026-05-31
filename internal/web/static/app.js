@@ -88,7 +88,54 @@ async function fetchMailboxStatus(token) {
   return res.json();
 }
 
+// ── Crypto token storage ──────────────────────────────────────────────────────
+
+const SR_SECRET_PREFIX = 'sr:secret:';
+
+function storeSecret(identifier, token) {
+  // Always keep in sessionStorage for current tab.
+  try { sessionStorage.setItem(SR_SECRET_PREFIX + identifier, token); } catch (_) {}
+  // Persist in localStorage if user consented (or always — secret is needed for decryption).
+  try { localStorage.setItem(SR_SECRET_PREFIX + identifier, token); } catch (_) {}
+}
+
+function loadSecret(identifier) {
+  try {
+    return localStorage.getItem(SR_SECRET_PREFIX + identifier)
+      || sessionStorage.getItem(SR_SECRET_PREFIX + identifier)
+      || null;
+  } catch (_) { return null; }
+}
+
+function removeSecret(identifier) {
+  try { localStorage.removeItem(SR_SECRET_PREFIX + identifier); } catch (_) {}
+  try { sessionStorage.removeItem(SR_SECRET_PREFIX + identifier); } catch (_) {}
+}
+
+// ── Mailbox creation (E2E crypto path) ───────────────────────────────────────
+
+async function createMailboxWithCrypto() {
+  const crypto = window.SenderReportCrypto;
+  if (!crypto) throw new Error('SenderReportCrypto not loaded');
+  const { token, public: pub, identifier } = await crypto.generateToken();
+  const pubHex = crypto._bytesToHex(pub);
+  const res = await fetch('/api/mailboxes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    cache: 'no-store',
+    body: JSON.stringify({ identifier, public_key: pubHex }),
+  });
+  if (!res.ok) throw new Error('mailbox create failed');
+  const data = await res.json();
+  storeSecret(identifier, token);
+  return data;
+}
+
 async function createMailbox() {
+  // Use E2E crypto path if available, otherwise fall back.
+  if (window.SenderReportCrypto) {
+    return createMailboxWithCrypto();
+  }
   const res = await fetch('/api/mailboxes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -141,6 +188,18 @@ function updateMailboxIdentity(data) {
     statCard.dataset.latestMessageId = '0';
   }
   sessionStorage.setItem(`mailprobe:lastmsg:${data.token}`, '0');
+
+  // Phase 2: reveal main content, hide loading spinner.
+  const loader  = document.getElementById('mb-init-loader');
+  const content = document.getElementById('mb-main-content');
+  if (loader)  loader.classList.add('d-none');
+  if (content) content.classList.remove('d-none');
+
+  // Show E2E badge + footer hint if this is an encrypted mailbox.
+  if (data.encrypted) {
+    document.getElementById('mp-e2e-badge')?.classList.remove('d-none');
+    document.getElementById('mp-e2e-footer')?.classList.remove('d-none');
+  }
 }
 
 async function createNewAddress() {
@@ -979,6 +1038,63 @@ function setupExtendModal() {
   }
 }
 
+// ── Home page: client-side mailbox initialisation (Phase 2) ──────────────────
+
+async function initHomeMailbox() {
+  const panel = document.getElementById('check-panel');
+  if (!panel) return; // not on home page
+
+  // Run crypto self-test in background (logs to console).
+  window.SenderReportCrypto?.cryptoSelfTest().catch(() => {});
+
+  // Try to restore an existing mailbox from localStorage.
+  // We look for the most recent identifier in mailprobe:mailboxes whose
+  // secret token is still stored and whose server-side mailbox is alive.
+  const crypto = window.SenderReportCrypto;
+  if (crypto) {
+    try {
+      const raw = localStorage.getItem('mailprobe:mailboxes');
+      const history = raw ? JSON.parse(raw) : [];
+      for (const entry of history.slice(0, 5)) {
+        const identifier = typeof entry === 'string' ? entry : entry?.token;
+        if (!identifier) continue;
+        const secret = loadSecret(identifier);
+        if (!secret) continue;
+        try {
+          const res = await fetch(`/api/mailboxes/${identifier}/status`, { cache: 'no-store' });
+          if (!res.ok) continue;
+          const status = await res.json();
+          if (status.expired) continue;
+          // Mailbox is alive — restore identity.
+          const info = await crypto.fromToken(secret);
+          const addr = identifier + '@' + (panel.dataset.domain || location.hostname);
+          updateMailboxIdentity({
+            token: identifier,
+            address: status.address || addr,
+            expires_at: status.expires_at,
+            mailbox_url: `/mailbox/${identifier}`,
+            status_path: `/api/mailboxes/${identifier}/status`,
+            events_path: `/api/mailboxes/${identifier}/events`,
+            encrypted: true,
+          });
+          setupMailboxPolling();
+          return;
+        } catch (_) { continue; }
+      }
+    } catch (_) {}
+  }
+
+  // No restorable mailbox found — create a fresh one.
+  try {
+    const data = await createMailbox();
+    updateMailboxIdentity(data);
+    saveMbToHistory(data.token);
+    setupMailboxPolling();
+  } catch (_) {
+    setTransientStatus('Mailbox konnte nicht erstellt werden. Seite neu laden.', 'warn');
+  }
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 setupThemeToggle();
@@ -986,7 +1102,6 @@ setupCheckButton();
 setupNewAddressButton();
 setupCopyButtons();
 localizeStaticTimes();
-setupMailboxPolling();
 setupCheckFilter();
 setupCookieConsent();
 colorScoreDeltas();
@@ -997,3 +1112,10 @@ document.getElementById('mp-delete-confirm-btn')?.addEventListener('click', conf
 
 // Verlängern-Modal
 setupExtendModal();
+
+// Home page: async mailbox init (after DOM ready, crypto libs loaded).
+if (document.getElementById('check-panel')) {
+  initHomeMailbox();
+} else {
+  setupMailboxPolling();
+}

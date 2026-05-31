@@ -31,6 +31,7 @@ import (
 	"github.com/brightcolor/sender-report/internal/config"
 	"github.com/brightcolor/sender-report/internal/model"
 	"github.com/brightcolor/sender-report/internal/ratelimit"
+	"github.com/brightcolor/sender-report/internal/sealedbox"
 	"github.com/brightcolor/sender-report/internal/store"
 	"github.com/brightcolor/sender-report/internal/telemetry"
 	"github.com/brightcolor/sender-report/internal/version"
@@ -55,7 +56,6 @@ var errGlobalActiveMailboxLimit = errors.New("active mailbox limit reached globa
 type HomeData struct {
 	AppName   string
 	Domain    string
-	Mailbox   model.Mailbox
 	PublicURL string
 }
 
@@ -367,31 +367,13 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	ip := s.clientIP(r)
-	var preferredToken string
-	if c, err := r.Cookie("mailprobe_mailbox"); err == nil {
-		preferredToken = strings.TrimSpace(c.Value)
-	}
 	domain := s.requestSMTPDomain(r)
-	mb, err := s.getOrCreateHomeMailbox(r.Context(), ip, preferredToken, true, domain)
-	if err != nil {
-		if errors.Is(err, errActiveMailboxLimit) {
-			http.Error(w, "too many active mailboxes for this IP", http.StatusTooManyRequests)
-			return
-		}
-		if errors.Is(err, errGlobalActiveMailboxLimit) {
-			http.Error(w, "too many active mailboxes globally", http.StatusTooManyRequests)
-			return
-		}
-		http.Error(w, "could not prepare mailbox", http.StatusInternalServerError)
-		return
-	}
-	setMailboxCookie(w, mb)
-
+	// Phase 2: mailbox creation is now client-side (crypto key generation in browser).
+	// The home page renders an empty widget; JavaScript fills it after generating
+	// the X25519 key pair and calling POST /api/mailboxes with {identifier, public_key}.
 	data := HomeData{
 		AppName:   s.cfg.AppName,
 		Domain:    domain,
-		Mailbox:   mb,
 		PublicURL: s.publicBaseURL(r),
 	}
 	s.render(w, "home", data)
@@ -404,10 +386,7 @@ func (s *Server) createMailbox(w http.ResponseWriter, r *http.Request) {
 	}
 	ip := s.clientIP(r)
 	ctx := r.Context()
-	var preferredToken string
-	if c, err := r.Cookie("mailprobe_mailbox"); err == nil {
-		preferredToken = strings.TrimSpace(c.Value)
-	}
+
 	active, err := s.store.CountActiveMailboxesByIP(ctx, ip)
 	if err != nil {
 		http.Error(w, "db error", http.StatusInternalServerError)
@@ -427,39 +406,79 @@ func (s *Server) createMailbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, addr, err := s.generateMailboxAddress(ctx, s.requestSMTPDomain(r))
+	// Phase 2: try to parse a client-supplied {identifier, public_key} body.
+	// If present and valid, use client-generated identity (E2E path).
+	// Otherwise fall back to server-side generation (legacy/API-tool path).
+	var mb model.Mailbox
+	domain := s.requestSMTPDomain(r)
+
+	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		var body struct {
+			Identifier string `json:"identifier"`
+			PublicKey  string `json:"public_key"` // hex-encoded 32-byte X25519 public key
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err == nil &&
+			body.Identifier != "" && body.PublicKey != "" {
+			// Validate: identifier must equal sealedbox.Identifier(decoded public key).
+			pubBytes, hexErr := hex.DecodeString(body.PublicKey)
+			if hexErr != nil || len(pubBytes) != 32 {
+				http.Error(w, "invalid public_key", http.StatusBadRequest)
+				return
+			}
+			if sealedbox.Identifier(pubBytes) != body.Identifier {
+				http.Error(w, "identifier does not match public_key", http.StatusBadRequest)
+				return
+			}
+			addr := body.Identifier + "@" + cleanDomain(domain)
+			// Check address is not already in use (e.g. replay).
+			if existing, lookErr := s.store.GetMailboxByToken(ctx, body.Identifier); lookErr == nil {
+				// Return existing mailbox if still valid — idempotent create.
+				if time.Now().UTC().Before(existing.ExpiresAt) {
+					_ = s.store.TouchMailbox(ctx, existing.ID)
+					jsonResp(w, http.StatusOK, s.mailboxJSON(existing, r))
+					return
+				}
+				// Expired — delete and re-create.
+				_ = s.store.DeleteMailboxByToken(ctx, existing.Token)
+			}
+			mb, err = s.store.CreateMailbox(ctx, body.Identifier, addr, body.PublicKey, ip, s.cfg.MailboxTTL)
+			if err != nil {
+				http.Error(w, "could not create mailbox", http.StatusInternalServerError)
+				return
+			}
+			s.metrics.IncMailboxesCreated()
+			jsonResp(w, http.StatusCreated, s.mailboxJSON(mb, r))
+			return
+		}
+		// JSON body present but no crypto fields → legacy JSON create.
+		token, addr, genErr := s.generateMailboxAddress(ctx, domain)
+		if genErr != nil {
+			http.Error(w, "could not create mailbox", http.StatusInternalServerError)
+			return
+		}
+		mb, err = s.store.CreateMailbox(ctx, token, addr, "", ip, s.cfg.MailboxTTL)
+		if err != nil {
+			http.Error(w, "could not create mailbox", http.StatusInternalServerError)
+			return
+		}
+		s.metrics.IncMailboxesCreated()
+		jsonResp(w, http.StatusCreated, s.mailboxJSON(mb, r))
+		return
+	}
+
+	// Form POST fallback (non-JSON).
+	token, addr, err := s.generateMailboxAddress(ctx, domain)
 	if err != nil {
 		http.Error(w, "could not create mailbox", http.StatusInternalServerError)
 		return
 	}
-	mb, err := s.store.CreateMailbox(ctx, token, addr, ip, s.cfg.MailboxTTL)
+	mb, err = s.store.CreateMailbox(ctx, token, addr, "", ip, s.cfg.MailboxTTL)
 	if err != nil {
 		http.Error(w, "could not create mailbox", http.StatusInternalServerError)
 		return
 	}
 	s.metrics.IncMailboxesCreated()
-	if preferredToken != "" && preferredToken != mb.Token {
-		if oldBox, oldErr := s.store.GetMailboxByToken(ctx, preferredToken); oldErr == nil {
-			msgs, listErr := s.store.ListMessagesByMailbox(ctx, oldBox.ID, 1)
-			if listErr == nil && len(msgs) == 0 {
-				_ = s.store.DeleteMailboxByToken(ctx, oldBox.Token)
-			}
-		}
-	}
 	setMailboxCookie(w, mb)
-
-	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-		jsonResp(w, http.StatusCreated, map[string]any{
-			"token":       mb.Token,
-			"address":     mb.Address,
-			"expires_at":  mb.ExpiresAt,
-			"mailbox_url": fmt.Sprintf("%s/mailbox/%s", s.publicBaseURL(r), mb.Token),
-			"status_path": fmt.Sprintf("/api/mailboxes/%s/status", mb.Token),
-			"events_path": fmt.Sprintf("/api/mailboxes/%s/events", mb.Token),
-		})
-		return
-	}
-
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -702,6 +721,20 @@ func (s *Server) reportAPI(w http.ResponseWriter, r *http.Request) {
 		},
 		"report": selected.Report,
 	})
+}
+
+// mailboxJSON returns the standard JSON payload for a newly created/found mailbox.
+func (s *Server) mailboxJSON(mb model.Mailbox, r *http.Request) map[string]any {
+	base := s.publicBaseURL(r)
+	return map[string]any{
+		"token":       mb.Token,
+		"address":     mb.Address,
+		"encrypted":   mb.PublicKey != "",
+		"expires_at":  mb.ExpiresAt,
+		"mailbox_url": fmt.Sprintf("%s/mailbox/%s", base, mb.Token),
+		"status_path": fmt.Sprintf("/api/mailboxes/%s/status", mb.Token),
+		"events_path": fmt.Sprintf("/api/mailboxes/%s/events", mb.Token),
+	}
 }
 
 func (s *Server) mailboxAPI(w http.ResponseWriter, r *http.Request) {
@@ -1320,7 +1353,7 @@ func (s *Server) getOrCreateHomeMailbox(ctx context.Context, ip, preferredToken 
 	if err != nil {
 		return model.Mailbox{}, err
 	}
-	mb, err := s.store.CreateMailbox(ctx, token, addr, ip, s.cfg.MailboxTTL)
+	mb, err := s.store.CreateMailbox(ctx, token, addr, "", ip, s.cfg.MailboxTTL)
 	if err != nil {
 		return model.Mailbox{}, err
 	}

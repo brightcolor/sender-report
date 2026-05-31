@@ -106,59 +106,76 @@
           <div class="col-lg-7 col-xl-7">
             <div class="card mp-widget-card shadow-lg"
                  id="check-panel"
-                 data-token="{{.Mailbox.Token}}"
+                 data-token=""
+                 data-domain="{{.Domain}}"
                  data-public-url="{{.PublicURL}}">
 
               <div class="card-header py-3 d-flex align-items-center gap-2">
                 <i class="bi bi-envelope-at text-primary"></i>
                 <span class="fw-semibold">Deine Test-Mailbox</span>
+                <!-- Encryption badge — shown by JS once crypto key is established -->
+                <span id="mp-e2e-badge"
+                      class="badge text-bg-secondary ms-1 d-none d-inline-flex align-items-center gap-1"
+                      style="font-size:.7rem"
+                      title="Inhalte werden Ende-zu-Ende verschlüsselt gespeichert">
+                  <i class="bi bi-lock-fill"></i>E2E
+                </span>
                 <span class="badge text-bg-success ms-auto d-inline-flex align-items-center gap-1" style="font-size:.7rem">
                   <span class="mp-live-dot"></span>Bereit
                 </span>
               </div>
 
               <div class="card-body p-4">
-                <div class="mp-addr-box mb-4" onclick="copyAddress()" title="Klicken zum Kopieren" role="button" tabindex="0"
-                     onkeydown="if(event.key==='Enter'||event.key===' ')copyAddress()">
-                  <code class="mp-addr-text" id="mail-address">{{.Mailbox.Address}}</code>
-                  <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren</span>
+                <!-- Loading state — shown until JS has created/restored the mailbox -->
+                <div id="mb-init-loader" class="text-center py-3">
+                  <div class="spinner-border spinner-border-sm text-secondary mb-2" role="status" aria-hidden="true"></div>
+                  <p class="text-secondary small mb-0">Mailbox wird vorbereitet &hellip;</p>
                 </div>
 
-                <!-- Buttons (sichtbar im Ruhezustand) -->
-                <div id="check-actions" class="d-flex gap-2 justify-content-center mb-3">
-                  <button id="check-btn" class="btn btn-primary px-4" type="button">
-                    <i class="bi bi-play-fill me-1"></i>Check starten
-                  </button>
-                  <button id="new-address-btn" class="btn btn-outline-secondary px-4" type="button">
-                    <i class="bi bi-arrow-clockwise me-1"></i>Neue Mailbox
-                  </button>
-                </div>
-
-                <!-- Wartezustand (sichtbar nach "Check starten") -->
-                <div id="check-loader" class="d-none text-center py-3">
-                  <div class="mp-inbox-anim mx-auto mb-3">
-                    <svg class="mp-spinner-svg" viewBox="0 0 72 72" fill="none" aria-hidden="true">
-                      <circle cx="36" cy="36" r="30" stroke="currentColor" stroke-width="4.5" opacity="0.18"/>
-                      <circle cx="36" cy="36" r="30" stroke="currentColor" stroke-width="4.5"
-                              stroke-linecap="round" stroke-dasharray="120 69">
-                        <animateTransform attributeName="transform" type="rotate"
-                                          from="0 36 36" to="360 36 36"
-                                          dur="1.3s" repeatCount="indefinite"/>
-                      </circle>
-                    </svg>
-                    <i class="mp-inbox-env-icon bi bi-envelope"></i>
+                <!-- Address box — hidden until JS fills it -->
+                <div id="mb-main-content" class="d-none">
+                  <div class="mp-addr-box mb-4" onclick="copyAddress()" title="Klicken zum Kopieren" role="button" tabindex="0"
+                       onkeydown="if(event.key==='Enter'||event.key===' ')copyAddress()">
+                    <code class="mp-addr-text" id="mail-address"></code>
+                    <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren</span>
                   </div>
-                  <p id="check-wait-msg" class="text-secondary small mb-0">
-                    Warte auf eingehende E-Mail &hellip;
-                  </p>
-                  <div id="check-steps" class="mp-check-steps d-none mt-3 mx-auto"></div>
-                  <p id="check-status" class="mb-0 text-secondary small mt-2 d-none"></p>
-                </div>
 
-                <!-- Ruhezustand Status -->
-                <p id="check-status-idle" class="mb-0 text-center text-secondary small">
-                  <i class="bi bi-info-circle me-1"></i>Noch keine E-Mail für diese Mailbox geprüft.
-                </p>
+                  <!-- Buttons (sichtbar im Ruhezustand) -->
+                  <div id="check-actions" class="d-flex gap-2 justify-content-center mb-3">
+                    <button id="check-btn" class="btn btn-primary px-4" type="button">
+                      <i class="bi bi-play-fill me-1"></i>Check starten
+                    </button>
+                    <button id="new-address-btn" class="btn btn-outline-secondary px-4" type="button">
+                      <i class="bi bi-arrow-clockwise me-1"></i>Neue Mailbox
+                    </button>
+                  </div>
+
+                  <!-- Wartezustand (sichtbar nach "Check starten") -->
+                  <div id="check-loader" class="d-none text-center py-3">
+                    <div class="mp-inbox-anim mx-auto mb-3">
+                      <svg class="mp-spinner-svg" viewBox="0 0 72 72" fill="none" aria-hidden="true">
+                        <circle cx="36" cy="36" r="30" stroke="currentColor" stroke-width="4.5" opacity="0.18"/>
+                        <circle cx="36" cy="36" r="30" stroke="currentColor" stroke-width="4.5"
+                                stroke-linecap="round" stroke-dasharray="120 69">
+                          <animateTransform attributeName="transform" type="rotate"
+                                            from="0 36 36" to="360 36 36"
+                                            dur="1.3s" repeatCount="indefinite"/>
+                        </circle>
+                      </svg>
+                      <i class="mp-inbox-env-icon bi bi-envelope"></i>
+                    </div>
+                    <p id="check-wait-msg" class="text-secondary small mb-0">
+                      Warte auf eingehende E-Mail &hellip;
+                    </p>
+                    <div id="check-steps" class="mp-check-steps d-none mt-3 mx-auto"></div>
+                    <p id="check-status" class="mb-0 text-secondary small mt-2 d-none"></p>
+                  </div>
+
+                  <!-- Ruhezustand Status -->
+                  <p id="check-status-idle" class="mb-0 text-center text-secondary small">
+                    <i class="bi bi-info-circle me-1"></i>Noch keine E-Mail für diese Mailbox geprüft.
+                  </p>
+                </div>
               </div>
 
               <div class="card-footer px-4 py-3">
@@ -166,16 +183,14 @@
                   <span>
                     <i class="bi bi-clock me-1"></i>
                     Gültig bis
-                    <span id="mail-expires-at"
-                          data-time="{{.Mailbox.ExpiresAt.Format "2006-01-02T15:04:05Z07:00"}}">
-                      {{.Mailbox.ExpiresAt.Format "02.01.2006, 15:04 MST"}}
-                    </span>
+                    <span id="mail-expires-at" data-time=""></span>
                   </span>
-                  <a id="mailbox-direct-link"
-                     href="{{.PublicURL}}/mailbox/{{.Mailbox.Token}}"
-                     class="text-secondary text-decoration-none">
+                  <a id="mailbox-direct-link" href="#" class="text-secondary text-decoration-none">
                     <i class="bi bi-box-arrow-up-right me-1"></i>Direktlink
                   </a>
+                  <span id="mp-e2e-footer" class="d-none text-secondary">
+                    <i class="bi bi-lock-fill text-success me-1"></i>Ende-zu-Ende verschlüsselt
+                  </span>
                 </div>
               </div>
             </div>
@@ -237,6 +252,8 @@
 <script src="/static/vendor/bootstrap.min.js"></script>
 <script src="/static/vendor/overlayscrollbars.es5.min.js"></script>
 <script src="/static/vendor/adminlte.min.js"></script>
+<script src="/static/vendor/tweetnacl.min.js"></script>
+<script src="/static/crypto.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

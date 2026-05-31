@@ -207,11 +207,54 @@
               Beim nächsten Seitenaufruf erscheint die Einwilligungsabfrage erneut.
             </p>
 
-            <h3>2.5 Externe Ressourcen</h3>
+            <h3>2.5 Kryptografische Schlüssel (E2E-Verschlüsselung)</h3>
+            <p>
+              {{.AppName}} nutzt eine Ende-zu-Ende-Verschlüsselung für Mailbox-Inhalte:
+            </p>
+            <div class="table-responsive mb-3">
+              <table class="table table-bordered table-sm mp-privacy-table">
+                <thead class="table-light">
+                  <tr>
+                    <th>Datum</th>
+                    <th>Wo gespeichert</th>
+                    <th>Zweck</th>
+                    <th>Einwilligung</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>sr:secret:{identifier}</code></td>
+                    <td>localStorage + sessionStorage</td>
+                    <td>Der geheime X25519-Schlüssel (als Token codiert), der ausschließlich im Browser verbleibt und zum Entschlüsseln der Mailbox-Inhalte benötigt wird. Ohne diesen Schlüssel können Inhalte auch mit vollem Serverzugriff nicht entschlüsselt werden.</td>
+                    <td><span class="badge text-bg-secondary">Nicht erforderlich</span><br><small class="text-secondary">technisch zwingend notwendig für Entschlüsselung</small></td>
+                  </tr>
+                  <tr>
+                    <td>Öffentlicher Schlüssel (<code>public_key</code>)</td>
+                    <td>Server-Datenbank</td>
+                    <td>Der X25519-Public-Key wird vom Browser an den Server übermittelt und dort gespeichert. Der Server nutzt ihn ausschließlich zur Verschlüsselung eingehender Mails. Aus dem öffentlichen Schlüssel lässt sich der private Schlüssel nicht zurückrechnen.</td>
+                    <td><span class="badge text-bg-secondary">Nicht erforderlich</span><br><small class="text-secondary">technisch zwingend notwendig für Verschlüsselung</small></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="alert alert-info d-flex gap-2 py-2" role="note">
+              <i class="bi bi-lock-fill text-primary flex-shrink-0 mt-1"></i>
+              <div class="small">
+                <strong>Wie die E2E-Verschlüsselung funktioniert:</strong>
+                Beim Erstellen einer Mailbox generiert dein Browser ein X25519-Schlüsselpaar.
+                Der <strong>private Schlüssel</strong> verlässt deinen Browser nie — er steckt im Mailbox-Token
+                in deiner URL und in deinem localStorage. Der Server erhält nur den <strong>öffentlichen Schlüssel</strong>
+                und kann damit eingehende Mails verschlüsseln, aber niemals entschlüsseln.
+                Nur du (über dein Token) kannst die Inhalte lesen.
+                Verwendete Verfahren: X25519 + HKDF-SHA256 + AES-256-GCM.
+              </div>
+            </div>
+
+            <h3>2.6 Externe Ressourcen</h3>
             <p>
               Alle CSS- und JavaScript-Bibliotheken (Bootstrap, Bootstrap Icons, OverlayScrollbars,
-              AdminLTE) werden <strong>vom eigenen Server</strong> ausgeliefert. Es werden keine
-              externen CDN-Verbindungen hergestellt und keine IP-Adressen an Dritte übermittelt.
+              AdminLTE, TweetNaCl) werden <strong>vom eigenen Server</strong> ausgeliefert. Es werden
+              keine externen CDN-Verbindungen hergestellt und keine IP-Adressen an Dritte übermittelt.
             </p>
 
             <!-- 3 -->

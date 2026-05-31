@@ -75,6 +75,12 @@ CREATE TABLE IF NOT EXISTS reports (
 CREATE INDEX IF NOT EXISTS idx_reports_message_id ON reports(message_id);
 CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at);
 `
-	_, err := db.Exec(schema)
-	return err
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+	// Phase-2 migration: add public_key column to existing databases.
+	// SQLite returns "duplicate column name" if the column already exists;
+	// we intentionally ignore that error so this migration is idempotent.
+	_, _ = db.Exec(`ALTER TABLE mailboxes ADD COLUMN public_key TEXT`)
+	return nil
 }

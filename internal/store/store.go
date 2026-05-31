@@ -20,13 +20,15 @@ func New(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-func (s *Store) CreateMailbox(ctx context.Context, token, address, ip string, ttl time.Duration) (model.Mailbox, error) {
+// CreateMailbox inserts a new mailbox. publicKey is the hex-encoded X25519
+// public key supplied by the client (Phase 2+); pass "" for legacy creation.
+func (s *Store) CreateMailbox(ctx context.Context, token, address, publicKey, ip string, ttl time.Duration) (model.Mailbox, error) {
 	now := time.Now().UTC()
 	expires := now.Add(ttl)
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO mailboxes(token, address, created_ip, created_at, expires_at, last_seen_at)
-		VALUES(?,?,?,?,?,?)
-	`, token, address, ip, now, expires, now)
+		INSERT INTO mailboxes(token, address, public_key, created_ip, created_at, expires_at, last_seen_at)
+		VALUES(?,?,?,?,?,?,?)
+	`, token, address, publicKey, ip, now, expires, now)
 	if err != nil {
 		return model.Mailbox{}, err
 	}
@@ -35,6 +37,7 @@ func (s *Store) CreateMailbox(ctx context.Context, token, address, ip string, tt
 		ID:         id,
 		Token:      token,
 		Address:    address,
+		PublicKey:  publicKey,
 		CreatedIP:  ip,
 		CreatedAt:  now,
 		ExpiresAt:  expires,
@@ -66,7 +69,7 @@ func (s *Store) CountActiveMailboxes(ctx context.Context) (int, error) {
 
 func (s *Store) GetMailboxByToken(ctx context.Context, token string) (model.Mailbox, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, token, address, created_ip, created_at, expires_at, last_seen_at
+		SELECT id, token, address, COALESCE(public_key,''), created_ip, created_at, expires_at, last_seen_at
 		FROM mailboxes WHERE token = ?
 	`, token)
 	return scanMailbox(row)
@@ -74,7 +77,7 @@ func (s *Store) GetMailboxByToken(ctx context.Context, token string) (model.Mail
 
 func (s *Store) GetMailboxByAddress(ctx context.Context, address string) (model.Mailbox, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, token, address, created_ip, created_at, expires_at, last_seen_at
+		SELECT id, token, address, COALESCE(public_key,''), created_ip, created_at, expires_at, last_seen_at
 		FROM mailboxes WHERE lower(address) = lower(?)
 	`, address)
 	return scanMailbox(row)
@@ -82,7 +85,7 @@ func (s *Store) GetMailboxByAddress(ctx context.Context, address string) (model.
 
 func (s *Store) GetMailboxByID(ctx context.Context, id int64) (model.Mailbox, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, token, address, created_ip, created_at, expires_at, last_seen_at
+		SELECT id, token, address, COALESCE(public_key,''), created_ip, created_at, expires_at, last_seen_at
 		FROM mailboxes WHERE id = ?
 	`, id)
 	return scanMailbox(row)
@@ -90,7 +93,7 @@ func (s *Store) GetMailboxByID(ctx context.Context, id int64) (model.Mailbox, er
 
 func scanMailbox(row *sql.Row) (model.Mailbox, error) {
 	var mb model.Mailbox
-	if err := row.Scan(&mb.ID, &mb.Token, &mb.Address, &mb.CreatedIP, &mb.CreatedAt, &mb.ExpiresAt, &mb.LastSeenAt); err != nil {
+	if err := row.Scan(&mb.ID, &mb.Token, &mb.Address, &mb.PublicKey, &mb.CreatedIP, &mb.CreatedAt, &mb.ExpiresAt, &mb.LastSeenAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return model.Mailbox{}, ErrNotFound
 		}

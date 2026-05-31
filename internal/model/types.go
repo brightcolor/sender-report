@@ -6,6 +6,7 @@ type Mailbox struct {
 	ID         int64
 	Token      string
 	Address    string
+	PublicKey  string // hex-encoded X25519 public key; empty for legacy mailboxes
 	CreatedIP  string
 	CreatedAt  time.Time
 	ExpiresAt  time.Time
