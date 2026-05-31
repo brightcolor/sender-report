@@ -229,6 +229,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/static/", s.staticFS)
 	mux.HandleFunc("/", s.home)
+	mux.HandleFunc("/about", s.aboutPage)
 	mux.HandleFunc("/privacy", s.privacyPage)
 	mux.HandleFunc("/healthz", s.health)
 	mux.HandleFunc("/readyz", s.ready)
@@ -559,6 +560,24 @@ func (s *Server) rawPage(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (s *Server) aboutPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	host := r.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	s.render(w, "about", struct {
+		AppName string
+		Domain  string
+	}{
+		AppName: s.cfg.AppName,
+		Domain:  host,
+	})
 }
 
 func (s *Server) privacyPage(w http.ResponseWriter, r *http.Request) {

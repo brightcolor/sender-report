@@ -1,0 +1,337 @@
+{{define "about"}}
+<!doctype html>
+<html lang="de" data-bs-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Sender-Report – wie es funktioniert, was geprüft wird und häufige Fragen." />
+  <title>Über Sender-Report – {{.AppName}}</title>
+  <script>(function(){try{var p=localStorage.getItem('mailprobe-theme')||'auto';var d=p==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.bsTheme=d;document.documentElement.dataset.themePreference=p;}catch(e){document.documentElement.dataset.bsTheme='light';}})()</script>
+  <link rel="stylesheet" href="/static/vendor/bootstrap.min.css">
+  <link rel="stylesheet" href="/static/vendor/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/static/vendor/overlayscrollbars.min.css">
+  <link rel="stylesheet" href="/static/vendor/adminlte.min.css">
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body class="layout-fixed">
+<div class="app-wrapper">
+
+  <!-- ── Navbar ─────────────────────────────────────────────────────────── -->
+  <nav class="app-header navbar navbar-expand bg-body">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+        <span class="mp-brand-mark">SR</span>{{.AppName}}
+      </a>
+      <ul class="navbar-nav ms-auto align-items-center gap-2">
+        <li class="nav-item d-none d-md-block">
+          <span class="badge text-bg-primary">{{.Domain}}</span>
+        </li>
+        <li class="nav-item dropdown">
+          <a class="nav-link text-secondary small py-0 dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            Mehr
+          </a>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>Über Sender-Report</a></li>
+            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>Was wird geprüft?</a></li>
+            <li><a class="dropdown-item small" href="/about#faq"><i class="bi bi-question-circle me-2"></i>FAQ</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>Datenschutz</a></li>
+          </ul>
+        </li>
+        <li class="nav-item">
+          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
+            <span class="theme-icon">AUTO</span>
+          </button>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ── Main ───────────────────────────────────────────────────────────── -->
+  <main class="app-main">
+
+    <!-- ══ Hero ════════════════════════════════════════════════════════════ -->
+    <section class="mp-hero-section py-5">
+      <div class="container-xl px-4 mp-home-container">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <a href="/" class="text-secondary text-decoration-none small"><i class="bi bi-house me-1"></i>Start</a>
+          <span class="text-secondary small opacity-50">/</span>
+          <span class="text-secondary small">Über Sender-Report</span>
+        </div>
+        <h1 class="fw-bold mb-3" style="font-size:2rem">Über Sender-Report</h1>
+        <p class="text-secondary mb-0" style="font-size:1.075rem; max-width:600px; line-height:1.7">
+          Sender-Report ist ein selbst-gehostetes Werkzeug, das deine E-Mail-Zustellbarkeit
+          analysiert — ohne Account, ohne Tracking, ohne Drittanbieter.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══ Trust-Leiste ══════════════════════════════════════════════════ -->
+    <section class="mp-trust-strip">
+      <div class="container-xl px-4 mp-home-container">
+        <div class="row g-4 py-4 text-center text-sm-start">
+          <div class="col-6 col-lg-3">
+            <div class="mp-trust-item">
+              <i class="bi bi-lightning-charge-fill text-primary"></i>
+              <div>
+                <strong class="d-block">Sofort-Analyse</strong>
+                <span class="text-secondary small">Ergebnis Sekunden nach Mail-Eingang</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="mp-trust-item">
+              <i class="bi bi-incognito text-primary"></i>
+              <div>
+                <strong class="d-block">Ohne Anmeldung</strong>
+                <span class="text-secondary small">Kein Account, keine E-Mail-Adresse nötig</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="mp-trust-item">
+              <i class="bi bi-hourglass-split text-primary"></i>
+              <div>
+                <strong class="d-block">Selbstzerstörend</strong>
+                <span class="text-secondary small">Mailboxen laufen automatisch ab</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="mp-trust-item">
+              <i class="bi bi-git text-primary"></i>
+              <div>
+                <strong class="d-block">Open Source</strong>
+                <span class="text-secondary small">Self-hosted &amp; voll transparent</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ Was wird geprüft ═══════════════════════════════════════════════ -->
+    <section class="mp-checks-section" id="checks">
+      <div class="container-xl px-4 py-5 mp-home-container">
+
+        <div class="text-center mb-5">
+          <span class="mp-section-badge mb-3"><i class="bi bi-check2-circle me-1"></i>20+ automatische Checks</span>
+          <h2 class="fw-bold mb-2" style="font-size:1.65rem">Was Sender-Report prüft</h2>
+          <p class="text-secondary mb-0 mx-auto" style="max-width:540px">
+            Vier Dimensionen der Zustellbarkeit – vollständig automatisch, ohne dass du etwas konfigurieren musst.
+          </p>
+        </div>
+
+        <div class="row g-4">
+          <div class="col-12 col-sm-6 col-xl-3">
+            <div class="mp-check-tile h-100">
+              <div class="mp-check-tile-icon text-bg-success mb-3">
+                <i class="bi bi-shield-check"></i>
+              </div>
+              <h6 class="fw-semibold mb-2">Authentifizierung</h6>
+              <p class="text-secondary small mb-3">
+                Der häufigste Grund für Spam-Einordnung: falsch konfigurierte Auth-Records.
+              </p>
+              <ul class="mp-feat-list">
+                <li><strong>SPF</strong> – Absender-IP im DNS erlaubt?</li>
+                <li><strong>DKIM</strong> – Signatur gültig?</li>
+                <li><strong>DMARC</strong> – Policy-Alignment korrekt?</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-12 col-sm-6 col-xl-3">
+            <div class="mp-check-tile h-100">
+              <div class="mp-check-tile-icon text-bg-info mb-3">
+                <i class="bi bi-hdd-network"></i>
+              </div>
+              <h6 class="fw-semibold mb-2">Server &amp; Netz</h6>
+              <p class="text-secondary small mb-3">
+                Technische Konfigurationsfehler, die Zustellbarkeit still sabotieren.
+              </p>
+              <ul class="mp-feat-list">
+                <li><strong>PTR / rDNS</strong> – Reverse-DNS korrekt?</li>
+                <li><strong>HELO</strong> – Server-Identität stimmig?</li>
+                <li><strong>TLS</strong> – Verschlüsselt übertragen?</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-12 col-sm-6 col-xl-3">
+            <div class="mp-check-tile h-100">
+              <div class="mp-check-tile-icon text-bg-warning mb-3">
+                <i class="bi bi-funnel"></i>
+              </div>
+              <h6 class="fw-semibold mb-2">Spam-Filter</h6>
+              <p class="text-secondary small mb-3">
+                Inhalt und IP-Reputation — was Spam-Filter wirklich entscheiden lässt.
+              </p>
+              <ul class="mp-feat-list">
+                <li><strong>SpamAssassin</strong> – Score &amp; Regeldetails</li>
+                <li><strong>Rspamd</strong> – Symbol-Analyse (optional)</li>
+                <li><strong>DNSBL / RBL</strong> – IP auf Blacklists?</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-12 col-sm-6 col-xl-3">
+            <div class="mp-check-tile h-100">
+              <div class="mp-check-tile-icon text-bg-secondary mb-3">
+                <i class="bi bi-bar-chart-steps"></i>
+              </div>
+              <h6 class="fw-semibold mb-2">Report &amp; Score</h6>
+              <p class="text-secondary small mb-3">
+                Alle Ergebnisse auf einen Blick — plus Rohdaten für die Fehlersuche.
+              </p>
+              <ul class="mp-feat-list">
+                <li><strong>Score 0–10</strong> – Gesamtbewertung</li>
+                <li><strong>Header-Chain</strong> – Received-Path</li>
+                <li><strong>JSON-Export</strong> – API-Zugriff</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══ Privatsphäre ══════════════════════════════════════════════════ -->
+    <section class="mp-privacy-section">
+      <div class="container-xl px-4 py-5 mp-home-container">
+        <div class="row align-items-center g-5">
+          <div class="col-lg-6">
+            <span class="mp-section-badge mb-3"><i class="bi bi-shield-lock me-1"></i>Privacy by Design</span>
+            <h2 class="fw-bold mb-3" style="font-size:1.65rem">Deine Testmails bleiben deine Sache</h2>
+            <p class="text-secondary mb-4">
+              Sender-Report ist als Wegwerf-Werkzeug gebaut: keine Konten, keine Profile,
+              keine Weitergabe. Was du testest, verschwindet von selbst.
+            </p>
+            <ul class="mp-privacy-list">
+              <li><i class="bi bi-link-45deg"></i><div><strong>Der Link ist der Schlüssel.</strong> Nur wer die Mailbox-URL kennt, sieht den Inhalt – nichts ist öffentlich auffindbar.</div></li>
+              <li><i class="bi bi-trash3"></i><div><strong>Automatische Löschung.</strong> Mailboxen und Mails werden nach Ablauf der Gültigkeit restlos entfernt.</div></li>
+              <li><i class="bi bi-hdd-stack"></i><div><strong>Keine externen Dienste.</strong> Alle Skripte, Schriften und Styles kommen vom eigenen Server – keine CDNs, keine Tracker.</div></li>
+              <li><i class="bi bi-people"></i><div><strong>Keine Weitergabe.</strong> Inhalte gehen an keine Werbe- oder Tracking-Dritten. Punkt.</div></li>
+            </ul>
+            <a href="/privacy" class="btn btn-outline-secondary btn-sm mt-2">
+              <i class="bi bi-file-earmark-text me-1"></i>Zur Datenschutzerklärung
+            </a>
+          </div>
+          <div class="col-lg-6">
+            <div class="mp-privacy-visual">
+              <div class="mp-lifecycle">
+                <div class="mp-lifecycle-step">
+                  <span class="mp-lifecycle-icon text-bg-primary"><i class="bi bi-envelope-arrow-down"></i></span>
+                  <div><strong>Mail empfangen</strong><span class="text-secondary small d-block">Analyse läuft sofort</span></div>
+                </div>
+                <div class="mp-lifecycle-line"></div>
+                <div class="mp-lifecycle-step">
+                  <span class="mp-lifecycle-icon text-bg-info"><i class="bi bi-clipboard-data"></i></span>
+                  <div><strong>Report bereitgestellt</strong><span class="text-secondary small d-block">Nur über deinen Link erreichbar</span></div>
+                </div>
+                <div class="mp-lifecycle-line"></div>
+                <div class="mp-lifecycle-step">
+                  <span class="mp-lifecycle-icon text-bg-secondary"><i class="bi bi-fire"></i></span>
+                  <div><strong>Automatisch gelöscht</strong><span class="text-secondary small d-block">Wenn die Mailbox abläuft</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ FAQ ═══════════════════════════════════════════════════════════ -->
+    <section class="mp-faq-section" id="faq">
+      <div class="container-xl px-4 py-5 mp-home-container" style="max-width:760px">
+        <div class="text-center mb-4">
+          <h2 class="fw-bold mb-2" style="font-size:1.65rem">Häufige Fragen</h2>
+          <p class="text-secondary mb-0">Kurz und ehrlich beantwortet.</p>
+        </div>
+        <div class="accordion mp-faq" id="mp-faq">
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                Brauche ich einen Account?
+              </button>
+            </h3>
+            <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
+              <div class="accordion-body text-secondary">
+                Nein. Es wird automatisch eine temporäre Mailbox erzeugt – ohne Registrierung,
+                ohne E-Mail-Adresse, ohne Passwort.
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                Was passiert mit meinen Testmails?
+              </button>
+            </h3>
+            <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
+              <div class="accordion-body text-secondary">
+                Sie werden ausschließlich für die Analyse verarbeitet und nach Ablauf der
+                Mailbox automatisch und vollständig gelöscht. Es findet keine Weitergabe an
+                Dritte statt.
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                Wie lange ist eine Mailbox gültig?
+              </button>
+            </h3>
+            <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
+              <div class="accordion-body text-secondary">
+                Standardmäßig 24 Stunden. In der Mailbox-Ansicht kannst du die Gültigkeit bei
+                Bedarf verlängern (bis zum vom Betreiber konfigurierten Maximum).
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                Welche Prüfungen werden durchgeführt?
+              </button>
+            </h3>
+            <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
+              <div class="accordion-body text-secondary">
+                Über 20 Checks aus vier Bereichen: Authentifizierung (SPF, DKIM, DMARC),
+                Server &amp; Netz (PTR, HELO, TLS, MX), Spam-Signale (SpamAssassin, Rspamd,
+                DNSBL) sowie Inhalt &amp; MIME-Struktur. Das Ergebnis fasst ein Score von 0–10 zusammen.
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                Kann ich Sender-Report selbst hosten?
+              </button>
+            </h3>
+            <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
+              <div class="accordion-body text-secondary">
+                Ja. Sender-Report ist Open Source und läuft als einzelnes Docker-Image inklusive
+                Web-UI, SMTP-Empfang und Datenbank – komplett auf deiner eigenen Infrastruktur.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-center mt-5">
+          <a href="/" class="btn btn-primary px-4">
+            <i class="bi bi-play-fill me-1"></i>Jetzt testen
+          </a>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  {{template "page-footer" .}}
+
+</div>
+<script src="/static/vendor/popper.min.js"></script>
+<script src="/static/vendor/bootstrap.min.js"></script>
+<script src="/static/vendor/overlayscrollbars.es5.min.js"></script>
+<script src="/static/vendor/adminlte.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
+{{end}}
