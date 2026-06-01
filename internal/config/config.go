@@ -50,7 +50,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		AppName:              getEnv("APP_NAME", "Sender-Report"),
+		AppName:              getEnv("APP_NAME", "sender.report"),
 		HTTPListenAddr:       getEnv("HTTP_LISTEN_ADDR", ":8080"),
 		EnableTLS:            getEnvBool("ENABLE_TLS", false),
 		TLSCertFile:          getEnv("TLS_CERT_FILE", ""),
