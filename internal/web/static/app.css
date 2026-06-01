@@ -44,8 +44,8 @@ body,
 
 /* ── Brand logo (SVG inline, .mp-brand-mark entfernt) ──────────────────── */
 
-/* ── Navbar: Logo/Text am Content ausrichten ────────────────────────────── */
-.app-header .container-fluid {
+/* ── Navbar: Logo/Text am Content ausrichten (nur Startseite) ───────────── */
+.mp-page-home .app-header .container-fluid {
   max-width: 900px;
   margin-left: auto;
   margin-right: auto;
