@@ -1410,7 +1410,7 @@ func rblHeuristics(ctx context.Context, remoteIP string, providers []string) []m
 			continue
 		}
 		meta := rblProviderMeta(provider, remoteIP)
-		cleanProviders = append(cleanProviders, fmt.Sprintf("%s (%s)", provider, meta.Name))
+		cleanProviders = append(cleanProviders, fmt.Sprintf("%s (%s)|%s", provider, meta.Name, meta.Description))
 		name := queryIP + "." + provider
 		queryNames = append(queryNames, name)
 		lookupCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -1424,9 +1424,16 @@ func rblHeuristics(ctx context.Context, remoteIP string, providers []string) []m
 			continue
 		}
 		if len(ips) > 0 {
+			// Query-Verweigerungen (z. B. Spamhaus 127.255.255.254 = Open Resolver)
+			// sind kein echtes Listing — als Fehler behandeln, nicht als Treffer.
+			if rblQueryRefusal(ips) {
+				lookupErrors = append(lookupErrors, fmt.Sprintf("%s: Query verweigert (%s) — Open Resolver oder Rate Limit; kein echtes Listing", provider, strings.Join(ips, ", ")))
+				continue
+			}
 			listed++
 			listedProviders = append(listedProviders, fmt.Sprintf("%s (%s)", provider, meta.Name))
-			listingResponses = append(listingResponses, provider+" -> "+strings.Join(ips, ", "))
+			meaning := rblResponseMeaning(provider, ips)
+			listingResponses = append(listingResponses, fmt.Sprintf("%s → %s", provider, meaning))
 			txtCtx, txtCancel := context.WithTimeout(ctx, 2*time.Second)
 			txts, txtErr := net.DefaultResolver.LookupTXT(txtCtx, name)
 			txtCancel()
@@ -1469,9 +1476,84 @@ func rblHeuristics(ctx context.Context, remoteIP string, providers []string) []m
 }
 
 type rblProvider struct {
-	Name      string
-	DelistURL string
-	Delisting string
+	Name        string
+	Description string // Was die Liste listet und wie sie genutzt wird
+	DelistURL   string
+	Delisting   string
+}
+
+// rblQueryRefusal gibt true zurück wenn die Antwort eine Spamhaus-spezifische
+// Fehlermeldung ist (kein echtes Listing, sondern Query-Verweigerung).
+func rblQueryRefusal(ips []string) bool {
+	for _, ip := range ips {
+		if ip == "127.255.255.254" || ip == "127.255.255.255" {
+			return true
+		}
+	}
+	return false
+}
+
+// rblResponseMeaning übersetzt bekannte DNS-Antwort-IPs in verständlichen Text.
+func rblResponseMeaning(provider string, ips []string) string {
+	p := strings.ToLower(provider)
+	meanings := make([]string, 0, len(ips))
+	for _, ip := range ips {
+		switch {
+		case ip == "127.255.255.254":
+			meanings = append(meanings, ip+" (Query verweigert — Open Resolver; kein echtes Listing)")
+		case ip == "127.255.255.255":
+			meanings = append(meanings, ip+" (Query-Timeout; kein echtes Listing)")
+		case strings.Contains(p, "spamhaus") || strings.HasSuffix(p, ".spamhaus.org"):
+			switch ip {
+			case "127.0.0.2":
+				meanings = append(meanings, ip+" → SBL: bekannte Spam-Quelle")
+			case "127.0.0.3":
+				meanings = append(meanings, ip+" → SBL CSS: Snowshoe-Spam")
+			case "127.0.0.4", "127.0.0.5", "127.0.0.6", "127.0.0.7":
+				meanings = append(meanings, ip+" → XBL: Exploit/Botnet/kompromittierter Host")
+			case "127.0.0.9":
+				meanings = append(meanings, ip+" → DROP/EDROP: vollständig blockierter Adressbereich")
+			case "127.0.0.10":
+				meanings = append(meanings, ip+" → PBL: dynamische/Consumer-IP (ISP-Policy)")
+			case "127.0.0.11":
+				meanings = append(meanings, ip+" → PBL: dynamische IP (Nutzer-gemeldet)")
+			default:
+				meanings = append(meanings, ip+" → Spamhaus-Listing (unbekannter Subtyp)")
+			}
+		case strings.Contains(p, "barracuda"):
+			meanings = append(meanings, ip+" → Barracuda BRBL: Spam-Reputationstreffer")
+		case strings.Contains(p, "spamcop"):
+			meanings = append(meanings, ip+" → SpamCop: von Nutzern gemeldete Spam-IP")
+		case strings.Contains(p, "dronebl"):
+			switch ip {
+			case "127.0.0.3":
+				meanings = append(meanings, ip+" → IRC-Drone")
+			case "127.0.0.5":
+				meanings = append(meanings, ip+" → Bottrap")
+			case "127.0.0.6":
+				meanings = append(meanings, ip+" → IRC-Spam-Bot")
+			case "127.0.0.7":
+				meanings = append(meanings, ip+" → HTTP-Proxy (Open Proxy)")
+			case "127.0.0.8":
+				meanings = append(meanings, ip+" → SOCKS-Proxy (Open Proxy)")
+			case "127.0.0.9":
+				meanings = append(meanings, ip+" → Proxy-Chain")
+			case "127.0.0.13":
+				meanings = append(meanings, ip+" → Brute-Force-Angreifer")
+			case "127.0.0.14":
+				meanings = append(meanings, ip+" → Open Resolver (missbraucht für DDoS)")
+			case "127.0.0.17":
+				meanings = append(meanings, ip+" → Automatischer E-Mail-Angriff")
+			case "127.0.0.255":
+				meanings = append(meanings, ip+" → Manuell gelistet")
+			default:
+				meanings = append(meanings, ip+" → DroneBL-Listing")
+			}
+		default:
+			meanings = append(meanings, ip)
+		}
+	}
+	return strings.Join(meanings, ", ")
 }
 
 func rblProviderMeta(provider, remoteIP string) rblProvider {
@@ -1479,51 +1561,59 @@ func rblProviderMeta(provider, remoteIP string) rblProvider {
 	switch p {
 	case "zen.spamhaus.org", "sbl.spamhaus.org", "xbl.spamhaus.org", "pbl.spamhaus.org", "sbl-xbl.spamhaus.org", "dbl.spamhaus.org":
 		return rblProvider{
-			Name:      "Spamhaus",
-			DelistURL: "https://check.spamhaus.org/",
-			Delisting: "Spamhaus Reputation Checker öffnen, IP/Domain prüfen und die angezeigte Liste beachten. Bei SBL muss in der Regel der ISP/Provider das Abuse-Problem bestätigt beheben und die Entfernung anstoßen; bei XBL/CSS erst Malware, Proxy oder kompromittierte Accounts entfernen; bei PBL nur delisten, wenn die IP wirklich ein legitimer Mailserver ist.",
+			Name:        "Spamhaus",
+			Description: "Spamhaus betreibt die weltweit meistgenutzten DNSBLs. ZEN kombiniert SBL (bekannte Spam-Quellen), XBL (Exploits/Botnets) und PBL (Policy-Liste für dynamische IPs). Ein Spamhaus-Listing führt bei Gmail, Outlook, Yahoo und den meisten Enterprise-Gateways direkt zur Ablehnung. Antwort-Codes: 127.0.0.2=SBL, 127.0.0.3=SBL-CSS, 127.0.0.4=XBL, 127.0.0.10/11=PBL. Code 127.255.255.254 bedeutet Query-Verweigerung (kein echtes Listing).",
+			DelistURL:   "https://check.spamhaus.org/",
+			Delisting:   "Spamhaus Reputation Checker öffnen, IP/Domain prüfen und die angezeigte Liste beachten. Bei SBL muss in der Regel der ISP/Provider das Abuse-Problem bestätigt beheben und die Entfernung anstoßen; bei XBL/CSS erst Malware, Proxy oder kompromittierte Accounts entfernen; bei PBL nur delisten, wenn die IP wirklich ein legitimer Mailserver ist.",
 		}
 	case "bl.spamcop.net":
 		return rblProvider{
-			Name:      "SpamCop Blocking List",
-			DelistURL: "https://www.spamcop.net/bl.shtml",
-			Delisting: "SpamCop ist zeitbasiert. Es gibt normalerweise kein manuelles Express-Delisting; nach Ende neuer Spam-Reports läuft das Listing automatisch aus. Prüfe SpamCop-Reports, kompromittierte Accounts, offene Relays, infizierte Hosts und fehlgeleitete Bounces.",
+			Name:        "SpamCop Blocking List",
+			Description: "SpamCop listet IPs, von denen Nutzer aktiv Spam gemeldet haben. Das Listing ist zeitbasiert und läuft automatisch aus, wenn keine neuen Meldungen eingehen. Wird von vielen ISPs und selbst betriebenen Mailservern genutzt. Eher ein Warnsignal als ein hartes Blockierungswerkzeug.",
+			DelistURL:   "https://www.spamcop.net/bl.shtml",
+			Delisting:   "SpamCop ist zeitbasiert. Es gibt normalerweise kein manuelles Express-Delisting; nach Ende neuer Spam-Reports läuft das Listing automatisch aus. Prüfe SpamCop-Reports, kompromittierte Accounts, offene Relays, infizierte Hosts und fehlgeleitete Bounces.",
 		}
 	case "b.barracudacentral.org", "bb.barracudacentral.org":
 		return rblProvider{
-			Name:      "Barracuda Reputation Block List",
-			DelistURL: "https://www.barracudacentral.org/rbl/removal-request",
-			Delisting: "Barracuda Removal Request mit IP, Kontaktadresse, Telefonnummer und nachvollziehbarer Ursache einreichen. Vorher Spamquelle stoppen, Queue prüfen und erklären, was konkret behoben wurde; Mehrfachanfragen ohne neue Informationen vermeiden.",
+			Name:        "Barracuda Reputation Block List",
+			Description: "Barracuda BRBL listet IPs mit schlechter Versandreputation basierend auf Spam-Beschwerden und Spam-Trap-Treffern. Wird von Barracuda-Gateways in Unternehmen weit verbreitet eingesetzt. Ein Listing kann direkte Ablehnungen bei Unternehmensempfängern verursachen. Delisting ist kostenlos über das Webformular möglich.",
+			DelistURL:   "https://www.barracudacentral.org/rbl/removal-request",
+			Delisting:   "Barracuda Removal Request mit IP, Kontaktadresse, Telefonnummer und nachvollziehbarer Ursache einreichen. Vorher Spamquelle stoppen, Queue prüfen und erklären, was konkret behoben wurde; Mehrfachanfragen ohne neue Informationen vermeiden.",
 		}
 	case "psbl.surriel.com":
 		return rblProvider{
-			Name:      "Passive Spam Block List",
-			DelistURL: "https://www.psbl.org/remove",
-			Delisting: "PSBL-Remove-Seite mit der IP nutzen. PSBL listet typischerweise Spamtrap-Treffer; vor Delisting Listenherkunft, Empfängerlisten, kompromittierte Accounts und ungewollte Direktzustellung prüfen. Removal ist self-service, DNS-Propagation kann dauern.",
+			Name:        "Passive Spam Block List",
+			Description: "PSBL ist eine passive Liste — sie listet IPs, die Spam-Traps getroffen haben, ohne aktive Nutzer-Reports. Wird von kleineren Mailservern und einigen ISPs genutzt. Delisting ist self-service. Ein Listing deutet oft auf alte oder gekaufte Empfängerlisten hin.",
+			DelistURL:   "https://www.psbl.org/remove",
+			Delisting:   "PSBL-Remove-Seite mit der IP nutzen. PSBL listet typischerweise Spamtrap-Treffer; vor Delisting Listenherkunft, Empfängerlisten, kompromittierte Accounts und ungewollte Direktzustellung prüfen. Removal ist self-service, DNS-Propagation kann dauern.",
 		}
 	case "dnsbl.dronebl.org":
 		return rblProvider{
-			Name:      "DroneBL",
-			DelistURL: "https://www.dronebl.org/lookup",
-			Delisting: "DroneBL-Lookup ausführen und den dort angezeigten Instruktionen folgen. Häufige Ursachen sind offene Proxies, Botnet-/Malware-Verkehr oder kompromittierte Hosts; diese Ursache muss vor dem Delisting beseitigt sein.",
+			Name:        "DroneBL",
+			Description: "DroneBL listet IPs die als offene Proxies, Botnets, IRC-Dronen oder Angreifer bekannt sind. Wird vor allem in IRC-Netzwerken und von selbst betriebenen Mailservern genutzt. Ein Listing deutet auf kompromittierte Infrastruktur oder Malware-Aktivität hin. Antwort-Codes zeigen den genauen Typ (Proxy, Bot, Brute-Force etc.).",
+			DelistURL:   "https://www.dronebl.org/lookup",
+			Delisting:   "DroneBL-Lookup ausführen und den dort angezeigten Instruktionen folgen. Häufige Ursachen sind offene Proxies, Botnet-/Malware-Verkehr oder kompromittierte Hosts; diese Ursache muss vor dem Delisting beseitigt sein.",
 		}
 	case "bl.blocklist.de":
 		return rblProvider{
-			Name:      "blocklist.de",
-			DelistURL: "https://www.blocklist.de/en/delist.html?ip=" + url.QueryEscape(remoteIP),
-			Delisting: "blocklist.de delistet Angreifer-IP-Adressen nach Behebung vorzeitig über die Delist-Seite; sonst läuft das Listing typischerweise automatisch aus. Vorher Logins, SSH/FTP/Web-/Mail-Bruteforce, kompromittierte Dienste und Fail2Ban-Meldungen prüfen.",
+			Name:        "blocklist.de",
+			Description: "blocklist.de ist eine deutschsprachige DNSBL die IPs listet, die durch Brute-Force-Angriffe (SSH, FTP, SMTP, HTTP) oder Spam auffällig geworden sind. Daten kommen aus Fail2Ban-Reports von teilnehmenden Servern. Listings laufen automatisch aus, können aber vorzeitig über das Delist-Formular entfernt werden.",
+			DelistURL:   "https://www.blocklist.de/en/delist.html?ip=" + url.QueryEscape(remoteIP),
+			Delisting:   "blocklist.de delistet Angreifer-IP-Adressen nach Behebung vorzeitig über die Delist-Seite; sonst läuft das Listing typischerweise automatisch aus. Vorher Logins, SSH/FTP/Web-/Mail-Bruteforce, kompromittierte Dienste und Fail2Ban-Meldungen prüfen.",
 		}
 	case "cbl.abuseat.org":
 		return rblProvider{
-			Name:      "Composite Blocking List",
-			DelistURL: "https://www.abuseat.org/lookup.cgi?ip=" + url.QueryEscape(remoteIP),
-			Delisting: "CBL-Lookup mit der IP öffnen, Ursache lesen und erst nach Beseitigung von Malware, Proxy, Botnet-Verkehr oder kompromittierten SMTP-Zugangsdaten delisten.",
+			Name:        "Composite Blocking List",
+			Description: "CBL listet IPs die durch Spam, offene Proxies oder Botnet-Aktivität auffällig geworden sind. Wird von Spamhaus XBL als Datenquelle genutzt — ein CBL-Listing führt daher oft auch zu einem XBL-Listing. Automatisches Delisting nach Behebung der Ursache.",
+			DelistURL:   "https://www.abuseat.org/lookup.cgi?ip=" + url.QueryEscape(remoteIP),
+			Delisting:   "CBL-Lookup mit der IP öffnen, Ursache lesen und erst nach Beseitigung von Malware, Proxy, Botnet-Verkehr oder kompromittierten SMTP-Zugangsdaten delisten.",
 		}
 	default:
 		return rblProvider{
-			Name:      "generische DNSBL",
-			DelistURL: "https://" + provider,
-			Delisting: "Provider-Dokumentation der DNSBL öffnen, Listinggrund prüfen, Ursache technisch beheben und erst danach eine Entfernung beantragen. Falls keine Delisting-Seite existiert, Abuse-Kontakt des Providers oder automatische Expiry-Regeln beachten.",
+			Name:        "DNSBL",
+			Description: "Diese DNSBL-Liste listet IPs basierend auf eigenem Regelwerk. Prüfe die Dokumentation des Providers für Details zu Listungskriterien und Delisting-Prozess.",
+			DelistURL:   "https://" + provider,
+			Delisting:   "Provider-Dokumentation der DNSBL öffnen, Listinggrund prüfen, Ursache technisch beheben und erst danach eine Entfernung beantragen. Falls keine Delisting-Seite existiert, Abuse-Kontakt des Providers oder automatische Expiry-Regeln beachten.",
 		}
 	}
 }
@@ -1543,7 +1633,7 @@ func rblImpactText(listed int) string {
 		return "Keine Listing-Treffer in den konfigurierten RBLs. Das garantiert keine gute Inbox-Platzierung, reduziert aber ein wichtiges Infrastruktur-Risiko."
 	}
 	if listed == 1 {
-		return "Ein einzelnes Listing ist ein Warnsignal. Je nach Liste kann es bei kleineren Providern direkt zu Ablehnungen fuehren und bei grossen Providern die IP-Reputation indirekt belasten."
+		return "Ein einzelnes Listing ist ein Warnsignal. Je nach Liste kann es bei kleineren Providern direkt zu Ablehnungen führen und bei großen Providern die IP-Reputation indirekt belasten."
 	}
 	return "Mehrere Listings sind ein starkes Reputationsproblem. Vor weiterem Versand sollte die Ursache behoben werden, sonst drohen Ablehnungen, Spamfolder-Platzierung und schnelle Wiederlistings."
 }

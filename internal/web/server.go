@@ -113,6 +113,44 @@ type RBLHit struct {
 	Delisting string
 }
 
+// RBLProviderInfo enthält Metadaten zu einem geprüften Provider.
+type RBLProviderInfo struct {
+	Host        string // z. B. zen.spamhaus.org
+	DisplayName string // z. B. Spamhaus
+	Description string // Was die Liste listet und wie sie genutzt wird
+}
+
+// rblProvidersFn parst checked_providers (Format: "host (Name)|Beschreibung") in strukturierte Einträge.
+func rblProvidersFn(details map[string]string) []RBLProviderInfo {
+	raw := details["checked_providers"]
+	if raw == "" || raw == "none" {
+		return nil
+	}
+	var out []RBLProviderInfo
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Format: "host (Name)|Description"
+		parts := strings.SplitN(line, "|", 2)
+		hostPart := strings.TrimSpace(parts[0])
+		desc := ""
+		if len(parts) == 2 {
+			desc = strings.TrimSpace(parts[1])
+		}
+		// "host (Name)" → host und name trennen
+		host := hostPart
+		displayName := hostPart
+		if idx := strings.Index(hostPart, " ("); idx > 0 {
+			host = hostPart[:idx]
+			displayName = hostPart[idx+2 : len(hostPart)-1]
+		}
+		out = append(out, RBLProviderInfo{Host: host, DisplayName: displayName, Description: desc})
+	}
+	return out
+}
+
 // rblHitsFn parses the parallel slices stored in TechnicalDetails for a RBL
 // check result and returns one RBLHit per listed provider.
 func rblHitsFn(details map[string]string) []RBLHit {
@@ -268,6 +306,7 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"rspamdActionClass":   rspamdActionClass,
 		"rspamdScorePercent":  rspamdScorePercent,
 		"rblHits":             rblHitsFn,
+		"rblProviders":        rblProvidersFn,
 		"splitLines":          splitLinesFn,
 		"appVersion":          func() string { return version.Version },
 	}).ParseGlob(filepath.Join("internal", "web", "templates", "*.html"))

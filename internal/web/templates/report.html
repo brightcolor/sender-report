@@ -488,18 +488,43 @@ Kind regards,
                       </div>
                       {{end}}
 
-                      {{/* Geprüfte Provider (immer, zusammengeklappt) */}}
-                      {{if $checked}}
-                      <button class="btn btn-link btn-sm text-secondary p-0 mt-3"
+                      {{/* Query-Fehler (z. B. Open Resolver, Rate Limit) */}}
+                      {{$lookupErrors := splitLines (index .TechnicalDetails "lookup_errors")}}
+                      {{if $lookupErrors}}
+                      <div class="alert alert-warning py-2 mb-3">
+                        <h6 class="fw-bold mb-1"><i class="bi bi-exclamation-triangle me-1"></i>Abfragefehler</h6>
+                        <ul class="mb-0 ps-3 small">
+                          {{range $lookupErrors}}<li>{{.}}</li>{{end}}
+                        </ul>
+                        <p class="small mb-0 mt-2 text-secondary">
+                          Abfragefehler bedeuten <strong>kein echtes Listing</strong>. Häufigster Grund: Spamhaus und andere Listen verweigern Anfragen von öffentlichen/Open Resolvern (Antwortcode 127.255.255.254). Lösung: eigenen Resolver (Unbound, PowerDNS) verwenden statt 8.8.8.8 oder 1.1.1.1.
+                        </p>
+                      </div>
+                      {{end}}
+
+                      {{/* Alle geprüften Provider mit Beschreibung */}}
+                      {{$allProviders := rblProviders .TechnicalDetails}}
+                      {{if $allProviders}}
+                      <button class="btn btn-link btn-sm text-secondary p-0 mt-2"
                               type="button"
                               data-bs-toggle="collapse"
                               data-bs-target="#rbl-all-providers">
-                        <i class="bi bi-code me-1"></i>Alle geprüften Provider anzeigen
+                        <i class="bi bi-list-ul me-1"></i>Alle geprüften Listen anzeigen ({{len $allProviders}})
                       </button>
                       <div id="rbl-all-providers" class="collapse mt-2">
-                        <ul class="list-unstyled mb-0">
-                          {{range $checked}}<li class="small text-secondary"><code>{{.}}</code></li>{{end}}
-                        </ul>
+                        <div class="d-flex flex-column gap-2">
+                          {{range $allProviders}}
+                          <div class="p-2 rounded border" style="font-size:.85rem">
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                              <code class="text-secondary" style="font-size:.75rem">{{.Host}}</code>
+                              <span class="fw-semibold">{{.DisplayName}}</span>
+                            </div>
+                            {{if .Description}}
+                            <p class="mb-0 text-secondary" style="font-size:.8rem">{{.Description}}</p>
+                            {{end}}
+                          </div>
+                          {{end}}
+                        </div>
                       </div>
                       {{end}}
 
