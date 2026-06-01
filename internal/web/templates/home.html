@@ -132,17 +132,33 @@
         </div>
 
         <div class="card-footer px-4 py-3">
-          <div class="d-flex flex-wrap gap-3 small text-secondary">
+          <div class="d-flex flex-wrap align-items-center gap-3 small text-secondary mb-2">
             <span>
               <i class="bi bi-clock me-1"></i>Gültig bis
               <span id="mail-expires-at" data-time=""></span>
             </span>
-            <a id="mailbox-direct-link" href="#" class="text-secondary text-decoration-none">
-              <i class="bi bi-box-arrow-up-right me-1"></i>Direktlink
-            </a>
             <span id="mp-e2e-footer" class="d-none">
               <i class="bi bi-lock-fill text-success me-1"></i>E2E verschlüsselt
             </span>
+          </div>
+          <!-- Direktlink als Input-Feld (zeigt nur Pfad, kopiert vollen Link mit Key) -->
+          <div id="mailbox-link-row" class="d-none">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text text-secondary" style="font-size:.75rem">
+                <i class="bi bi-link-45deg"></i>
+              </span>
+              <input id="mailbox-direct-link-input" type="text" class="form-control font-monospace"
+                     style="font-size:.72rem; overflow:hidden; text-overflow:ellipsis"
+                     readonly aria-label="Direktlink zur Mailbox">
+              <a id="mailbox-direct-link" href="#" target="_blank"
+                 class="btn btn-outline-secondary" title="Direktlink öffnen" aria-label="Direktlink öffnen">
+                <i class="bi bi-box-arrow-up-right"></i>
+              </a>
+              <button type="button" class="btn btn-outline-secondary" id="mailbox-link-copy-btn"
+                      title="Link kopieren" aria-label="Link kopieren">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>

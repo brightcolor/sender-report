@@ -240,6 +240,8 @@ function updateMailboxIdentity(data) {
   const address  = document.getElementById('mail-address');
   const expires  = document.getElementById('mail-expires-at');
   const link     = document.getElementById('mailbox-direct-link');
+  const linkInput= document.getElementById('mailbox-direct-link-input');
+  const linkRow  = document.getElementById('mailbox-link-row');
   const statCard = document.getElementById('status-card');
 
   if (panel)   panel.dataset.token = data.token;
@@ -248,10 +250,29 @@ function updateMailboxIdentity(data) {
     expires.dataset.time = data.expires_at;
     expires.textContent  = formatExpiry(data.expires_at);
   }
-  if (link) {
-    link.href        = data.mailbox_url;
-    link.textContent = data.mailbox_url;
+
+  // Show direct link as input field; display only the path (without #key fragment).
+  if (link && linkInput && linkRow) {
+    const fullUrl = data.mailbox_url || '';
+    // Strip the #fragment for display — key must never be visible in plain text
+    const displayUrl = fullUrl.split('#')[0];
+    link.href        = fullUrl;           // <a> opens full URL (with key)
+    linkInput.value  = displayUrl;        // input shows path only
+    linkRow.classList.remove('d-none');
+
+    // Copy button copies the full link (with key) to clipboard.
+    const copyBtn = document.getElementById('mailbox-link-copy-btn');
+    if (copyBtn && !copyBtn.dataset.bound) {
+      copyBtn.dataset.bound = '1';
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(fullUrl).then(() => {
+          const icon = copyBtn.querySelector('i');
+          if (icon) { icon.className = 'bi bi-check'; setTimeout(() => { icon.className = 'bi bi-clipboard'; }, 1500); }
+        }).catch(() => {});
+      });
+    }
   }
+
   if (statCard) {
     statCard.dataset.token           = data.token;
     statCard.dataset.latestMessageId = '0';
