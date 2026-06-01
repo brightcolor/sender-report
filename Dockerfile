@@ -1,36 +1,39 @@
 # syntax=docker/dockerfile:1.7
 
 # ── Build stage ───────────────────────────────────────────────────────────────
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /src
 
-# build-base provides GCC for cgo (go-sqlite3).
-# Cache the apk layer so it is only re-downloaded when the alpine index changes.
+# No build-base/GCC needed: modernc.org/sqlite is pure Go (CGO_ENABLED=0).
+# Only cache the apk layer for any future tool additions.
 RUN --mount=type=cache,target=/var/cache/apk \
-    apk add --no-cache build-base
+    apk add --no-cache
 
-# Copy dependency manifests first — rebuilt only when go.mod or go.sum change
+# Copy dependency manifests first — rebuilt only when go.mod or go.sum change.
 COPY go.mod go.sum ./
 
-# Download modules with a persistent cache mount
+# Download modules with a persistent cache mount.
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     go mod download
 
-# Copy source and build.
-# Both cache mounts stay warm across builds — only changed packages recompile.
+# Copy source and build. Cache mounts stay warm across builds.
 COPY . .
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/sender-report ./cmd/sender-report
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/sender-report ./cmd/sender-report
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM alpine:3.21
-RUN apk add --no-cache ca-certificates tzdata sqlite-libs su-exec
+# ca-certificates: HTTPS outbound (DNSBL, SpamAssassin, Rspamd).
+# tzdata: correct timezone handling.
+# su-exec: privilege drop in entrypoint.
+# No sqlite-libs needed: SQLite is embedded in the binary.
+RUN apk add --no-cache ca-certificates tzdata su-exec
 WORKDIR /app
 COPY --from=builder /out/sender-report        /app/sender-report
-COPY internal/web/templates               /app/internal/web/templates
-COPY internal/web/static                  /app/internal/web/static
-COPY entrypoint.sh                        /app/entrypoint.sh
+COPY internal/web/templates                   /app/internal/web/templates
+COPY internal/web/static                      /app/internal/web/static
+COPY entrypoint.sh                            /app/entrypoint.sh
 RUN addgroup -S app && adduser -S -G app app \
     && mkdir -p /data && chown -R app:app /data /app \
     && chmod +x /app/entrypoint.sh
