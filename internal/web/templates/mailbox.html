@@ -265,7 +265,18 @@
 {{end}}
 <script src="/static/app.js"></script>
 {{if .Mailbox.PublicKey}}
-<script>readAndStoreTokenFromFragment();</script>
+<script>
+readAndStoreTokenFromFragment();
+// Append #secretToken to all report links so the report auto-decrypts on open.
+(function() {
+  var secret = localStorage.getItem('sr:secret:' + '{{.Mailbox.Token}}')
+            || sessionStorage.getItem('sr:secret:' + '{{.Mailbox.Token}}');
+  if (!secret) return;
+  document.querySelectorAll('a[href*="/report/"]').forEach(function(a) {
+    if (!a.hash) a.href = a.href + '#' + secret;
+  });
+})();
+</script>
 {{end}}
 </body>
 </html>

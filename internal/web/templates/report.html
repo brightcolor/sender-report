@@ -133,34 +133,7 @@
           </div>
         </div>
 
-        {{if .Encrypted}}
-        <!-- ── E2E Decrypt panel ──────────────────────────────────────── -->
-        <div class="card mb-3" id="mp-e2e-panel">
-          <div class="card-body text-center py-5">
-            <div id="mp-e2e-locked">
-              <i class="bi bi-lock-fill text-secondary mb-3 d-block" style="font-size:2.5rem"></i>
-              <h5 class="fw-semibold mb-1">Inhalt Ende-zu-Ende verschlüsselt</h5>
-              <p class="text-secondary small mb-4">
-                Der Schlüssel steckt in deinem Mailbox-Link. Klicke auf „Entschlüsseln" um
-                den Bericht in deinem Browser zu entschlüsseln – der Schlüssel verlässt deinen Browser nicht.
-              </p>
-              <button class="btn btn-primary" id="mp-e2e-decrypt-btn" type="button">
-                <i class="bi bi-unlock-fill me-2"></i>Entschlüsseln
-              </button>
-              <p class="text-danger small mt-3 d-none" id="mp-e2e-error"></p>
-            </div>
-            <div id="mp-e2e-loading" class="d-none">
-              <div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>
-              <p class="text-secondary small mb-0">Entschlüssele &hellip;</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Decrypted content injected here by JS -->
-        <div id="mp-e2e-content" class="d-none"></div>
-
-        {{else}}
-        <!-- ── Check filter bar ───────────────────────────────────────── -->
+        <!-- ── Check filter bar — always visible ────────────────────────── -->
         <div class="d-flex gap-2 flex-wrap align-items-center mb-3" id="check-filter-bar">
           <span class="small fw-semibold text-secondary me-1">Anzeigen:</span>
           <button class="mp-filter-btn active" data-filter="all"  type="button">Alle</button>
@@ -169,9 +142,31 @@
           <button class="mp-filter-btn fail"   data-filter="fail" type="button">&#10007; Fehler</button>
           <button class="mp-filter-btn info"   data-filter="info" type="button">&#x2139; Info</button>
         </div>
-        {{end}}
 
-        {{if not .Encrypted}}
+        {{if .Encrypted}}
+        <!-- ── E2E: compact lock banner (hidden if auto-decrypting) ──────── -->
+        <div id="mp-e2e-panel" class="alert alert-secondary d-flex align-items-center gap-3 mb-3">
+          <i class="bi bi-lock-fill flex-shrink-0" style="font-size:1.25rem"></i>
+          <div class="flex-grow-1 small">
+            <strong>Inhalt Ende-zu-Ende verschlüsselt.</strong>
+            Öffne den Report über deinen Direktlink (mit Schlüssel im URL) um ihn automatisch zu entschlüsseln.
+          </div>
+          <button class="btn btn-sm btn-outline-secondary flex-shrink-0"
+                  id="mp-e2e-decrypt-btn" type="button"
+                  data-bs-toggle="modal" data-bs-target="#mp-key-modal">
+            <i class="bi bi-key me-1"></i>Schlüssel eingeben
+          </button>
+        </div>
+        <div id="mp-e2e-loading" class="text-center py-4 d-none">
+          <div class="spinner-border spinner-border-sm text-secondary me-2" role="status" aria-hidden="true"></div>
+          <span class="text-secondary small">Entschlüssele &hellip;</span>
+        </div>
+
+        <!-- Decrypted content injected here by JS (full two-column layout) -->
+        <div id="mp-e2e-content"></div>
+
+        {{else}}
+        <!-- ── Non-encrypted: full server-rendered layout ─────────────── -->
         <!-- ── Two-column report layout ───────────────────────────────── -->
         <div class="row g-3">
 
@@ -797,7 +792,38 @@ Kind regards,
             {{end}}
           </div>
         </div>
-        {{end}}{{/* end if not .Encrypted */}}
+        {{end}}{{/* end if not .Encrypted / else branch */}}
+
+        {{if .Encrypted}}
+        <!-- ── Key-entry modal ───────────────────────────────────────────── -->
+        <div class="modal fade" id="mp-key-modal" tabindex="-1" aria-labelledby="mp-key-modal-label" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title" id="mp-key-modal-label">
+                  <i class="bi bi-key me-2"></i>Entschlüsselungsschlüssel
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+              </div>
+              <div class="modal-body pt-2">
+                <p class="text-secondary small mb-2">
+                  Den Schlüssel findest du im Direktlink deiner Mailbox nach dem <code>#</code>-Zeichen.
+                </p>
+                <textarea class="form-control font-monospace" id="mp-key-input"
+                          rows="3" placeholder="AQICAwQF… (base64url-Token aus dem Mailbox-Direktlink)"
+                          style="font-size:.8rem; resize:none"></textarea>
+                <p class="text-danger small mt-2 d-none" id="mp-key-error"></p>
+              </div>
+              <div class="modal-footer border-top-0 pt-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-primary" id="mp-key-submit">
+                  <i class="bi bi-unlock-fill me-1"></i>Entschlüsseln
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {{end}}
 
       </div>
     </div>
@@ -818,156 +844,201 @@ Kind regards,
 <script src="/static/app.js"></script>
 {{if .Encrypted}}
 <script>
-// Read shared token from URL fragment (#token) on page load.
-// This allows shareable links: /report/{id}#{token}
+(function() {
+'use strict';
+
 readAndStoreTokenFromFragment();
 
-(async function() {
-  const meta    = document.querySelector('meta[name="mp-encrypted"]');
-  const token   = meta?.dataset.token;
-  const msgref  = meta?.dataset.msgref;
-  if (!token || !msgref) return;
+var META    = document.querySelector('meta[name="mp-encrypted"]');
+var TOKEN   = META && META.dataset.token;
+var MSGREF  = META && META.dataset.msgref;
+var PANEL   = document.getElementById('mp-e2e-panel');
+var LOADING = document.getElementById('mp-e2e-loading');
+var CONTENT = document.getElementById('mp-e2e-content');
 
-  const btn     = document.getElementById('mp-e2e-decrypt-btn');
-  const locked  = document.getElementById('mp-e2e-locked');
-  const loading = document.getElementById('mp-e2e-loading');
-  const errEl   = document.getElementById('mp-e2e-error');
-  const content = document.getElementById('mp-e2e-content');
+async function decryptWith(secretToken) {
+  var crypto = window.SenderReportCrypto;
+  var info   = await crypto.fromToken(secretToken);
+  var res    = await fetch('/api/payload/' + TOKEN + '/' + MSGREF, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Payload konnte nicht geladen werden (' + res.status + ').');
+  var json   = await res.json();
+  var blob   = crypto._fromBase64url(json.payload_enc);
+  var pt     = await crypto.open(blob, info.secret);
+  return { payload: JSON.parse(crypto._fromUtf8(pt)), info: info };
+}
 
-  btn?.addEventListener('click', async () => {
-    locked.classList.add('d-none');
-    loading.classList.remove('d-none');
-    errEl.classList.add('d-none');
+function showDecrypted(payload) {
+  if (PANEL)   PANEL.classList.add('d-none');
+  if (LOADING) LOADING.classList.add('d-none');
+  if (CONTENT) {
+    CONTENT.innerHTML = renderDecryptedReport(payload);
+    if (typeof setupCopyButtons    === 'function') setupCopyButtons();
+    if (typeof colorScoreDeltas    === 'function') colorScoreDeltas();
+    if (typeof setupCheckFilter    === 'function') setupCheckFilter();
+    if (typeof localizeStaticTimes === 'function') localizeStaticTimes();
+  }
+}
 
+// Auto-decrypt on load if key is already in localStorage.
+window.addEventListener('DOMContentLoaded', async function() {
+  if (!TOKEN || !MSGREF) return;
+  var stored = localStorage.getItem('sr:secret:' + TOKEN)
+            || sessionStorage.getItem('sr:secret:' + TOKEN);
+  if (!stored) return; // no key — show lock banner, wait for user
+  if (PANEL)   PANEL.classList.add('d-none');
+  if (LOADING) LOADING.classList.remove('d-none');
+  try   { showDecrypted((await decryptWith(stored)).payload); }
+  catch { if (PANEL)   PANEL.classList.remove('d-none');
+           if (LOADING) LOADING.classList.add('d-none'); }
+});
+
+// Modal: manual key entry.
+var submitBtn = document.getElementById('mp-key-submit');
+var keyInput  = document.getElementById('mp-key-input');
+var keyErr    = document.getElementById('mp-key-error');
+if (submitBtn) {
+  submitBtn.addEventListener('click', async function() {
+    var key = keyInput && keyInput.value.trim();
+    if (!key) { showKeyErr('Bitte einen Schlüssel eingeben.'); return; }
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Entschlüssele…';
     try {
-      // Load secret from localStorage.
-      const storedToken = localStorage.getItem('sr:secret:' + token)
-                       || sessionStorage.getItem('sr:secret:' + token);
-      if (!storedToken) throw new Error('Schlüssel nicht im Browser gefunden. Öffne den originalen Mailbox-Link.');
-
-      const crypto = window.SenderReportCrypto;
-      const { secret } = await crypto.fromToken(storedToken);
-
-      // Fetch encrypted payload from server.
-      const res = await fetch('/api/payload/' + token + '/' + msgref, { cache: 'no-store' });
-      if (!res.ok) throw new Error('Payload konnte nicht geladen werden (' + res.status + ').');
-      const { payload_enc } = await res.json();
-
-      // Decrypt. payload_enc is base64url-encoded (no padding), matches Go base64.RawURLEncoding.
-      const blobBytes = crypto._fromBase64url(payload_enc);
-      const ptBytes   = await crypto.open(blobBytes, secret);
-      const payload   = JSON.parse(crypto._fromUtf8(ptBytes));
-
-      // Render decrypted content.
-      content.innerHTML = renderDecryptedReport(payload);
-      content.classList.remove('d-none');
-      document.getElementById('mp-e2e-panel').classList.add('d-none');
-
-      // Re-init UI helpers for the newly rendered elements.
-      if (typeof setupCopyButtons === 'function') setupCopyButtons();
-      if (typeof colorScoreDeltas === 'function') colorScoreDeltas();
-
-    } catch (e) {
-      locked.classList.remove('d-none');
-      loading.classList.add('d-none');
-      errEl.textContent = 'Fehler: ' + e.message;
-      errEl.classList.remove('d-none');
+      var result = await decryptWith(key);
+      storeSecret(result.info.identifier, key);
+      var modal = bootstrap.Modal.getInstance(document.getElementById('mp-key-modal'));
+      if (modal) modal.hide();
+      showDecrypted(result.payload);
+    } catch(e) {
+      showKeyErr('Entschlüsselung fehlgeschlagen – Schlüssel prüfen.');
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="bi bi-unlock-fill me-1"></i>Entschlüsseln';
     }
   });
+}
+function showKeyErr(msg) {
+  if (keyErr) { keyErr.textContent = msg; keyErr.classList.remove('d-none'); }
+}
 
-  function statusBadge(status) {
-    const map = { pass: ['success','✓'], warn: ['warning','!'], fail: ['danger','✗'], info: ['secondary','i'] };
-    const [cls, icon] = map[status] || ['secondary','?'];
-    return `<span class="badge text-bg-${cls}">${icon} ${status}</span>`;
-  }
+// ── Rendering ────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function statusLbl(s) {
+  return {pass:'Bestanden',warn:'Warnung',fail:'Fehler',info:'Info'}[s] || s;
+}
 
-  function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  function renderDecryptedReport(p) {
-    const r = p.report || {};
-    const checks = r.checks || [];
-
-    // Group checks by category.
-    const groups = {};
-    checks.forEach(c => {
-      const g = c.category || 'Allgemein';
-      if (!groups[g]) groups[g] = [];
-      groups[g].push(c);
-    });
-
-    let html = '';
-
-    // Check groups.
-    html += '<div class="row g-3 mb-3"><div class="col-12">';
-    Object.entries(groups).forEach(([name, chks], gi) => {
-      html += `<div class="card mb-3"><div class="card-header"><h3 class="card-title mb-0">${escHtml(name)}</h3></div>`;
-      html += `<div class="card-body p-0"><div class="accordion accordion-flush" id="dec-grp-${gi}">`;
-      chks.forEach((c, ci) => {
-        const uid = `dec-${gi}-${ci}`;
-        const delta = c.score_delta ? (c.score_delta > 0 ? '+' : '') + c.score_delta.toFixed(1) : '';
-        html += `<div class="accordion-item mp-check-item ${escHtml(c.status)}" data-status="${escHtml(c.status)}">
-          <h2 class="accordion-header">
-            <button class="accordion-button ${c.status !== 'fail' ? 'collapsed' : ''}" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#${uid}">
-              <div class="mp-chk-inner">
-                <span class="mp-status-dot ${escHtml(c.status)}"></span>
-                <span class="mp-chk-name"><strong>${escHtml(c.name)}</strong><small>${escHtml(c.summary)}</small></span>
-                <span class="mp-pill ${escHtml(c.status)}">${escHtml(c.status)}</span>
-                <strong class="mp-delta">${escHtml(delta)}</strong>
-              </div>
-            </button>
-          </h2>
-          <div id="${uid}" class="accordion-collapse collapse ${c.status === 'fail' ? 'show' : ''}">
-            <div class="accordion-body">`;
-
-        if (c.explanation) html += `<div class="mb-3"><h6 class="text-uppercase small fw-bold text-secondary mb-1" style="letter-spacing:.06em">Erklärung</h6><p class="mb-0">${escHtml(c.explanation)}</p></div>`;
-        if (c.recommendation && (c.status === 'warn' || c.status === 'fail')) {
-          html += `<div class="mp-fix-box mb-3"><div class="d-flex align-items-center justify-content-between mb-2">
-            <h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>Empfehlung</h6>
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="${escHtml(c.recommendation)}"><i class="bi bi-clipboard me-1"></i>Kopieren</button>
-          </div><p class="mb-0" style="white-space:pre-line">${escHtml(c.recommendation)}</p></div>`;
-        }
-        if (c.technical_details && Object.keys(c.technical_details).length) {
-          html += `<button class="btn btn-link btn-sm text-secondary p-0 mb-1" type="button" data-bs-toggle="collapse" data-bs-target="#raw-${uid}">
-            <i class="bi bi-code me-1"></i>Rohdaten anzeigen</button>
-            <div id="raw-${uid}" class="collapse mt-2"><dl class="mp-tech-dl">`;
-          Object.entries(c.technical_details).forEach(([k, v]) => {
-            html += `<div><dt>${escHtml(k)}</dt><dd><code>${escHtml(v)}</code></dd></div>`;
-          });
-          html += `</dl></div>`;
-        }
-        if (c.doc_links?.length) {
-          html += `<div class="mt-3"><h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em"><i class="bi bi-link-45deg me-1"></i>Quellen &amp; Tools</h6><div class="d-flex flex-wrap gap-2">`;
-          c.doc_links.forEach(l => {
-            html += `<a href="${escHtml(l.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary">${escHtml(l.title)}<i class="bi bi-box-arrow-up-right ms-1" style="font-size:.65rem"></i></a>`;
-          });
-          html += `</div></div>`;
-        }
-        html += `</div></div></div>`;
+function renderCheckGroup(name, checks, gi) {
+  var p=0,w=0,f=0,inf=0;
+  checks.forEach(function(c){
+    if(c.status==='pass')p++; else if(c.status==='warn')w++;
+    else if(c.status==='fail')f++; else inf++;
+  });
+  var badges=(p?'<span class="badge mp-grp-badge pass">'+p+' ✓</span>':'')+
+             (w?'<span class="badge mp-grp-badge warn">'+w+' !</span>':'')+
+             (f?'<span class="badge mp-grp-badge fail">'+f+' ✗</span>':'')+
+             (inf?'<span class="badge mp-grp-badge info">'+inf+' i</span>':'');
+  var h='<div class="card mb-3"><div class="card-header d-flex align-items-start justify-content-between gap-2 flex-wrap">'+
+        '<h3 class="card-title mb-0">'+esc(name)+'</h3>'+
+        '<div class="d-flex gap-1 flex-shrink-0 align-items-center pt-1">'+badges+'</div></div>'+
+        '<div class="card-body p-0"><div class="accordion accordion-flush" id="dec-grp-'+gi+'">';
+  checks.forEach(function(c,ci){
+    var uid='dec-'+gi+'-'+ci;
+    var delta=c.score_delta?(c.score_delta>0?'+':'')+Number(c.score_delta).toFixed(1):'';
+    var open=c.status==='fail'?'show':'', col=c.status!=='fail'?'collapsed':'';
+    h+='<div class="accordion-item mp-check-item '+esc(c.status)+'" data-status="'+esc(c.status)+'" id="chk-'+uid+'">'+
+       '<h2 class="accordion-header"><button class="accordion-button '+col+'" type="button" '+
+       'data-bs-toggle="collapse" data-bs-target="#cb-'+uid+'">'+
+       '<div class="mp-chk-inner"><span class="mp-status-dot '+esc(c.status)+'"></span>'+
+       '<span class="mp-chk-name"><strong>'+esc(c.name)+'</strong><small>'+esc(c.summary)+'</small></span>'+
+       '<span class="mp-pill '+esc(c.status)+'">'+statusLbl(c.status)+'</span>'+
+       '<strong class="mp-delta">'+esc(delta)+'</strong></div></button></h2>'+
+       '<div id="cb-'+uid+'" class="accordion-collapse collapse '+open+'"><div class="accordion-body">';
+    if(c.explanation)
+      h+='<div class="mb-3"><h6 class="text-uppercase small fw-bold text-secondary mb-1" style="letter-spacing:.06em">Erklärung</h6><p class="mb-0">'+esc(c.explanation)+'</p></div>';
+    if(c.recommendation&&(c.status==='warn'||c.status==='fail'))
+      h+='<div class="mp-fix-box mb-3"><div class="d-flex align-items-center justify-content-between mb-2">'+
+         '<h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>Wie wird’s gemacht?</h6>'+
+         '<button class="btn btn-sm btn-outline-secondary" type="button" data-copy="'+esc(c.recommendation)+'">'+
+         '<i class="bi bi-clipboard me-1"></i>Kopieren</button></div>'+
+         '<p class="mb-0" style="white-space:pre-line">'+esc(c.recommendation)+'</p></div>';
+    if(c.technical_details&&Object.keys(c.technical_details).length){
+      h+='<div class="mt-3"><button class="btn btn-link btn-sm text-secondary p-0" type="button" '+
+         'data-bs-toggle="collapse" data-bs-target="#raw-'+uid+'">'+
+         '<i class="bi bi-code me-1"></i>Rohdaten anzeigen</button>'+
+         '<div id="raw-'+uid+'" class="collapse mt-2"><dl class="mp-tech-dl">';
+      Object.entries(c.technical_details).forEach(function(e){
+        h+='<div><dt>'+esc(e[0])+'</dt><dd><code>'+esc(e[1])+'</code></dd></div>';
       });
-      html += `</div></div></div>`;
-    });
-
-    // Suggestions sidebar (if any).
-    if ((r.suggestions || []).length || (r.spam_signals || []).length) {
-      html += `<div class="row g-3 mb-3"><div class="col-12"><div class="card mb-3"><div class="card-header"><h3 class="card-title mb-0"><i class="bi bi-lightbulb me-1 text-warning"></i>Empfehlungen</h3></div><div class="card-body pt-3 pb-2"><ul class="mp-side-list">`;
-      (r.suggestions || []).forEach(s => { html += `<li>${escHtml(s)}</li>`; });
-      html += `</ul></div></div></div></div>`;
+      h+='</dl></div></div>';
     }
-
-    // Raw source.
-    if (p.raw_source && p.raw_source !== '[encrypted]') {
-      html += `<div class="card mb-3"><div class="card-header d-flex align-items-center justify-content-between">
-        <h3 class="card-title mb-0"><i class="bi bi-code me-1"></i>Vollständige Rohnachricht</h3>
-        <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="${escHtml(p.raw_source)}"><i class="bi bi-clipboard me-1"></i>Kopieren</button>
-      </div><div class="card-body p-0"><div class="accordion-body"><pre class="mp-raw-pre">${escHtml(p.raw_source)}</pre></div></div></div>`;
+    if(c.doc_links&&c.doc_links.length){
+      h+='<div class="mt-3"><h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">'+
+         '<i class="bi bi-link-45deg me-1"></i>Quellen &amp; Tools</h6><div class="d-flex flex-wrap gap-2">';
+      c.doc_links.forEach(function(l){
+        h+='<a href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary">'+
+           esc(l.title)+'<i class="bi bi-box-arrow-up-right ms-1" style="font-size:.65rem"></i></a>';
+      });
+      h+='</div></div>';
     }
+    h+='</div></div></div>';
+  });
+  return h+'</div></div></div>';
+}
 
-    html += '</div>';
-    return html;
+function renderDecryptedReport(p) {
+  var r=p.report||{}, checks=r.checks||[];
+  var order=[], grpMap={};
+  checks.forEach(function(c){
+    var g=c.category||'Allgemein';
+    if(!grpMap[g]){grpMap[g]=[];order.push(g);}
+    grpMap[g].push(c);
+  });
+  var leftHtml='';
+  order.forEach(function(name,gi){leftHtml+=renderCheckGroup(name,grpMap[name],gi);});
+
+  var sideHtml='';
+  if((r.suggestions||[]).length){
+    sideHtml+='<div class="card mb-3"><div class="card-header d-flex align-items-center justify-content-between">'+
+              '<h3 class="card-title mb-0"><i class="bi bi-lightbulb me-1 text-warning"></i>Empfehlungen</h3>'+
+              '<span class="badge text-bg-warning">'+r.suggestions.length+'</span></div>'+
+              '<div class="card-body pt-3 pb-2"><ul class="mp-side-list">';
+    r.suggestions.forEach(function(s){sideHtml+='<li>'+esc(s)+'</li>';});
+    sideHtml+='</ul></div></div>';
   }
+  if((r.spam_signals||[]).length){
+    sideHtml+='<div class="card mb-3"><div class="card-header d-flex align-items-center justify-content-between">'+
+              '<h3 class="card-title mb-0"><i class="bi bi-exclamation-triangle me-1 text-danger"></i>Spam-Indikatoren</h3>'+
+              '<span class="badge text-bg-danger">'+r.spam_signals.length+'</span></div>'+
+              '<div class="card-body pt-3 pb-2"><ul class="mp-side-list">';
+    r.spam_signals.forEach(function(s){sideHtml+='<li>'+esc(s)+'</li>';});
+    sideHtml+='</ul></div></div>';
+  }
+  sideHtml+='<div class="card mb-3"><div class="card-header"><h3 class="card-title mb-0">'+
+            '<i class="bi bi-download me-1"></i>Export &amp; Rohdaten</h3></div>'+
+            '<div class="card-body d-flex flex-column gap-2">'+
+            '<a class="btn btn-outline-secondary btn-sm" href="/raw/'+esc(TOKEN)+'/'+esc(MSGREF)+'/headers" target="_blank" rel="noopener noreferrer"><i class="bi bi-file-text me-1"></i>Header herunterladen</a>'+
+            '<a class="btn btn-outline-secondary btn-sm" href="/raw/'+esc(TOKEN)+'/'+esc(MSGREF)+'/source" target="_blank" rel="noopener noreferrer"><i class="bi bi-file-earmark-code me-1"></i>Raw herunterladen</a>'+
+            '<a class="btn btn-outline-secondary btn-sm" href="/api/reports/'+esc(TOKEN)+'/'+esc(MSGREF)+'" target="_blank" rel="noopener noreferrer"><i class="bi bi-braces me-1"></i>JSON Export</a>'+
+            '</div></div>';
+
+  var rawHtml='';
+  if(p.raw_source&&p.raw_source!=='[encrypted]'){
+    rawHtml='<div class="d-flex align-items-center gap-2 mb-2">'+
+            '<button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#raw-dec-section">'+
+            '<i class="bi bi-code me-1"></i>E-Mail-Quelltext &amp; Rohdaten anzeigen</button></div>'+
+            '<div id="raw-dec-section" class="collapse mb-1"><div class="card mb-3">'+
+            '<div class="card-header d-flex align-items-center justify-content-between">'+
+            '<h3 class="card-title mb-0"><i class="bi bi-code me-1"></i>Vollständige Rohnachricht</h3>'+
+            '<button class="btn btn-sm btn-outline-secondary" type="button" data-copy="'+esc(p.raw_source)+'">'+
+            '<i class="bi bi-clipboard me-1"></i>Kopieren</button></div>'+
+            '<div class="card-body p-0"><div class="accordion-body"><pre class="mp-raw-pre">'+esc(p.raw_source)+'</pre></div></div></div></div>';
+  }
+
+  return '<div class="row g-3"><div class="col-xl-8">'+leftHtml+'</div>'+
+         '<div class="col-xl-4"><div class="mp-report-side">'+sideHtml+'</div></div></div>'+rawHtml;
+}
+
 })();
 </script>
 {{end}}
