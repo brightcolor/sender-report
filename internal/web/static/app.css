@@ -44,6 +44,11 @@ body,
 
 /* ── Brand logo (SVG inline, .mp-brand-mark entfernt) ──────────────────── */
 
+/* ── AdminLTE override: nav-link height entfernen ───────────────────────── */
+.app-header .nav-link {
+  height: auto !important;
+}
+
 /* ── Navbar: Logo/Text am Content ausrichten (nur Startseite) ───────────── */
 .mp-page-home .app-header .container-fluid {
   max-width: 900px;
