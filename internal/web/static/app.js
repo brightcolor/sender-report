@@ -602,6 +602,14 @@ function startCheckLoop() {
   setCheckUIState(true, '', 'warn');
   if (mailboxPollTimer) clearInterval(mailboxPollTimer);
 
+  // SSE läuft bereits (setupMailboxPolling) → kein Interval nötig,
+  // nur einmalig abfragen falls Mail schon angekommen ist.
+  if (mailboxEventSource) {
+    fetchMailboxStatus(token).then(handleCheckStatusEvent).catch(() => {});
+    return;
+  }
+
+  // Fallback: Interval-Polling wenn kein SSE verfügbar
   const run = async () => {
     try {
       const data = await fetchMailboxStatus(token);
@@ -650,33 +658,47 @@ function stopMailboxPolling() {
 }
 
 function setupMailboxPolling() {
-  const card = document.getElementById('status-card');
-  if (!card) return;
+  const card  = document.getElementById('status-card');
+  const panel = document.getElementById('check-panel');
 
-  const token    = card.dataset.token;
-  const stateKey = `mailprobe:lastmsg:${token}`;
-  if (!sessionStorage.getItem(stateKey)) {
-    sessionStorage.setItem(stateKey, card.dataset.latestMessageId || '0');
-  }
-
-  const onStatus = (data) => {
-    const lastKnown = sessionStorage.getItem(stateKey) || '0';
-    const latest    = String(data.latest_message_id || '0');
-    if (latest !== '0' && latest !== lastKnown) {
-      sessionStorage.setItem(stateKey, latest);
-      location.reload();
-      return;
+  if (card) {
+    // ── Mailbox-Seite: Reload wenn neue Nachricht ──────────────────────────
+    const token    = card.dataset.token;
+    const stateKey = `mailprobe:lastmsg:${token}`;
+    if (!sessionStorage.getItem(stateKey)) {
+      sessionStorage.setItem(stateKey, card.dataset.latestMessageId || '0');
     }
-    updateMailboxStatusText(data);
-  };
-
-  if (typeof EventSource !== 'undefined') {
-    startMailboxSSE(token, onStatus);
-  } else {
-    startMailboxPollingFallback(token, onStatus);
+    const onStatus = (data) => {
+      const lastKnown = sessionStorage.getItem(stateKey) || '0';
+      const latest    = String(data.latest_message_id || '0');
+      if (latest !== '0' && latest !== lastKnown) {
+        sessionStorage.setItem(stateKey, latest);
+        location.reload();
+        return;
+      }
+      updateMailboxStatusText(data);
+    };
+    if (typeof EventSource !== 'undefined') {
+      startMailboxSSE(token, onStatus);
+    } else {
+      startMailboxPollingFallback(token, onStatus);
+    }
+    setStatusDot('waiting');
+    return;
   }
 
-  setStatusDot('waiting');
+  if (panel) {
+    // ── Startseite: SSE im Hintergrund, liefert Mail/Report-Events ─────────
+    const token = panel.dataset.token;
+    if (!token) return;
+    if (typeof EventSource !== 'undefined') {
+      startMailboxSSE(token, (data) => {
+        if (data.latest_message_id || data.latest_report_path) {
+          handleCheckStatusEvent(data);
+        }
+      });
+    }
+  }
 }
 
 function startMailboxSSE(token, onStatus) {
