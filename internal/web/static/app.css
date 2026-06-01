@@ -595,21 +595,29 @@ body,
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Score hero ─────────────────────────────────────────────────────────── */
-:root { --mp-score-color: var(--bs-success); }
-.mp-score-hero.status-pass { --mp-score-color: var(--bs-success); }
-.mp-score-hero.status-warn { --mp-score-color: var(--bs-warning); }
-.mp-score-hero.status-fail { --mp-score-color: var(--bs-danger); }
+:root {
+  --mp-score-color: var(--bs-success);
+  --mp-hero-rgb: var(--bs-success-rgb);
+}
+.mp-score-hero.status-pass { --mp-score-color: var(--bs-success); --mp-hero-rgb: var(--bs-success-rgb); }
+.mp-score-hero.status-warn { --mp-score-color: var(--bs-warning); --mp-hero-rgb: var(--bs-warning-rgb); }
+.mp-score-hero.status-fail { --mp-score-color: var(--bs-danger);  --mp-hero-rgb: var(--bs-danger-rgb); }
 
 .mp-score-hero {
   position: relative;
   overflow: hidden;
 }
+/* Vignette: dezenter Farbschimmer links (wo der Score-Ring sitzt) */
 .mp-score-hero::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at 80% 50%, var(--mp-score-color), transparent 65%);
-  opacity: .07;
+  background: radial-gradient(
+    ellipse 52% 100% at 8% 50%,
+    rgba(var(--mp-hero-rgb), 0.18) 0%,
+    rgba(var(--mp-hero-rgb), 0.08) 40%,
+    transparent 75%
+  );
   pointer-events: none;
 }
 
@@ -617,6 +625,7 @@ body,
 /* Bootstrap d-flex handles the row; this card removes default card-bg conflicts */
 .card.mp-score-hero {
   border: 1px solid var(--bs-border-color);
+  border-left: 3px solid rgba(var(--mp-hero-rgb), 0.55);
 }
 
 /* ── Score ring ─────────────────────────────────────────────────────────── */
