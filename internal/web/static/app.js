@@ -235,12 +235,42 @@ function localizeStaticTimes() {
 
 // ── Mailbox identity update ───────────────────────────────────────────────────
 
+// maskKey: zeige max. die erste Hälfte des Schlüssels + '…'
+// Der Schlüssel darf niemals vollständig sichtbar sein.
+function maskKey(key) {
+  if (!key) return '—';
+  const half = Math.ceil(key.length / 2);
+  return key.slice(0, half) + '…';
+}
+
+// mbCopyShare: kopiert den echten Wert des Share-Felds (Home-Seite)
+// und zeigt kurz visuelles Feedback.
+function mbCopyShare(which) {
+  const map    = { full: 'mb-share-full', nokey: 'mb-share-nokey', key: 'mb-share-key' };
+  const boxMap = { full: 'mb-share-full-box', nokey: 'mb-share-nokey-box', key: 'mb-share-key-box' };
+  const el  = document.getElementById(map[which]);
+  const box = document.getElementById(boxMap[which]);
+  if (!el) return;
+  const val = el.dataset.val || '';
+  if (!val) return;
+  navigator.clipboard.writeText(val).then(() => {
+    if (box) {
+      box.classList.add('mp-share-copied');
+      const hint = box.querySelector('.mp-addr-copy-hint');
+      const prev = hint ? hint.innerHTML : '';
+      if (hint) hint.innerHTML = '<i class="bi bi-check2 me-1"></i>Kopiert!';
+      setTimeout(() => {
+        if (box) box.classList.remove('mp-share-copied');
+        if (hint) hint.innerHTML = prev;
+      }, 1500);
+    }
+  }).catch(() => {});
+}
+
 function updateMailboxIdentity(data) {
   const panel    = document.getElementById('check-panel');
   const address  = document.getElementById('mail-address');
   const expires  = document.getElementById('mail-expires-at');
-  const link     = document.getElementById('mailbox-direct-link');
-  const linkInput= document.getElementById('mailbox-direct-link-input');
   const linkRow  = document.getElementById('mailbox-link-row');
   const statCard = document.getElementById('status-card');
 
@@ -251,26 +281,31 @@ function updateMailboxIdentity(data) {
     expires.textContent  = formatExpiry(data.expires_at);
   }
 
-  // Show direct link as input field; display only the path (without #key fragment).
-  if (link && linkInput && linkRow) {
-    const fullUrl = data.mailbox_url || '';
-    // Strip the #fragment for display — key must never be visible in plain text
-    const displayUrl = fullUrl.split('#')[0];
-    link.href        = fullUrl;           // <a> opens full URL (with key)
-    linkInput.value  = displayUrl;        // input shows path only
-    linkRow.classList.remove('d-none');
+  // 3-spaltig-klickbarer Share-Block (analog zum Report)
+  if (linkRow) {
+    const fullUrl   = data.mailbox_url || '';
+    const baseUrl   = fullUrl.split('#')[0];
+    const secretKey = fullUrl.includes('#') ? fullUrl.split('#')[1] : '';
+    const keyMasked = maskKey(secretKey);
+    const fullMasked = secretKey ? baseUrl + '#' + keyMasked : baseUrl;
 
-    // Copy button copies the full link (with key) to clipboard.
-    const copyBtn = document.getElementById('mailbox-link-copy-btn');
-    if (copyBtn && !copyBtn.dataset.bound) {
-      copyBtn.dataset.bound = '1';
-      copyBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText(fullUrl).then(() => {
-          const icon = copyBtn.querySelector('i');
-          if (icon) { icon.className = 'bi bi-check'; setTimeout(() => { icon.className = 'bi bi-clipboard'; }, 1500); }
-        }).catch(() => {});
-      });
-    }
+    const elFull  = document.getElementById('mb-share-full');
+    const elNoKey = document.getElementById('mb-share-nokey');
+    const elKey   = document.getElementById('mb-share-key');
+    if (elFull)  { elFull.textContent  = fullMasked;        elFull.dataset.val  = fullUrl; }
+    if (elNoKey) { elNoKey.textContent = baseUrl;           elNoKey.dataset.val = baseUrl; }
+    if (elKey)   { elKey.textContent   = keyMasked;         elKey.dataset.val   = secretKey; }
+
+    // Click-Handler auf die Boxen (einmalig binden)
+    [['mb-share-full-box','full'],['mb-share-nokey-box','nokey'],['mb-share-key-box','key']].forEach(([id, which]) => {
+      const box = document.getElementById(id);
+      if (box && !box.dataset.bound) {
+        box.dataset.bound = '1';
+        box.addEventListener('click', () => mbCopyShare(which));
+      }
+    });
+
+    linkRow.classList.remove('d-none');
   }
 
   if (statCard) {
