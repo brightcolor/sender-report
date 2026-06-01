@@ -44,6 +44,40 @@ body,
 
 /* ── Brand logo (SVG inline, .mp-brand-mark entfernt) ──────────────────── */
 
+/* ── Steps bar (Startseite) ─────────────────────────────────────────────── */
+.mp-steps-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+.mp-step {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .78rem;
+  color: var(--bs-secondary-color);
+}
+.mp-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bs-primary);
+  color: #fff;
+  font-size: .65rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.mp-step-arrow {
+  color: var(--bs-border-color);
+  font-size: .85rem;
+  line-height: 1;
+}
+
 /* ── Utility ────────────────────────────────────────────────────────────── */
 .font-monospace-address {
   font-family: 'Cascadia Code', 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace !important;
