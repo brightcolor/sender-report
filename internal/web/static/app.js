@@ -137,17 +137,28 @@ async function createMailboxWithCrypto() {
 
 // ── URL-Fragment: read token from #hash on mailbox/report pages ───────────────
 // When a user opens a shared link like /mailbox/{id}#secretToken, this function
-// reads the fragment, derives the identifier, and stores the secret in localStorage
-// so subsequent decryption works — even for fresh browser sessions.
-async function readAndStoreTokenFromFragment() {
+// reads the fragment and stores the secret synchronously — the identifier is
+// already in the URL path, so no async derivation is needed.
+function readAndStoreTokenFromFragment() {
   const hash = (location.hash || '').slice(1); // strip leading #
-  if (!hash || !window.SenderReportCrypto) return;
-  try {
-    const { identifier } = await window.SenderReportCrypto.fromToken(hash);
-    storeSecret(identifier, hash);
-    // Keep the fragment in the URL so copying/sharing still works.
-  } catch (_) {
-    // Not a valid token — ignore (could be a regular anchor link).
+  if (!hash) return;
+  // Identifier is the last non-empty path segment: /mailbox/{id} or /report/{id}
+  const segments = location.pathname.split('/').filter(Boolean);
+  const identifier = segments[segments.length - 1];
+  if (!identifier || identifier.length < 8) return;
+  // Store immediately — synchronous, no race condition possible.
+  storeSecret(identifier, hash);
+  // Best-effort async verification: if the fragment doesn't actually belong to
+  // this identifier, remove the incorrectly stored secret.
+  if (window.SenderReportCrypto) {
+    window.SenderReportCrypto.fromToken(hash).then(function(info) {
+      if (info.identifier !== identifier) {
+        removeSecret(identifier);
+        storeSecret(info.identifier, hash);
+      }
+    }).catch(function() {
+      removeSecret(identifier); // invalid token in fragment
+    });
   }
 }
 
