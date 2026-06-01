@@ -1,6 +1,10 @@
 let mailboxPollTimer = null;
 let mailboxEventSource = null;
 
+// Merkt ob die aktuelle Mailbox-Adresse schon mindestens einmal kopiert wurde.
+// Erst dann wird sie in der History (localStorage) gespeichert.
+let _mbAddressCopied = false;
+
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
 function resolveThemePreference(preference) {
@@ -75,6 +79,13 @@ async function copyAddress() {
   if (chip && ok) {
     chip.classList.add('mp-copied');
     setTimeout(() => chip.classList.remove('mp-copied'), 1800);
+  }
+
+  // Erst nach dem ersten Kopieren in die History aufnehmen.
+  if (ok && !_mbAddressCopied) {
+    _mbAddressCopied = true;
+    const token = document.getElementById('check-panel')?.dataset?.token;
+    if (token) saveMbToHistory(token);
   }
 
   setTransientStatus(ok ? 'Adresse kopiert.' : 'Kopieren fehlgeschlagen – bitte manuell markieren.', ok ? 'ok' : 'warn');
@@ -328,8 +339,8 @@ async function createNewAddress() {
   stopMailboxPolling();
   try {
     const data = await createMailbox();
+    _mbAddressCopied = false;           // neue Mailbox → erst nach Kopieren speichern
     updateMailboxIdentity(data);
-    saveMbToHistory(data.token);        // track new token if consented
     _stopStepAnimation();
     setCheckUIState(false, 'Neue Mailbox bereit.', 'ok');
     setupMailboxPolling();
@@ -1006,7 +1017,8 @@ function setupCookieConsent() {
     setTimeout(() => document.getElementById('mp-consent-banner')?.classList.remove('d-none'), 800);
   } else if (getConsentState() === 'granted') {
     const token = document.getElementById('check-panel')?.dataset?.token;
-    if (token) saveMbToHistory(token);
+    // Nur speichern wenn Adresse bereits kopiert wurde
+    if (token && _mbAddressCopied) saveMbToHistory(token);
     loadPreviousMailboxes();
   }
 }
@@ -1016,7 +1028,8 @@ function consentAccept() {
   try { localStorage.setItem('mailprobe:consent', 'granted'); } catch (_) {}
   document.getElementById('mp-consent-banner')?.classList.add('d-none');
   const token = document.getElementById('check-panel')?.dataset?.token;
-  if (token) saveMbToHistory(token);
+  // Nur speichern wenn Adresse bereits kopiert wurde
+  if (token && _mbAddressCopied) saveMbToHistory(token);
   loadPreviousMailboxes();
 }
 
@@ -1211,8 +1224,8 @@ async function initHomeMailbox() {
   // No restorable mailbox found — create a fresh one.
   try {
     const data = await createMailbox();
+    _mbAddressCopied = false;           // erst nach Kopieren in History speichern
     updateMailboxIdentity(data);
-    saveMbToHistory(data.token);
     setupMailboxPolling();
   } catch (_) {
     setTransientStatus('Mailbox konnte nicht erstellt werden. Seite neu laden.', 'warn');
