@@ -961,6 +961,14 @@ body,
   white-space: nowrap;
 }
 
+/* mp-sym-explain: replaces mp-sym-desc with full wrapping explanation text */
+.mp-sym-explain {
+  color: var(--bs-secondary-color);
+  font-size: .775rem;
+  line-height: 1.45;
+  white-space: normal;
+}
+
 /* ── Cookie consent banner ──────────────────────────────────────────────── */
 .mp-consent-banner {
   position: fixed;

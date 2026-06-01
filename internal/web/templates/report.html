@@ -252,7 +252,9 @@
                           <div class="mp-symbol-row {{if gt .Score 0.0}}sym-pos{{else if lt .Score 0.0}}sym-neg{{else}}sym-zero{{end}}">
                             <code class="mp-sym-name">{{.Name}}</code>
                             <span class="mp-sym-score">{{printf "%+.2f" .Score}}</span>
-                            {{if .Desc}}<span class="mp-sym-desc">{{.Desc}}</span>{{end}}
+                            <span class="mp-sym-explain">
+                              {{if .Explain}}{{.Explain}}{{else if .Desc}}{{.Desc}}{{end}}
+                            </span>
                           </div>
                           {{end}}
                         </div>
