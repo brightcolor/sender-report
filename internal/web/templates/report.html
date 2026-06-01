@@ -1058,6 +1058,29 @@ Kind regards,
 <script src="/static/crypto.js"></script>
 {{end}}
 <script src="/static/app.js"></script>
+<script>
+// ── Report data for client-side PDF generation ─────────────────────────────
+// Non-encrypted: full data embedded here.
+// E2E encrypted: showDecrypted() below overwrites groups + message fields.
+window.__mpReport = {
+  appName:    {{jsonEncode .AppName}},
+  score:      {{printf "%f" .Report.Score}},
+  scoreLabel: {{jsonEncode .HeroTitle}},
+  encrypted:  {{if .Encrypted}}true{{else}}false{{end}},
+  mailbox:    {address: {{jsonEncode .Mailbox.Address}}, token: {{jsonEncode .Mailbox.Token}}},
+  message: {
+    subject:    {{jsonEncode .Message.Subject}},
+    smtpFrom:   {{jsonEncode .Message.SMTPFrom}},
+    remoteIP:   {{jsonEncode .Message.RemoteIP}},
+    helo:       {{jsonEncode .Message.HELO}},
+    receivedAt: {{if not .Message.ReceivedAt.IsZero}}{{jsonEncode (.Message.ReceivedAt.Format "2006-01-02T15:04:05Z07:00")}}{{else}}""{{end}}
+  },
+  groups: {{jsonEncode .CheckGroups}}
+};
+</script>
+<script src="/static/vendor/jspdf.umd.min.js"></script>
+<script src="/static/vendor/jspdf.plugin.autotable.min.js"></script>
+<script src="/static/pdf-report.js"></script>
 {{if .Encrypted}}
 <script>
 (function() {
@@ -1163,6 +1186,31 @@ function showDecrypted(payload) {
     });
 
     shareBlock.classList.remove('d-none');
+  }
+
+  // ── Update PDF data with decrypted values ─────────────────────────────
+  if (window.__mpReport) {
+    window.__mpReport.message.subject    = payload.subject    || '';
+    window.__mpReport.message.smtpFrom   = payload.smtp_from  || '';
+    window.__mpReport.message.remoteIP   = payload.remote_ip  || '';
+    window.__mpReport.message.helo       = payload.helo       || '';
+    window.__mpReport.message.receivedAt = payload.received_at || '';
+    window.__mpReport.encrypted = false; // decrypted — full content available
+
+    // Regroup decrypted checks by category (same logic as renderDecryptedReport)
+    var grpMap = {}, grpOrder = [];
+    var decChecks = (payload.report && payload.report.checks) ? payload.report.checks : [];
+    decChecks.forEach(function(c) {
+      var g = c.category || 'Allgemein';
+      if (!grpMap[g]) { grpMap[g] = []; grpOrder.push(g); }
+      grpMap[g].push(c);
+    });
+    window.__mpReport.groups = grpOrder.map(function(name) {
+      return {name: name, hint: GROUP_HINTS[name] || '', checks: grpMap[name]};
+    });
+    if (payload.report && payload.report.score != null) {
+      window.__mpReport.score = payload.report.score;
+    }
   }
 }
 
@@ -1419,55 +1467,39 @@ function renderDecryptedReport(p) {
     });
   }
 
-  // "PDF erstellen" klicken → serverseitige PDF-Generierung, kein Druckdialog
+  // "PDF erstellen" → client-seitig mit jsPDF (alle Daten lokal, E2E-sicher)
   var printBtn = document.getElementById('mp-pdf-print-btn');
   if (printBtn) {
     printBtn.addEventListener('click', function() {
-      var token = '{{.Mailbox.Token}}';
-      var p = function(id) {
+      var cb = function(id) {
         var el = document.getElementById(id);
-        return (el && el.checked) ? '1' : '0';
+        return el ? el.checked : true;
       };
-      var params = new URLSearchParams({
-        pass:    p('pdf-chk-pass'),
-        warn:    p('pdf-chk-warn'),
-        fail:    p('pdf-chk-fail'),
-        info:    p('pdf-chk-info'),
-        hero:    p('pdf-chk-hero'),
-        meta:    p('pdf-chk-meta'),
-        details: p('pdf-chk-details'),
-      });
-
-      // Button-Feedback während des Downloads
-      var origHtml = printBtn.innerHTML;
-      printBtn.disabled = true;
-      printBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Erstelle PDF…';
+      var opts = {
+        pass:    cb('pdf-chk-pass'),
+        warn:    cb('pdf-chk-warn'),
+        fail:    cb('pdf-chk-fail'),
+        info:    cb('pdf-chk-info'),
+        hero:    cb('pdf-chk-hero'),
+        meta:    cb('pdf-chk-meta'),
+        details: cb('pdf-chk-details'),
+      };
 
       var bsModal = bootstrap.Modal.getInstance(modal);
       if (bsModal) bsModal.hide();
 
-      fetch('/api/pdf/' + token + '?' + params.toString())
-        .then(function(res) {
-          if (!res.ok) throw new Error('PDF-Generierung fehlgeschlagen (' + res.status + ')');
-          return res.blob();
-        })
-        .then(function(blob) {
-          var url = URL.createObjectURL(blob);
-          var a = document.createElement('a');
-          a.href = url;
-          a.download = 'deliverability-report-' + token.slice(0,8) + '.pdf';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
-        })
-        .catch(function(err) {
-          alert('Fehler: ' + err.message);
-        })
-        .finally(function() {
-          printBtn.disabled = false;
-          printBtn.innerHTML = origHtml;
-        });
+      // Kurz warten damit das Modal schließt, dann PDF generieren
+      setTimeout(function() {
+        try {
+          if (typeof mpGeneratePDF === 'function') {
+            mpGeneratePDF(opts);
+          } else {
+            alert('PDF-Generator nicht geladen. Seite neu laden.');
+          }
+        } catch(e) {
+          alert('PDF-Fehler: ' + e.message);
+        }
+      }, 150);
     });
   }
 

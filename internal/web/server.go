@@ -99,13 +99,13 @@ type ReportData struct {
 }
 
 type ReportCheckGroup struct {
-	Name      string
-	Hint      string
-	Checks    []model.CheckResult
-	PassCount int
-	WarnCount int
-	FailCount int
-	InfoCount int
+	Name      string              `json:"name"`
+	Hint      string              `json:"hint"`
+	Checks    []model.CheckResult `json:"checks"`
+	PassCount int                 `json:"pass_count"`
+	WarnCount int                 `json:"warn_count"`
+	FailCount int                 `json:"fail_count"`
+	InfoCount int                 `json:"info_count"`
 }
 
 // RBLHit is returned by the rblHits template function.
@@ -312,6 +312,13 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"rblProviders":        rblProvidersFn,
 		"splitLines":          splitLinesFn,
 		"appVersion":          func() string { return version.Version },
+		"jsonEncode": func(v any) (template.JS, error) {
+			b, err := json.Marshal(v)
+			if err != nil {
+				return "", err
+			}
+			return template.JS(b), nil
+		},
 	}).ParseGlob(filepath.Join("internal", "web", "templates", "*.html"))
 	if err != nil {
 		return nil, err
