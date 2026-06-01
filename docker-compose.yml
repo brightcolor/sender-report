@@ -20,8 +20,6 @@ services:
       - ./.env:/config/.env:rw
       # TLS-Zertifikate für HTTPS — nur nötig wenn ENABLE_TLS=true:
       # - ./certs:/certs:ro
-    depends_on:
-      - rspamd
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz"]
