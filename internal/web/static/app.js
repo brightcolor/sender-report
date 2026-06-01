@@ -294,7 +294,9 @@ function updateMailboxIdentity(data) {
 
   // Vollständiger Link inkl. Schlüssel (maskiert) – klickbar zum Kopieren
   if (linkRow) {
-    const fullUrl    = data.mailbox_url || '';
+    // Immer absolute URL – Restore-Pfad liefert nur /mailbox/…, Create-Pfad die volle URL
+    const rawUrl  = data.mailbox_url || '';
+    const fullUrl = rawUrl.startsWith('http') ? rawUrl : location.origin + rawUrl;
     const baseUrl    = fullUrl.split('#')[0];
     const secretKey  = fullUrl.includes('#') ? fullUrl.split('#')[1] : '';
     const fullMasked = secretKey ? baseUrl + '#' + maskKey(secretKey) : baseUrl;
