@@ -135,52 +135,54 @@
 
         <!-- ── Link-Sharing (nur für verschlüsselte Reports mit Key) ──── -->
         {{if .Encrypted}}
-        <div id="mp-share-block" class="card mb-3 d-none" style="max-width:560px">
+        <div id="mp-share-block" class="card mb-3 d-none">
           <div class="card-header py-2 d-flex align-items-center gap-2">
             <i class="bi bi-share text-primary"></i>
             <span class="fw-semibold small">Report teilen</span>
           </div>
-          <div class="card-body py-2 d-flex flex-column gap-2">
+          <div class="card-body py-2">
+            <div class="row g-2">
 
-            <!-- Vollständiger Link mit Schlüssel -->
-            <div>
-              <label class="form-label small text-secondary mb-1">
-                <i class="bi bi-link-45deg me-1"></i>Vollständiger Link <span class="text-success small">(inkl. Schlüssel)</span>
-              </label>
-              <div class="input-group input-group-sm">
-                <input id="mp-share-full" type="text" class="form-control font-monospace"
-                       style="font-size:.72rem" readonly aria-label="Link mit Schlüssel">
-                <button class="btn btn-outline-secondary mp-copy-share" data-target="mp-share-full"
-                        type="button" title="Kopieren"><i class="bi bi-clipboard"></i></button>
+              <!-- Vollständiger Link mit Schlüssel -->
+              <div class="col-12 col-md-4">
+                <p class="small text-secondary mb-1">
+                  <i class="bi bi-link-45deg me-1"></i>Vollständiger Link <span class="text-success">(inkl. Schlüssel)</span>
+                </p>
+                <div class="mp-share-box" id="mp-share-full-box" role="button" tabindex="0"
+                     title="Klicken zum Kopieren"
+                     onkeydown="if(event.key==='Enter'||event.key===' ')mpCopyShare('full')">
+                  <code class="mp-share-text" id="mp-share-full"></code>
+                  <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren</span>
+                </div>
               </div>
-            </div>
 
-            <!-- Link ohne Schlüssel -->
-            <div>
-              <label class="form-label small text-secondary mb-1">
-                <i class="bi bi-link me-1"></i>Link ohne Schlüssel
-              </label>
-              <div class="input-group input-group-sm">
-                <input id="mp-share-nokey" type="text" class="form-control font-monospace"
-                       style="font-size:.72rem" readonly aria-label="Link ohne Schlüssel">
-                <button class="btn btn-outline-secondary mp-copy-share" data-target="mp-share-nokey"
-                        type="button" title="Kopieren"><i class="bi bi-clipboard"></i></button>
+              <!-- Link ohne Schlüssel -->
+              <div class="col-12 col-md-4">
+                <p class="small text-secondary mb-1">
+                  <i class="bi bi-link me-1"></i>Link ohne Schlüssel
+                </p>
+                <div class="mp-share-box" id="mp-share-nokey-box" role="button" tabindex="0"
+                     title="Klicken zum Kopieren"
+                     onkeydown="if(event.key==='Enter'||event.key===' ')mpCopyShare('nokey')">
+                  <code class="mp-share-text" id="mp-share-nokey"></code>
+                  <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren</span>
+                </div>
               </div>
-            </div>
 
-            <!-- Nur der Schlüssel -->
-            <div>
-              <label class="form-label small text-secondary mb-1">
-                <i class="bi bi-key me-1"></i>Nur der Schlüssel
-              </label>
-              <div class="input-group input-group-sm">
-                <input id="mp-share-key" type="text" class="form-control font-monospace"
-                       style="font-size:.72rem" readonly aria-label="Schlüssel">
-                <button class="btn btn-outline-secondary mp-copy-share" data-target="mp-share-key"
-                        type="button" title="Kopieren"><i class="bi bi-clipboard"></i></button>
+              <!-- Nur der Schlüssel -->
+              <div class="col-12 col-md-4">
+                <p class="small text-secondary mb-1">
+                  <i class="bi bi-key me-1"></i>Nur der Schlüssel
+                </p>
+                <div class="mp-share-box" id="mp-share-key-box" role="button" tabindex="0"
+                     title="Klicken zum Kopieren"
+                     onkeydown="if(event.key==='Enter'||event.key===' ')mpCopyShare('key')">
+                  <code class="mp-share-text" id="mp-share-key"></code>
+                  <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren</span>
+                </div>
               </div>
-            </div>
 
+            </div>
           </div>
         </div>
         {{end}}
@@ -963,43 +965,56 @@ function showDecrypted(payload) {
     badge.innerHTML = '<i class="bi bi-unlock-fill me-1"></i>Entschlüsselt';
   }
 
-  // Befülle Share-Block mit gekürzten Links (vollständig im Clipboard).
+  // Befülle Share-Block mit klickbaren Feldern.
   var shareBlock = document.getElementById('mp-share-block');
   if (shareBlock && TOKEN) {
-    // Key aus localStorage holen (history.replaceState hat das Fragment bereits entfernt).
+    // Key aus localStorage lesen (history.replaceState hat das Fragment bereits entfernt).
     var secretKey = localStorage.getItem('sr:secret:' + TOKEN)
                  || sessionStorage.getItem('sr:secret:' + TOKEN)
-                 || location.hash.slice(1); // Fallback falls Fragment noch da
+                 || location.hash.slice(1);
     var baseUrl  = location.origin + location.pathname;
     var fullUrl  = secretKey ? baseUrl + '#' + secretKey : baseUrl;
-    var noKeyUrl = baseUrl;
 
-    var elFull   = document.getElementById('mp-share-full');
-    var elNoKey  = document.getElementById('mp-share-nokey');
-    var elKey    = document.getElementById('mp-share-key');
+    var elFull  = document.getElementById('mp-share-full');
+    var elNoKey = document.getElementById('mp-share-nokey');
+    var elKey   = document.getElementById('mp-share-key');
+    if (elFull)  { elFull.textContent  = fullUrl;            elFull.dataset.val  = fullUrl; }
+    if (elNoKey) { elNoKey.textContent = baseUrl;            elNoKey.dataset.val = baseUrl; }
+    if (elKey)   { elKey.textContent   = secretKey || '—';  elKey.dataset.val   = secretKey || ''; }
 
-    if (elFull)  { elFull.value  = fullUrl;    elFull.dataset.full  = fullUrl;    }
-    if (elNoKey) { elNoKey.value = noKeyUrl;   elNoKey.dataset.full = noKeyUrl;   }
-    if (elKey)   { elKey.value   = secretKey || ''; elKey.dataset.full = secretKey || ''; }
-
-    // Copy-Buttons: kopieren immer den vollen Wert.
-    if (!shareBlock.dataset.bound) {
-      shareBlock.dataset.bound = '1';
-      shareBlock.querySelectorAll('.mp-copy-share').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-          var inp = document.getElementById(btn.dataset.target);
-          if (!inp) return;
-          var val = inp.dataset.full || inp.value;
-          navigator.clipboard.writeText(val).then(function() {
-            var ic = btn.querySelector('i');
-            if (ic) { ic.className = 'bi bi-check'; setTimeout(function(){ ic.className = 'bi bi-clipboard'; }, 1500); }
-          }).catch(function(){});
-        });
-      });
-    }
+    // Click-Handler auf die Boxen.
+    [['mp-share-full-box','full'],['mp-share-nokey-box','nokey'],['mp-share-key-box','key']].forEach(function(pair) {
+      var box = document.getElementById(pair[0]);
+      if (box && !box.dataset.bound) {
+        box.dataset.bound = '1';
+        box.addEventListener('click', function() { mpCopyShare(pair[1]); });
+      }
+    });
 
     shareBlock.classList.remove('d-none');
   }
+}
+
+// Kopiert den Wert eines Share-Felds und zeigt kurz ✓-Feedback.
+function mpCopyShare(which) {
+  var map = { full: 'mp-share-full', nokey: 'mp-share-nokey', key: 'mp-share-key' };
+  var boxMap = { full: 'mp-share-full-box', nokey: 'mp-share-nokey-box', key: 'mp-share-key-box' };
+  var el  = document.getElementById(map[which]);
+  var box = document.getElementById(boxMap[which]);
+  if (!el) return;
+  var val = el.dataset.val || el.textContent;
+  if (!val || val === '—') return;
+  navigator.clipboard.writeText(val).then(function() {
+    if (box) {
+      box.classList.add('mp-copied');
+      var hint = box.querySelector('.mp-addr-copy-hint');
+      if (hint) { hint.innerHTML = '<i class="bi bi-check me-1"></i>Kopiert!'; }
+      setTimeout(function() {
+        box.classList.remove('mp-copied');
+        if (hint) { hint.innerHTML = '<i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren'; }
+      }, 1500);
+    }
+  }).catch(function(){});
 }
 
 // Auto-decrypt on load if key is already in localStorage.
