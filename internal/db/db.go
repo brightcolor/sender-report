@@ -9,13 +9,28 @@ import (
 
 func Open(path string) (*sql.DB, error) {
 	// modernc.org/sqlite registers as "sqlite" (pure Go, no CGO required).
-	dsn := fmt.Sprintf("file:%s?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=1", path)
+	// DSN parameters like _foreign_keys are mattn-specific and not supported by
+	// modernc — set pragmas explicitly via SQL instead.
+	dsn := fmt.Sprintf("file:%s", path)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
+
+	// Apply pragmas that modernc does not honour from the DSN.
+	pragmas := []string{
+		"PRAGMA journal_mode = WAL",
+		"PRAGMA busy_timeout = 5000",
+		"PRAGMA foreign_keys = ON",
+	}
+	for _, p := range pragmas {
+		if _, err := db.Exec(p); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("db pragma %q: %w", p, err)
+		}
+	}
 
 	if err := migrate(db); err != nil {
 		_ = db.Close()
