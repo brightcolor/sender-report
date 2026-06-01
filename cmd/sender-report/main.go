@@ -27,6 +27,7 @@ import (
 	"github.com/brightcolor/sender-report/internal/smtp"
 	"github.com/brightcolor/sender-report/internal/store"
 	"github.com/brightcolor/sender-report/internal/telemetry"
+	"github.com/brightcolor/sender-report/internal/tlscert"
 	"github.com/brightcolor/sender-report/internal/web"
 )
 
@@ -100,10 +101,18 @@ func main() {
 
 	smtpLimiter := ratelimit.New(time.Hour, cfg.SMTPRateLimitPerHour)
 	smtpBurstLimiter := ratelimit.New(time.Minute, cfg.SMTPBurstPerMin)
+	// STARTTLS-Zertifikat: beim ersten Start generieren, danach wiederverwenden.
+	smtpTLS, tlsErr := tlscert.EnsureAndLoad(cfg.DataDir, smtpGreetingDomain(cfg), logger)
+	if tlsErr != nil {
+		logger.Printf("smtp: TLS-Zertifikat nicht verfügbar (%v) — STARTTLS deaktiviert", tlsErr)
+		smtpTLS = nil
+	}
+
 	smtpSrv := &smtp.Server{
 		Addr:            cfg.SMTPListenAddr,
 		Domain:          smtpGreetingDomain(cfg),
 		MaxMessageBytes: cfg.MaxMessageBytes,
+		TLSConfig:       smtpTLS,
 		RateLimiter:     smtpLimiter,
 		BurstLimiter:    smtpBurstLimiter,
 		OnRateLimited: func(remoteIP string) {

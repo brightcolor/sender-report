@@ -3,6 +3,7 @@ package smtp
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"log"
@@ -20,6 +21,7 @@ type ReceivedMail struct {
 	MailFrom string
 	RcptTo   string
 	Data     []byte
+	TLS      bool // true wenn die Verbindung über STARTTLS aufgebaut wurde
 }
 
 type Handler func(ctx context.Context, m ReceivedMail) error
@@ -29,6 +31,7 @@ type Server struct {
 	Addr            string
 	Domain          string
 	MaxMessageBytes int64
+	TLSConfig       *tls.Config // optional; wenn gesetzt wird STARTTLS angeboten
 	RateLimiter     *ratelimit.Limiter
 	BurstLimiter    *ratelimit.Limiter
 	OnRateLimited   func(remoteIP string)
@@ -49,7 +52,11 @@ func (s *Server) Start(ctx context.Context) error {
 		return err
 	}
 	s.ln = ln
-	s.Logger.Printf("smtp: listening on %s", s.Addr)
+	if s.TLSConfig != nil {
+		s.Logger.Printf("smtp: lausche auf %s (STARTTLS aktiv)", s.Addr)
+	} else {
+		s.Logger.Printf("smtp: lausche auf %s (kein TLS)", s.Addr)
+	}
 
 	s.wg.Add(1)
 	go func() {
@@ -64,7 +71,7 @@ func (s *Server) Start(ctx context.Context) error {
 			if ctx.Err() != nil {
 				return nil
 			}
-			s.Logger.Printf("smtp: accept error: %v", err)
+			s.Logger.Printf("smtp: accept-Fehler: %v", err)
 			continue
 		}
 		s.wg.Add(1)
@@ -85,7 +92,8 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	if remoteIP == "" {
 		remoteIP = conn.RemoteAddr().String()
 	}
-	if (s.RateLimiter != nil && !s.RateLimiter.Allow("smtp:hour:"+remoteIP)) || (s.BurstLimiter != nil && !s.BurstLimiter.Allow("smtp:burst:"+remoteIP)) {
+	if (s.RateLimiter != nil && !s.RateLimiter.Allow("smtp:hour:"+remoteIP)) ||
+		(s.BurstLimiter != nil && !s.BurstLimiter.Allow("smtp:burst:"+remoteIP)) {
 		if s.OnRateLimited != nil {
 			s.OnRateLimited(remoteIP)
 		}
@@ -99,12 +107,13 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	r := bufio.NewReader(conn)
 	var helo, mailFrom string
 	var rcptTo []string
+	var isTLS bool
 
 	for {
 		line, err := r.ReadString('\n')
 		if err != nil {
 			if err != io.EOF {
-				s.Logger.Printf("smtp: read error from %s: %v", remoteIP, err)
+				s.Logger.Printf("smtp: Lesefehler von %s: %v", remoteIP, err)
 			}
 			return
 		}
@@ -115,55 +124,95 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 		case strings.HasPrefix(upper, "EHLO ") || strings.HasPrefix(upper, "HELO "):
 			helo = strings.TrimSpace(line[5:])
 			writeLine(conn, "250-"+s.Domain)
+			if s.TLSConfig != nil && !isTLS {
+				writeLine(conn, "250-STARTTLS")
+			}
 			writeLine(conn, "250 SIZE "+fmt.Sprintf("%d", s.MaxMessageBytes))
+
+		case upper == "STARTTLS":
+			if s.TLSConfig == nil {
+				writeLine(conn, "502 5.5.1 STARTTLS nicht verfügbar")
+				continue
+			}
+			if isTLS {
+				writeLine(conn, "503 5.5.1 TLS bereits aktiv")
+				continue
+			}
+			writeLine(conn, "220 2.0.0 bereit für TLS")
+			tlsConn := tls.Server(conn, s.TLSConfig)
+			if err := tlsConn.Handshake(); err != nil {
+				s.Logger.Printf("smtp: TLS-Handshake von %s fehlgeschlagen: %v", remoteIP, err)
+				return
+			}
+			// Verbindung auf TLS umschalten; Reader neu erstellen.
+			conn = tlsConn
+			r = bufio.NewReader(conn)
+			isTLS = true
+			// Session-Status zurücksetzen (RFC 3207).
+			helo, mailFrom = "", ""
+			rcptTo = nil
+
 		case strings.HasPrefix(upper, "MAIL FROM:"):
 			mailFrom = extractSMTPPath(line[len("MAIL FROM:"):])
 			rcptTo = rcptTo[:0]
 			writeLine(conn, "250 2.1.0 OK")
+
 		case strings.HasPrefix(upper, "RCPT TO:"):
 			rcpt := extractSMTPPath(line[len("RCPT TO:"):])
 			if rcpt == "" {
-				writeLine(conn, "501 5.1.3 bad recipient")
+				writeLine(conn, "501 5.1.3 ungültiger Empfänger")
 				continue
 			}
 			if s.AllowRecipient != nil && !s.AllowRecipient(ctx, rcpt) {
-				writeLine(conn, "550 5.1.1 recipient rejected")
+				writeLine(conn, "550 5.1.1 Empfänger abgelehnt")
 				continue
 			}
 			rcptTo = append(rcptTo, strings.ToLower(rcpt))
 			writeLine(conn, "250 2.1.5 OK")
+
 		case upper == "DATA":
 			if mailFrom == "" || len(rcptTo) == 0 {
-				writeLine(conn, "503 5.5.1 bad sequence")
+				writeLine(conn, "503 5.5.1 ungültige Reihenfolge")
 				continue
 			}
-			writeLine(conn, "354 End data with <CR><LF>.<CR><LF>")
+			writeLine(conn, "354 Daten senden, Ende mit <CR><LF>.<CR><LF>")
 			data, derr := readData(r, s.MaxMessageBytes)
 			if derr != nil {
-				writeLine(conn, "552 5.3.4 message too large or malformed")
+				writeLine(conn, "552 5.3.4 Nachricht zu groß oder fehlerhaft")
 				continue
 			}
 			for _, rcpt := range rcptTo {
 				if s.HandleMail == nil {
 					continue
 				}
-				err = s.HandleMail(ctx, ReceivedMail{RemoteIP: remoteIP, HELO: helo, MailFrom: mailFrom, RcptTo: rcpt, Data: data})
+				err = s.HandleMail(ctx, ReceivedMail{
+					RemoteIP: remoteIP,
+					HELO:     helo,
+					MailFrom: mailFrom,
+					RcptTo:   rcpt,
+					Data:     data,
+					TLS:      isTLS,
+				})
 				if err != nil {
-					s.Logger.Printf("smtp: handler error: %v", err)
+					s.Logger.Printf("smtp: Handler-Fehler: %v", err)
 				}
 			}
-			writeLine(conn, "250 2.0.0 queued")
+			writeLine(conn, "250 2.0.0 eingereiht")
+
 		case upper == "RSET":
 			mailFrom = ""
 			rcptTo = nil
-			writeLine(conn, "250 2.0.0 reset")
+			writeLine(conn, "250 2.0.0 zurückgesetzt")
+
 		case upper == "NOOP":
 			writeLine(conn, "250 2.0.0 OK")
+
 		case upper == "QUIT":
-			writeLine(conn, "221 2.0.0 bye")
+			writeLine(conn, "221 2.0.0 auf Wiedersehen")
 			return
+
 		default:
-			writeLine(conn, "500 5.5.2 command not recognized")
+			writeLine(conn, "500 5.5.2 Befehl nicht erkannt")
 		}
 	}
 }
@@ -201,7 +250,7 @@ func readData(r *bufio.Reader, maxBytes int64) ([]byte, error) {
 			line = line[1:]
 		}
 		if int64(out.Len()+len(line)) > maxBytes {
-			return nil, fmt.Errorf("message exceeds max bytes")
+			return nil, fmt.Errorf("Nachricht überschreitet maximale Größe")
 		}
 		out.WriteString(line)
 	}
