@@ -33,6 +33,8 @@ func (s *Store) CreateMailbox(ctx context.Context, token, address, publicKey, ip
 		return model.Mailbox{}, err
 	}
 	id, _ := res.LastInsertId()
+	// Cumulative counter: only ever increments, survives cleanup/expiry.
+	s.incrCounter(ctx, "mailboxes_created", 1)
 	return model.Mailbox{
 		ID:         id,
 		Token:      token,
@@ -130,6 +132,8 @@ func (s *Store) SaveMessage(ctx context.Context, m model.Message) (model.Message
 		return model.Message{}, err
 	}
 	m.ID, _ = res.LastInsertId()
+	// Cumulative counter: only ever increments, survives cleanup/expiry.
+	s.incrCounter(ctx, "messages_received", 1)
 	return m, nil
 }
 
@@ -188,6 +192,12 @@ func (s *Store) SaveReport(ctx context.Context, report model.AnalysisReport) (mo
 		report.CreatedAt = time.Now().UTC()
 	}
 
+	// Detect whether this is a brand-new report (vs. a re-analysis upsert) so the
+	// cumulative counters only count each report once.
+	var existing int
+	_ = s.db.QueryRowContext(ctx, `SELECT 1 FROM reports WHERE message_id=?`, report.MessageID).Scan(&existing)
+	isNewReport := existing == 0
+
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO reports(message_id, created_at, score, score_label, checks_json, warnings_json, suggestions_json, headers_json, links_json, spam_signals_json)
 		VALUES(?,?,?,?,?,?,?,?,?,?)
@@ -204,6 +214,11 @@ func (s *Store) SaveReport(ctx context.Context, report model.AnalysisReport) (mo
 	`, report.MessageID, report.CreatedAt, report.Score, report.ScoreLabel, string(checksJSON), string(warningsJSON), string(suggestionsJSON), string(headersJSON), string(linksJSON), string(spamJSON))
 	if err != nil {
 		return model.AnalysisReport{}, err
+	}
+	if isNewReport {
+		// Cumulative counters: report count + score sum (for a stable average).
+		s.incrCounter(ctx, "reports_generated", 1)
+		s.incrCounter(ctx, "score_sum", report.Score)
 	}
 	id, _ := res.LastInsertId()
 	if id > 0 {
@@ -337,30 +352,44 @@ type GlobalStats struct {
 	AvgScore        float64 `json:"avg_score"`
 }
 
-// GetGlobalStats returns platform-wide counters from SQLite.
-// Uses simple COUNT/AVG queries – fast on typical self-hosted instance sizes.
+// GetGlobalStats returns platform-wide statistics.
+//
+// The "total" figures are cumulative counters that only ever increase — they
+// are NOT affected when mailboxes expire or messages are cleaned up. Only
+// ActiveMailboxes is a live count, since it is meant to reflect "right now".
+// AvgScore is a stable lifetime average (score_sum / reports_generated).
 func (s *Store) GetGlobalStats(ctx context.Context) (GlobalStats, error) {
 	var st GlobalStats
-	now := time.Now().UTC()
 
-	row := s.db.QueryRowContext(ctx, `
-		SELECT
-			COUNT(1),
-			SUM(CASE WHEN expires_at > ? THEN 1 ELSE 0 END)
-		FROM mailboxes`, now)
-	if err := row.Scan(&st.TotalMailboxes, &st.ActiveMailboxes); err != nil {
-		return st, err
+	st.TotalMailboxes = int64(s.counterValue(ctx, "mailboxes_created"))
+	st.TotalMessages = int64(s.counterValue(ctx, "messages_received"))
+	st.TotalReports = int64(s.counterValue(ctx, "reports_generated"))
+	if st.TotalReports > 0 {
+		st.AvgScore = s.counterValue(ctx, "score_sum") / float64(st.TotalReports)
 	}
 
-	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(1) FROM messages`).Scan(&st.TotalMessages)
+	// ActiveMailboxes stays a live count — it reflects the current state.
+	_ = s.db.QueryRowContext(ctx,
+		`SELECT COUNT(1) FROM mailboxes WHERE expires_at > ?`, time.Now().UTC()).
+		Scan(&st.ActiveMailboxes)
 
-	var avgNull sql.NullFloat64
-	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(1), AVG(score) FROM reports`).
-		Scan(&st.TotalReports, &avgNull)
-	if avgNull.Valid {
-		st.AvgScore = avgNull.Float64
-	}
 	return st, nil
+}
+
+// incrCounter atomically adds delta to a named cumulative counter (best-effort;
+// stats are non-critical so errors are intentionally swallowed).
+func (s *Store) incrCounter(ctx context.Context, key string, delta float64) {
+	_, _ = s.db.ExecContext(ctx, `
+		INSERT INTO counters(key, value) VALUES(?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = value + excluded.value
+	`, key, delta)
+}
+
+// counterValue reads a named cumulative counter (0 if absent).
+func (s *Store) counterValue(ctx context.Context, key string) float64 {
+	var v float64
+	_ = s.db.QueryRowContext(ctx, `SELECT value FROM counters WHERE key = ?`, key).Scan(&v)
+	return v
 }
 
 func (s *Store) Cleanup(ctx context.Context, now time.Time, retention time.Duration) (deletedMailboxes, deletedMessages int64, err error) {

@@ -98,5 +98,34 @@ CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at);
 	_, _ = db.Exec(`ALTER TABLE mailboxes ADD COLUMN public_key TEXT`)
 	// Phase-3 migration: add payload_enc column to messages for E2E encryption.
 	_, _ = db.Exec(`ALTER TABLE messages ADD COLUMN payload_enc TEXT`)
+
+	// Phase-5 migration: cumulative counters that survive cleanup and expiry.
+	// Unlike COUNT(*) over the live tables (which shrinks when rows are deleted),
+	// these values only ever increase — one tick per creation event.
+	if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS counters (
+    key   TEXT PRIMARY KEY,
+    value REAL NOT NULL DEFAULT 0
+);`); err != nil {
+		return err
+	}
+	// One-time backfill: seed each counter from the current table state so the
+	// switch from live COUNT(*) to cumulative counters is seamless. The
+	// NOT EXISTS guard makes this idempotent — it runs once, then no-ops.
+	backfill := []string{
+		`INSERT INTO counters(key, value) SELECT 'mailboxes_created', COUNT(*) FROM mailboxes
+		   WHERE NOT EXISTS(SELECT 1 FROM counters WHERE key='mailboxes_created')`,
+		`INSERT INTO counters(key, value) SELECT 'messages_received', COUNT(*) FROM messages
+		   WHERE NOT EXISTS(SELECT 1 FROM counters WHERE key='messages_received')`,
+		`INSERT INTO counters(key, value) SELECT 'reports_generated', COUNT(*) FROM reports
+		   WHERE NOT EXISTS(SELECT 1 FROM counters WHERE key='reports_generated')`,
+		`INSERT INTO counters(key, value) SELECT 'score_sum', COALESCE(SUM(score),0) FROM reports
+		   WHERE NOT EXISTS(SELECT 1 FROM counters WHERE key='score_sum')`,
+	}
+	for _, q := range backfill {
+		if _, err := db.Exec(q); err != nil {
+			return err
+		}
+	}
 	return nil
 }
