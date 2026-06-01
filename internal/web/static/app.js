@@ -297,8 +297,14 @@ function updateMailboxIdentity(data) {
     // Immer absolute URL – Restore-Pfad liefert nur /mailbox/…, Create-Pfad die volle URL
     const rawUrl  = data.mailbox_url || '';
     const fullUrl = rawUrl.startsWith('http') ? rawUrl : location.origin + rawUrl;
+    // Schlüssel-Anteil maskieren: URL bis # vollständig, Key nur erste Hälfte + …
+    const hashIdx = fullUrl.indexOf('#');
+    const displayUrl = hashIdx === -1
+      ? fullUrl
+      : fullUrl.slice(0, hashIdx + 1) + maskKey(fullUrl.slice(hashIdx + 1));
+
     const elFull = document.getElementById('mb-share-full');
-    if (elFull) { elFull.textContent = fullUrl; elFull.dataset.val = fullUrl; }
+    if (elFull) { elFull.textContent = displayUrl; elFull.dataset.val = fullUrl; }
 
     const box = document.getElementById('mb-share-full-box');
     if (box && !box.dataset.bound) {
