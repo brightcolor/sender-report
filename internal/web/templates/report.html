@@ -60,8 +60,9 @@
           </a>
         </li>
         <li class="nav-item">
-          <button class="btn btn-success btn-sm" onclick="window.print()" type="button">
-            <i class="bi bi-file-earmark-arrow-down me-1"></i>PDF
+          <button class="btn btn-success btn-sm" id="mp-pdf-open-btn" type="button"
+                  data-bs-toggle="modal" data-bs-target="#mp-pdf-modal">
+            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
           </button>
         </li>
         <li class="nav-item">
@@ -954,6 +955,96 @@ Kind regards,
     </div>
   </main>
 
+  <!-- ── PDF-Export Modal ─────────────────────────────────────────────── -->
+  <div class="modal fade" id="mp-pdf-modal" tabindex="-1" aria-labelledby="mp-pdf-modal-label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header pb-2">
+          <h5 class="modal-title" id="mp-pdf-modal-label">
+            <i class="bi bi-file-earmark-pdf me-2 text-danger"></i>PDF erstellen
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+        </div>
+        <div class="modal-body pt-2">
+
+          <!-- Checks: orientiert am aktiven Filter -->
+          <p class="text-uppercase fw-semibold small text-secondary mb-2" style="letter-spacing:.06em">
+            <i class="bi bi-funnel me-1"></i>Checks einschließen
+            <span class="fw-normal text-secondary ms-1" style="font-size:.7rem">(orientiert am aktiven Filter)</span>
+          </p>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="mp-pdf-opt-label pass">
+                <input type="checkbox" id="pdf-chk-pass" class="mp-pdf-chk"> <span class="mp-pill pass">✓</span> Bestanden
+              </label>
+            </div>
+            <div class="col-6">
+              <label class="mp-pdf-opt-label warn">
+                <input type="checkbox" id="pdf-chk-warn" class="mp-pdf-chk"> <span class="mp-pill warn">!</span> Warnungen
+              </label>
+            </div>
+            <div class="col-6">
+              <label class="mp-pdf-opt-label fail">
+                <input type="checkbox" id="pdf-chk-fail" class="mp-pdf-chk"> <span class="mp-pill fail">✗</span> Fehler
+              </label>
+            </div>
+            <div class="col-6">
+              <label class="mp-pdf-opt-label info">
+                <input type="checkbox" id="pdf-chk-info" class="mp-pdf-chk"> <span class="mp-pill info">i</span> Info
+              </label>
+            </div>
+          </div>
+
+          <hr class="my-2">
+
+          <!-- Inhalt -->
+          <p class="text-uppercase fw-semibold small text-secondary mb-2 mt-3" style="letter-spacing:.06em">
+            <i class="bi bi-layout-text-sidebar me-1"></i>Inhalt
+          </p>
+
+          <label class="mp-pdf-opt-label w-100 mb-2">
+            <input type="checkbox" id="pdf-chk-hero" class="mp-pdf-chk" checked>
+            <span>
+              Score &amp; Zusammenfassung
+              <small class="d-block text-secondary fw-normal">Gesamtscore, Bestanden/Warnungen/Fehler</small>
+            </span>
+          </label>
+
+          <label class="mp-pdf-opt-label w-100 mb-2">
+            <input type="checkbox" id="pdf-chk-meta" class="mp-pdf-chk" checked>
+            <span>
+              Metadaten
+              <small class="d-block text-secondary fw-normal">Betreff, Absender, Empfangszeit, Quelle</small>
+            </span>
+          </label>
+
+          <label class="mp-pdf-opt-label w-100 mb-2">
+            <input type="checkbox" id="pdf-chk-details" class="mp-pdf-chk" checked>
+            <span>
+              Technische Details aufklappen
+              <small class="d-block text-secondary fw-normal">Hinweise &amp; Erklärungen pro Check</small>
+            </span>
+          </label>
+
+          <label class="mp-pdf-opt-label w-100 mb-1">
+            <input type="checkbox" id="pdf-chk-share" class="mp-pdf-chk">
+            <span>
+              Teilen-Links einschließen
+              <small class="d-block fw-normal" style="color:#fd7e14"><i class="bi bi-exclamation-triangle me-1"></i>Enthält den Entschlüsselungs-Schlüssel</small>
+            </span>
+          </label>
+
+        </div>
+        <div class="modal-footer pt-2">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-success" id="mp-pdf-print-btn">
+            <i class="bi bi-file-earmark-arrow-down me-1"></i>PDF erstellen
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   {{template "consent-banner" .}}
   {{template "page-footer" .}}
 
@@ -1312,11 +1403,54 @@ function renderDecryptedReport(p) {
 </script>
 {{end}}
 <script>
-// ── Print: Accordion aufklappen, Datum setzen ─────────────────────────────
+// ── PDF Modal: Filter vorbelegen + Drucken ────────────────────────────────
 (function() {
+
+  // Beim Öffnen des Modals: Checkboxen am aktiven Filter ausrichten
+  var modal = document.getElementById('mp-pdf-modal');
+  if (modal) {
+    modal.addEventListener('show.bs.modal', function() {
+      var activeBtn = document.querySelector('.mp-filter-btn.active');
+      var filter = activeBtn ? activeBtn.dataset.filter : 'all';
+      ['pass','warn','fail','info'].forEach(function(s) {
+        var cb = document.getElementById('pdf-chk-' + s);
+        if (cb) cb.checked = (filter === 'all' || filter === s);
+      });
+    });
+  }
+
+  // "PDF erstellen" klicken
+  var printBtn = document.getElementById('mp-pdf-print-btn');
+  if (printBtn) {
+    printBtn.addEventListener('click', function() {
+      var body = document.body;
+
+      // Status-Filter-Klassen setzen
+      ['pass','warn','fail','info'].forEach(function(s) {
+        var cb = document.getElementById('pdf-chk-' + s);
+        body.classList.toggle('mp-pdf-hide-' + s, !(cb && cb.checked));
+      });
+
+      // Inhalts-Optionen
+      body.classList.toggle('mp-pdf-no-hero',    !(document.getElementById('pdf-chk-hero')    || {}).checked);
+      body.classList.toggle('mp-pdf-no-meta',    !(document.getElementById('pdf-chk-meta')    || {}).checked);
+      body.classList.toggle('mp-pdf-summary',    !(document.getElementById('pdf-chk-details') || {}).checked);
+      body.classList.toggle('mp-pdf-show-share',  !!(document.getElementById('pdf-chk-share') || {}).checked);
+
+      // Modal schließen, dann drucken
+      var bsModal = bootstrap.Modal.getInstance(modal);
+      if (bsModal) bsModal.hide();
+      setTimeout(function() { window.print(); }, 350);
+    });
+  }
+
+  // beforeprint: Accordion aufklappen (außer bei "nur Zusammenfassung")
   function expandAll() {
+    var summaryOnly = document.body.classList.contains('mp-pdf-summary');
     document.querySelectorAll('.accordion-collapse').forEach(function(el) {
-      el.style.display = 'block';
+      if (!summaryOnly) {
+        el.style.display = 'block';
+      }
       el.dataset.printExpanded = '1';
     });
     var d = document.getElementById('mp-print-date');
@@ -1325,12 +1459,18 @@ function renderDecryptedReport(p) {
       hour:'2-digit', minute:'2-digit'
     });
   }
+
+  // afterprint: alles zurücksetzen
   function collapseAll() {
     document.querySelectorAll('[data-print-expanded]').forEach(function(el) {
       el.style.display = '';
       delete el.dataset.printExpanded;
     });
+    var body = document.body;
+    ['pass','warn','fail','info'].forEach(function(s) { body.classList.remove('mp-pdf-hide-' + s); });
+    body.classList.remove('mp-pdf-no-hero','mp-pdf-no-meta','mp-pdf-summary','mp-pdf-show-share');
   }
+
   window.addEventListener('beforeprint', expandAll);
   window.addEventListener('afterprint',  collapseAll);
 })();

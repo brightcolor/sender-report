@@ -1378,3 +1378,39 @@ body,
     }
   }
 }
+
+/* ── PDF Modal: Option-Labels ────────────────────────────────────────────── */
+.mp-pdf-opt-label {
+  display: flex;
+  align-items: flex-start;
+  gap: .5rem;
+  padding: .35rem .5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: .875rem;
+  font-weight: 500;
+  transition: background .12s;
+}
+.mp-pdf-opt-label:hover { background: var(--bs-tertiary-bg); }
+.mp-pdf-opt-label input[type=checkbox] { margin-top: 2px; flex-shrink: 0; }
+
+/* ── PDF Print: bedingte Klassen ────────────────────────────────────────── */
+@media print {
+  /* Status-Filter */
+  body.mp-pdf-hide-pass .mp-check-item.pass { display: none !important; }
+  body.mp-pdf-hide-warn .mp-check-item.warn { display: none !important; }
+  body.mp-pdf-hide-fail .mp-check-item.fail { display: none !important; }
+  body.mp-pdf-hide-info .mp-check-item.info { display: none !important; }
+
+  /* Kein Score-Hero */
+  body.mp-pdf-no-hero .mp-score-hero { display: none !important; }
+
+  /* Keine Metadaten */
+  body.mp-pdf-no-meta .row.g-2.mb-3:has(.info-box) { display: none !important; }
+
+  /* Nur Zusammenfassung: Details nicht aufklappen */
+  body.mp-pdf-summary .accordion-body { display: none !important; }
+
+  /* Teilen-Links einschließen */
+  body.mp-pdf-show-share #mp-share-block { display: block !important; }
+}
