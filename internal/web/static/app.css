@@ -42,21 +42,7 @@ body,
   box-shadow: none !important;
 }
 
-/* ── Brand mark ─────────────────────────────────────────────────────────── */
-.mp-brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: var(--bs-primary);
-  color: #fff;
-  border-radius: 6px;
-  font-size: .625rem;
-  font-weight: 900;
-  letter-spacing: .04em;
-  flex-shrink: 0;
-}
+/* ── Brand logo (SVG inline, .mp-brand-mark entfernt) ──────────────────── */
 
 /* ── Utility ────────────────────────────────────────────────────────────── */
 .font-monospace-address {
