@@ -1210,3 +1210,171 @@ body,
 .mp-share-box .mp-addr-copy-hint { font-size: .7rem; }
 .mp-share-box:hover .mp-addr-copy-hint { color: var(--bs-primary); }
 .mp-share-box.mp-copied .mp-addr-copy-hint { color: var(--bs-success); }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRINT / PDF EXPORT
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Print-only header (versteckt im Browser) ───────────────────────────── */
+#mp-print-header { display: none; }
+
+@media print {
+
+  /* ── Seitenformat & Basis ──────────────────────────────────────────────── */
+  @page {
+    size: A4 portrait;
+    margin: 16mm 14mm 14mm 14mm;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html, body {
+    background: #fff !important;
+    color: #212529 !important;
+    font-size: 11pt;
+  }
+
+  /* ── Layout-Reset ──────────────────────────────────────────────────────── */
+  .app-wrapper, .app-main, .app-content { margin: 0 !important; padding: 0 !important; }
+  .container-fluid { padding: 0 !important; }
+
+  /* ── Elemente ausblenden ───────────────────────────────────────────────── */
+  .app-header,
+  .app-footer,
+  #check-filter-bar,
+  #mp-share-block,
+  #mp-e2e-panel,
+  #mp-e2e-loading,
+  #mp-key-modal,
+  .mp-theme-btn,
+  [data-bs-toggle="dropdown"],
+  .dropdown-menu,
+  .accordion-button::after,
+  .mp-addr-copy-hint,
+  .mp-filter-btn { display: none !important; }
+
+  /* ── Print-Header einblenden ───────────────────────────────────────────── */
+  #mp-print-header {
+    display: block !important;
+    margin-bottom: 12pt;
+    padding-bottom: 8pt;
+  }
+  .mp-print-logo-row {
+    display: flex;
+    align-items: center;
+    gap: 10pt;
+    margin-bottom: 6pt;
+  }
+  .mp-print-logo-text {
+    font-size: 15pt;
+    font-weight: 700;
+    color: #0d6efd !important;
+    letter-spacing: -.01em;
+  }
+  .mp-print-doc-title {
+    margin-left: auto;
+    font-size: 11pt;
+    font-weight: 600;
+    color: #6c757d !important;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .mp-print-rule {
+    border: none;
+    border-top: 2px solid #0d6efd;
+    margin: 6pt 0;
+    opacity: 1;
+  }
+  .mp-print-meta-row {
+    display: flex;
+    gap: 24pt;
+    font-size: 9.5pt;
+    color: #495057 !important;
+  }
+
+  /* ── Score-Hero ────────────────────────────────────────────────────────── */
+  .mp-score-hero { break-inside: avoid; margin-bottom: 10pt !important; }
+  .mp-score-hero .card-body { padding: 10pt !important; }
+  .mp-ring { width: 72px !important; height: 72px !important; }
+  .mp-ring-value { font-size: 1.4rem !important; }
+
+  /* ── Info-Boxen ────────────────────────────────────────────────────────── */
+  .info-box {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #dee2e6 !important;
+    margin-bottom: 6pt !important;
+  }
+  .info-box-icon { width: 56px !important; }
+
+  /* ── Grid: volle Breite, kein Zweispalter ──────────────────────────────── */
+  .col-xl-8, .col-xl-4 { width: 100% !important; max-width: 100% !important; flex: 0 0 100% !important; }
+  .row { margin: 0 !important; }
+  .col-12, .col-sm-6, .col-xl-3 { flex: 0 0 50% !important; max-width: 50% !important; }
+
+  /* ── Karten ────────────────────────────────────────────────────────────── */
+  .card {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #dee2e6 !important;
+    margin-bottom: 8pt !important;
+  }
+  .card-header { padding: 6pt 10pt !important; }
+  .card-body   { padding: 6pt 10pt !important; }
+
+  /* ── Accordion: alle Inhalte aufgeklappt ──────────────────────────────── */
+  .accordion-collapse { display: block !important; height: auto !important; overflow: visible !important; }
+  .accordion-button {
+    box-shadow: none !important;
+    padding: 6pt 10pt !important;
+    background: transparent !important;
+    color: #212529 !important;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .accordion-button:not(.collapsed) { color: #212529 !important; }
+  .accordion-body { padding: 6pt 10pt !important; font-size: 9.5pt; }
+
+  /* ── Status-Farben (explizit, nicht CSS-Variablen) ─────────────────────── */
+  .mp-check-item.pass > .accordion-header > .accordion-button { border-left: 3px solid #198754 !important; }
+  .mp-check-item.warn > .accordion-header > .accordion-button { border-left: 3px solid #fd7e14 !important; }
+  .mp-check-item.fail > .accordion-header > .accordion-button { border-left: 3px solid #dc3545 !important; }
+  .mp-check-item.info > .accordion-header > .accordion-button { border-left: 3px solid #0dcaf0 !important; }
+
+  .mp-status-dot.pass { color: #198754 !important; }
+  .mp-status-dot.warn { color: #fd7e14 !important; }
+  .mp-status-dot.fail { color: #dc3545 !important; }
+  .mp-status-dot.info { color: #0dcaf0 !important; }
+
+  .mp-pill.pass { background: #d1e7dd !important; color: #0a3622 !important; }
+  .mp-pill.warn { background: #ffe5d0 !important; color: #6e2d00 !important; }
+  .mp-pill.fail { background: #f8d7da !important; color: #58151c !important; }
+  .mp-pill.info { background: #cff4fc !important; color: #055160 !important; }
+
+  /* ── Score-Hero Farben ─────────────────────────────────────────────────── */
+  .mp-score-hero.status-pass { border-left: 4px solid #198754 !important; }
+  .mp-score-hero.status-warn { border-left: 4px solid #fd7e14 !important; }
+  .mp-score-hero.status-fail { border-left: 4px solid #dc3545 !important; }
+
+  /* ── Badges & Chips ────────────────────────────────────────────────────── */
+  .badge, .mp-grp-badge { border: 1px solid currentColor !important; }
+  .text-bg-success { background: #d1e7dd !important; color: #0a3622 !important; border-color: #a3cfbb !important; }
+  .text-bg-warning { background: #fff3cd !important; color: #664d03 !important; border-color: #ffe69c !important; }
+  .text-bg-danger  { background: #f8d7da !important; color: #58151c !important; border-color: #f1aeb5 !important; }
+
+  /* ── Seitenumbrüche ────────────────────────────────────────────────────── */
+  .mp-score-hero, .info-box, .card { break-inside: avoid; page-break-inside: avoid; }
+  h2, h3 { break-after: avoid; page-break-after: avoid; }
+
+  /* ── Seitenfuß (CSS-generiert) ─────────────────────────────────────────── */
+  @page {
+    @bottom-center {
+      content: "sender.report – Deliverability Report – Seite " counter(page) " von " counter(pages);
+      font-size: 8pt;
+      color: #6c757d;
+    }
+  }
+}
