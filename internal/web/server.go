@@ -1318,7 +1318,7 @@ func reportHeroSubtitle(score float64) string {
 	case score >= 7.5:
 		return "Die Basis stimmt, einzelne Warnungen sollten vor groesseren Kampagnen geklaert werden."
 	case score >= 5.5:
-		return "Mehrere Signale koennen die Inbox-Platzierung bei Gmail, Outlook, Yahoo oder Apple Mail verschlechtern."
+		return "Mehrere Signale können die Inbox-Platzierung bei Gmail, Outlook, Yahoo oder Apple Mail verschlechtern."
 	default:
 		return "Bitte Authentifizierung, DNS und Inhalt priorisiert korrigieren, bevor du weiter versendest."
 	}
