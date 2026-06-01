@@ -1063,10 +1063,11 @@ Kind regards,
 // Non-encrypted: full data embedded here.
 // E2E encrypted: showDecrypted() below overwrites groups + message fields.
 window.__mpReport = {
-  appName:    {{jsonEncode .AppName}},
-  score:      {{printf "%f" .Report.Score}},
-  scoreLabel: {{jsonEncode .HeroTitle}},
-  encrypted:  {{if .Encrypted}}true{{else}}false{{end}},
+  appName:      {{jsonEncode .AppName}},
+  score:        {{printf "%f" .Report.Score}},
+  scoreLabel:   {{jsonEncode .HeroTitle}},
+  heroSubtitle: {{jsonEncode .HeroSubtitle}},
+  encrypted:    {{if .Encrypted}}true{{else}}false{{end}},
   mailbox:    {address: {{jsonEncode .Mailbox.Address}}, token: {{jsonEncode .Mailbox.Token}}},
   message: {
     subject:    {{jsonEncode .Message.Subject}},
@@ -1079,7 +1080,6 @@ window.__mpReport = {
 };
 </script>
 <script src="/static/vendor/jspdf.umd.min.js"></script>
-<script src="/static/vendor/jspdf.plugin.autotable.min.js"></script>
 <script src="/static/pdf-report.js"></script>
 {{if .Encrypted}}
 <script>
