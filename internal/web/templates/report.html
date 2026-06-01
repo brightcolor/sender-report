@@ -1410,11 +1410,11 @@ function renderDecryptedReport(p) {
   var modal = document.getElementById('mp-pdf-modal');
   if (modal) {
     modal.addEventListener('show.bs.modal', function() {
-      var activeBtn = document.querySelector('.mp-filter-btn.active');
-      var filter = activeBtn ? activeBtn.dataset.filter : 'all';
+      // Always pre-select all status types so the PDF is complete.
+      // The active filter in the web UI should not limit the PDF export.
       ['pass','warn','fail','info'].forEach(function(s) {
         var cb = document.getElementById('pdf-chk-' + s);
-        if (cb) cb.checked = (filter === 'all' || filter === s);
+        if (cb) cb.checked = true;
       });
     });
   }
