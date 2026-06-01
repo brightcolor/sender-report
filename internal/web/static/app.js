@@ -1288,6 +1288,47 @@ setupCookieConsent();
 colorScoreDeltas();
 colorScoreMinis();
 
+// ── Stats-Leiste: Live-Update ──────────────────────────────────────────────────
+function setupStatsPolling() {
+  if (!document.getElementById('mp-stats-bar')) return;
+
+  function fmtNum(n) {
+    if (typeof Intl !== 'undefined') {
+      return new Intl.NumberFormat('de-DE').format(n);
+    }
+    return String(n);
+  }
+
+  function updateStat(id, val) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var newVal = (id === 'stat-score') ? parseFloat(val).toFixed(1) : fmtNum(val);
+    if (el.textContent === newVal) return;
+    el.textContent = newVal;
+    el.classList.add('mp-stat-updated');
+    setTimeout(function() { el.classList.remove('mp-stat-updated'); }, 800);
+  }
+
+  function fetchStats() {
+    fetch('/api/stats')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) {
+        if (!d) return;
+        updateStat('stat-messages',  d.total_messages);
+        updateStat('stat-mailboxes', d.total_mailboxes);
+        updateStat('stat-active',    d.active_mailboxes);
+        if (d.total_reports > 0) updateStat('stat-score', d.avg_score);
+      })
+      .catch(function() {});
+  }
+
+  // First update after 30s, then every 60s
+  setTimeout(function() {
+    fetchStats();
+    setInterval(fetchStats, 60000);
+  }, 30000);
+}
+
 // Lösch-Bestätigung im Modal
 document.getElementById('mp-delete-confirm-btn')?.addEventListener('click', confirmDeleteMailbox);
 
@@ -1297,6 +1338,7 @@ setupExtendModal();
 // Home page: async mailbox init (after DOM ready, crypto libs loaded).
 if (document.getElementById('check-panel')) {
   initHomeMailbox();
+  setupStatsPolling();
 } else {
   setupMailboxPolling();
 }

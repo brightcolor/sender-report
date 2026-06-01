@@ -75,6 +75,35 @@
         <span class="mp-step"><span class="mp-step-num">3</span>Report öffnen</span>
       </div>
 
+      <!-- ══ Stats-Leiste ════════════════════════════════════════════════ -->
+      <div class="mp-stats-bar mb-3" id="mp-stats-bar">
+        <div class="mp-stat-item">
+          <span class="mp-stat-icon"><i class="bi bi-envelope-check"></i></span>
+          <span class="mp-stat-value" id="stat-messages">{{.Stats.TotalMessages}}</span>
+          <span class="mp-stat-label">E-Mails analysiert</span>
+        </div>
+        <div class="mp-stat-sep"></div>
+        <div class="mp-stat-item">
+          <span class="mp-stat-icon"><i class="bi bi-inbox"></i></span>
+          <span class="mp-stat-value" id="stat-mailboxes">{{.Stats.TotalMailboxes}}</span>
+          <span class="mp-stat-label">Mailboxen erstellt</span>
+        </div>
+        <div class="mp-stat-sep"></div>
+        <div class="mp-stat-item">
+          <span class="mp-stat-icon"><i class="bi bi-lightning-charge"></i></span>
+          <span class="mp-stat-value" id="stat-active">{{.Stats.ActiveMailboxes}}</span>
+          <span class="mp-stat-label">gerade aktiv</span>
+        </div>
+        {{if gt .Stats.TotalReports 0}}
+        <div class="mp-stat-sep"></div>
+        <div class="mp-stat-item">
+          <span class="mp-stat-icon"><i class="bi bi-star-half"></i></span>
+          <span class="mp-stat-value" id="stat-score">{{printf "%.1f" .Stats.AvgScore}}</span>
+          <span class="mp-stat-label">Ø Score /10</span>
+        </div>
+        {{end}}
+      </div>
+
       <!-- ══ Mailbox-Widget ════════════════════════════════════════════════ -->
       <div class="card mp-widget-card shadow mb-3"
            id="check-panel"

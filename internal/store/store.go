@@ -328,6 +328,41 @@ func (s *Store) DeleteMailboxByToken(ctx context.Context, token string) error {
 	return nil
 }
 
+// GlobalStats holds aggregated platform statistics shown on the home page.
+type GlobalStats struct {
+	TotalMailboxes  int64   `json:"total_mailboxes"`
+	ActiveMailboxes int64   `json:"active_mailboxes"`
+	TotalMessages   int64   `json:"total_messages"`
+	TotalReports    int64   `json:"total_reports"`
+	AvgScore        float64 `json:"avg_score"`
+}
+
+// GetGlobalStats returns platform-wide counters from SQLite.
+// Uses simple COUNT/AVG queries – fast on typical self-hosted instance sizes.
+func (s *Store) GetGlobalStats(ctx context.Context) (GlobalStats, error) {
+	var st GlobalStats
+	now := time.Now().UTC()
+
+	row := s.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(1),
+			SUM(CASE WHEN expires_at > ? THEN 1 ELSE 0 END)
+		FROM mailboxes`, now)
+	if err := row.Scan(&st.TotalMailboxes, &st.ActiveMailboxes); err != nil {
+		return st, err
+	}
+
+	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(1) FROM messages`).Scan(&st.TotalMessages)
+
+	var avgNull sql.NullFloat64
+	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(1), AVG(score) FROM reports`).
+		Scan(&st.TotalReports, &avgNull)
+	if avgNull.Valid {
+		st.AvgScore = avgNull.Float64
+	}
+	return st, nil
+}
+
 func (s *Store) Cleanup(ctx context.Context, now time.Time, retention time.Duration) (deletedMailboxes, deletedMessages int64, err error) {
 	cutoff := now.UTC().Add(-retention)
 

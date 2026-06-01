@@ -90,6 +90,63 @@ body,
   line-height: 1;
 }
 
+/* ── Stats-Leiste (Startseite) ──────────────────────────────────────────── */
+.mp-stats-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  flex-wrap: wrap;
+  background: var(--bs-tertiary-bg, #f8f9fa);
+  border: 1px solid var(--bs-border-color);
+  border-radius: .5rem;
+  padding: .75rem 1rem;
+}
+.mp-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .1rem;
+  padding: 0 1.25rem;
+  flex: 1;
+  min-width: 90px;
+}
+.mp-stat-icon {
+  font-size: 1.1rem;
+  color: var(--bs-primary);
+  line-height: 1;
+  margin-bottom: .15rem;
+}
+.mp-stat-value {
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--bs-emphasis-color);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.03em;
+  transition: color .3s;
+}
+.mp-stat-label {
+  font-size: .7rem;
+  color: var(--bs-secondary-color);
+  text-align: center;
+  white-space: nowrap;
+}
+.mp-stat-sep {
+  width: 1px;
+  height: 2.5rem;
+  background: var(--bs-border-color);
+  flex-shrink: 0;
+}
+/* Highlight briefly on live update */
+.mp-stat-value.mp-stat-updated {
+  color: var(--bs-primary);
+}
+@media (max-width: 480px) {
+  .mp-stat-sep { display: none; }
+  .mp-stat-item { flex: 1 0 40%; padding: .4rem .5rem; }
+}
+
 /* ── Utility ────────────────────────────────────────────────────────────── */
 .font-monospace-address {
   font-family: 'Cascadia Code', 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace !important;

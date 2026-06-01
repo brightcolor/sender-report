@@ -59,6 +59,7 @@ type HomeData struct {
 	AppName   string
 	Domain    string
 	PublicURL string
+	Stats     store.GlobalStats
 }
 
 type PrivacyData struct {
@@ -341,6 +342,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/healthz", s.health)
 	mux.HandleFunc("/readyz", s.ready)
 	mux.HandleFunc("/metrics", s.metricsPage)
+	mux.HandleFunc("/api/stats", s.statsHandler)
 	mux.HandleFunc("/api/mailboxes", s.createMailbox)
 	mux.HandleFunc("/api/mailboxes/", s.mailboxAPI)
 	mux.HandleFunc("/api/reports/", s.reportAPI)
@@ -448,10 +450,12 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	// Phase 2: mailbox creation is now client-side (crypto key generation in browser).
 	// The home page renders an empty widget; JavaScript fills it after generating
 	// the X25519 key pair and calling POST /api/mailboxes with {identifier, public_key}.
+	stats, _ := s.store.GetGlobalStats(r.Context())
 	data := HomeData{
 		AppName:   s.cfg.AppName,
 		Domain:    domain,
 		PublicURL: s.publicBaseURL(r),
+		Stats:     stats,
 	}
 	s.render(w, "home", data)
 }
@@ -1588,6 +1592,25 @@ type statusRecorder struct {
 func (r *statusRecorder) WriteHeader(status int) {
 	r.status = status
 	r.ResponseWriter.WriteHeader(status)
+}
+
+// statsHandler returns global platform statistics as JSON.
+// GET /api/stats
+func (s *Server) statsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	stats, err := s.store.GetGlobalStats(r.Context())
+	if err != nil {
+		http.Error(w, "stats unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=30")
+	if err := json.NewEncoder(w).Encode(stats); err != nil {
+		s.logger.Printf("stats encode error: %v", err)
+	}
 }
 
 // reportPDFHandler generates a PDF for a report and returns it as application/pdf.
