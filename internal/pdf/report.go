@@ -224,6 +224,12 @@ func Generate(data ReportData, opts Options) ([]byte, error) {
 
 	drawHeader(f, data, pageW)
 
+	// E2E notice (shown when plaintext fields are replaced server-side)
+	if data.Message.Subject == "[encrypted]" {
+		drawE2ENotice(f, cw)
+		f.Ln(4)
+	}
+
 	if opts.IncludeHero {
 		drawHero(f, data, cw)
 		f.Ln(5)
@@ -308,6 +314,43 @@ func drawHeader(f *fpdf.Fpdf, data ReportData, pageW float64) {
 	f.CellFormat(0, 5, latin1("Erstellt: "+data.GeneratedAt.Format("02.01.2006  15:04")), "", 0, "R", false, 0, "")
 
 	f.SetY(barH + stripH + 5)
+}
+
+// cleanMeta returns a display-friendly value for E2E-encrypted fields.
+// Fields stored as "[encrypted]" by the server are replaced with a clear notice.
+func cleanMeta(s, label string) string {
+	if s == "[encrypted]" || s == "" {
+		return "(E2E-verschluesselt - nur im Browser lesbar)"
+	}
+	return s
+}
+
+// drawE2ENotice renders a compact info banner when the message is E2E encrypted.
+func drawE2ENotice(f *fpdf.Fpdf, w float64) {
+	const x, h = 14.0, 9.0
+	y := f.GetY()
+
+	// Amber background
+	fc(f, rgb{255, 248, 230})
+	dc(f, rgb{253, 200, 100})
+	f.SetLineWidth(0.2)
+	f.RoundedRect(x, y, w, h, 1.5, "1234", "FD")
+
+	// Left amber accent
+	fc(f, rgb{253, 126, 20})
+	f.Rect(x, y, 3, h, "F")
+	f.RoundedRect(x, y, 3, h, 1.5, "14", "F")
+
+	sf(f, "B", 7.5)
+	tc(f, rgb{102, 68, 3})
+	f.SetXY(x+6, y+1.5)
+	f.CellFormat(w-10, 5, "E2E-verschluesselt: Betreff, Absender und IP sind nur im Browser mit deinem Schlussel lesbar.", "", 0, "L", false, 0, "")
+
+	sf(f, "", 6.5)
+	f.SetXY(x+6, y+5.5)
+	f.CellFormat(w-10, 3.5, "Der Score und alle Pruefergebnisse sind serverseitig verfuegbar und werden vollstaendig angezeigt.", "", 0, "L", false, 0, "")
+
+	f.SetY(y + h)
 }
 
 // drawHero: coloured sidebar (46 mm) with large score + white right panel.
@@ -505,22 +548,16 @@ func drawMeta(f *fpdf.Fpdf, data ReportData, w float64) {
 	y := f.GetY()
 	cw := (w - gap) / 2
 
-	subject := data.Message.Subject
-	if subject == "" {
-		subject = "(verschluesselt / nicht verfuegbar)"
-	}
-	received := "(verschluesselt)"
+	subject := cleanMeta(data.Message.Subject, "Betreff")
+	received := "(E2E-verschluesselt)"
 	if !data.Message.ReceivedAt.IsZero() {
 		received = data.Message.ReceivedAt.Format("02.01.2006  15:04:05")
 	}
-	smtpFrom := data.Message.SMTPFrom
-	if smtpFrom == "" {
-		smtpFrom = "(verschluesselt / leer)"
-	}
+	smtpFrom := cleanMeta(data.Message.SMTPFrom, "Envelope-From")
 	source := data.Message.RemoteIP
-	if source == "" {
-		source = "(verschluesselt)"
-	} else if data.Message.HELO != "" {
+	if source == "[encrypted]" || source == "" {
+		source = cleanMeta("[encrypted]", "Quelle")
+	} else if data.Message.HELO != "" && data.Message.HELO != "[encrypted]" {
 		source += " / " + data.Message.HELO
 	}
 
