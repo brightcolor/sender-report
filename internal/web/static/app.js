@@ -17,9 +17,23 @@ function applyThemePreference(preference) {
   const resolved = resolveThemePreference(selected);
   document.documentElement.dataset.bsTheme = resolved;
   document.documentElement.dataset.themePreference = selected;
-  const icon = document.querySelector('#theme-toggle .theme-icon');
+  const btn  = document.getElementById('theme-toggle');
+  const icon = btn?.querySelector('.theme-icon');
   if (icon) {
-    icon.textContent = selected === 'auto' ? 'AUTO' : (resolved === 'dark' ? 'DARK' : 'LIGHT');
+    // Ikon + Tooltip je nach aktivem Modus
+    if (selected === 'dark') {
+      icon.className = 'theme-icon bi bi-moon-fill';
+      icon.textContent = '';
+      if (btn) btn.title = 'Dunkles Theme aktiv – klicken für helles Theme';
+    } else if (selected === 'light') {
+      icon.className = 'theme-icon bi bi-sun-fill';
+      icon.textContent = '';
+      if (btn) btn.title = 'Helles Theme aktiv – klicken für System-Theme';
+    } else {
+      icon.className = 'theme-icon bi bi-circle-half';
+      icon.textContent = '';
+      if (btn) btn.title = 'System-Theme (' + (resolved === 'dark' ? 'dunkel' : 'hell') + ') – klicken für dunkles Theme';
+    }
   }
 }
 
