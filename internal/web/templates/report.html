@@ -175,7 +175,7 @@
             {{range .CheckGroups}}
             {{$groupID := safeID .Name}}
             <div class="card mb-3">
-              <div class="card-header d-flex align-items-start justify-content-between gap-2 flex-wrap">
+              <div class="card-header mp-group-header d-flex align-items-start justify-content-between gap-2 flex-wrap">
                 <div>
                   <h3 class="card-title mb-0">{{.Name}}</h3>
                   {{if .Hint}}<p class="text-secondary small mt-1 mb-0">{{.Hint}}</p>{{end}}
@@ -928,6 +928,49 @@ function statusLbl(s) {
   return {pass:'Bestanden',warn:'Warnung',fail:'Fehler',info:'Info'}[s] || s;
 }
 
+// Render the Rspamd symbol table (parsed from sym:NAME -> "score|desc|explain").
+// Mirrors the server-side template so encrypted reports show identical output.
+function renderRspamdSymbols(td) {
+  var syms = [];
+  Object.keys(td).forEach(function(k){
+    if (k.indexOf('sym:') !== 0) return;
+    var parts = String(td[k]).split('|');
+    syms.push({
+      name: k.slice(4),
+      score: parseFloat(parts[0]) || 0,
+      desc: parts[1] || '',
+      explain: parts[2] || ''
+    });
+  });
+  if (!syms.length) return '';
+  syms.sort(function(a,b){
+    var aa=Math.abs(a.score), ab=Math.abs(b.score);
+    if (aa!==ab) return ab-aa;
+    return a.name<b.name?-1:1;
+  });
+  var rows = syms.map(function(s){
+    var cls = s.score>0?'sym-pos':(s.score<0?'sym-neg':'sym-zero');
+    var sc  = (s.score>0?'+':'')+s.score.toFixed(2);
+    return '<div class="mp-symbol-row '+cls+'">'+
+           '<code class="mp-sym-name">'+esc(s.name)+'</code>'+
+           '<span class="mp-sym-score">'+sc+'</span>'+
+           '<span class="mp-sym-explain">'+(s.explain?esc(s.explain):esc(s.desc))+'</span>'+
+           '</div>';
+  }).join('');
+  return '<div class="mb-3"><h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">'+
+         'Symbole <span class="text-body fw-normal">(nach Gewicht)</span></h6>'+
+         '<div class="mp-symbol-table">'+rows+'</div></div>';
+}
+
+// Section intro hints — mirror of groupReportChecks() hints in server.go.
+var GROUP_HINTS = {
+  'Authentifizierung': 'Beweist, dass die Mail wirklich von deiner Domain stammt. SPF, DKIM und DMARC sind heute der wichtigste Faktor für die Zustellung – Gmail und Outlook lehnen ohne sie zunehmend ab.',
+  'DNS und Infrastruktur': 'Prüft, ob deine sendende IP und deine Hostnamen sauber im DNS hinterlegt sind (Reverse DNS, HELO, MX, A/AAAA, TLS). Inkonsistenzen hier wirken wie ein schlecht konfigurierter oder gekaperter Server.',
+  'Spamfilter': 'Externe Reputations- und Inhaltsfilter (SpamAssassin, Rspamd, DNSBL). Zeigt, wie verbreitete Filter deine Mail bewerten und welche Einzelsignale dabei zählen.',
+  'Format und Inhalt': 'Aufbau der Nachricht: MIME-Struktur, Text/HTML-Verhältnis, Links, Betreff und Anhänge. Schlechtes Format ist ein klassisches Spam-Signal und kann die Darstellung beim Empfänger zerstören.',
+  'Header und Rohdaten': 'Technische Basis-Header (Date, Message-ID, Received-Kette). Fehlende oder unplausible Pflichtfelder deuten auf einen fehlkonfigurierten Mailserver hin.'
+};
+
 function renderCheckGroup(name, checks, gi) {
   var p=0,w=0,f=0,inf=0;
   checks.forEach(function(c){
@@ -938,8 +981,9 @@ function renderCheckGroup(name, checks, gi) {
              (w?'<span class="badge mp-grp-badge warn">'+w+' !</span>':'')+
              (f?'<span class="badge mp-grp-badge fail">'+f+' ✗</span>':'')+
              (inf?'<span class="badge mp-grp-badge info">'+inf+' i</span>':'');
-  var h='<div class="card mb-3"><div class="card-header d-flex align-items-start justify-content-between gap-2 flex-wrap">'+
-        '<h3 class="card-title mb-0">'+esc(name)+'</h3>'+
+  var hint=GROUP_HINTS[name]?'<p class="text-secondary small mt-1 mb-0">'+esc(GROUP_HINTS[name])+'</p>':'';
+  var h='<div class="card mb-3"><div class="card-header mp-group-header d-flex align-items-start justify-content-between gap-2 flex-wrap">'+
+        '<div><h3 class="card-title mb-0">'+esc(name)+'</h3>'+hint+'</div>'+
         '<div class="d-flex gap-1 flex-shrink-0 align-items-center pt-1">'+badges+'</div></div>'+
         '<div class="card-body p-0"><div class="accordion accordion-flush" id="dec-grp-'+gi+'">';
   checks.forEach(function(c,ci){
@@ -954,6 +998,9 @@ function renderCheckGroup(name, checks, gi) {
        '<span class="mp-pill '+esc(c.status)+'">'+statusLbl(c.status)+'</span>'+
        '<strong class="mp-delta">'+esc(delta)+'</strong></div></button></h2>'+
        '<div id="cb-'+uid+'" class="accordion-collapse collapse '+open+'"><div class="accordion-body">';
+    // Rspamd: structured symbol table with explanations (before everything else).
+    if(c.id==='rspamd'&&c.technical_details)
+      h+=renderRspamdSymbols(c.technical_details);
     if(c.explanation)
       h+='<div class="mb-3"><h6 class="text-uppercase small fw-bold text-secondary mb-1" style="letter-spacing:.06em">Erklärung</h6><p class="mb-0">'+esc(c.explanation)+'</p></div>';
     if(c.recommendation&&(c.status==='warn'||c.status==='fail'))
@@ -962,15 +1009,19 @@ function renderCheckGroup(name, checks, gi) {
          '<button class="btn btn-sm btn-outline-secondary" type="button" data-copy="'+esc(c.recommendation)+'">'+
          '<i class="bi bi-clipboard me-1"></i>Kopieren</button></div>'+
          '<p class="mb-0" style="white-space:pre-line">'+esc(c.recommendation)+'</p></div>';
-    if(c.technical_details&&Object.keys(c.technical_details).length){
-      h+='<div class="mt-3"><button class="btn btn-link btn-sm text-secondary p-0" type="button" '+
-         'data-bs-toggle="collapse" data-bs-target="#raw-'+uid+'">'+
-         '<i class="bi bi-code me-1"></i>Rohdaten anzeigen</button>'+
-         '<div id="raw-'+uid+'" class="collapse mt-2"><dl class="mp-tech-dl">';
-      Object.entries(c.technical_details).forEach(function(e){
-        h+='<div><dt>'+esc(e[0])+'</dt><dd><code>'+esc(e[1])+'</code></dd></div>';
-      });
-      h+='</dl></div></div>';
+    if(c.technical_details){
+      // Show non-symbol technical details as a raw dl (sym: rows already rendered above).
+      var tdKeys=Object.keys(c.technical_details).filter(function(k){return k.indexOf('sym:')!==0;});
+      if(tdKeys.length){
+        h+='<div class="mt-3"><button class="btn btn-link btn-sm text-secondary p-0" type="button" '+
+           'data-bs-toggle="collapse" data-bs-target="#raw-'+uid+'">'+
+           '<i class="bi bi-code me-1"></i>Rohdaten anzeigen</button>'+
+           '<div id="raw-'+uid+'" class="collapse mt-2"><dl class="mp-tech-dl">';
+        tdKeys.forEach(function(k){
+          h+='<div><dt>'+esc(k)+'</dt><dd><code>'+esc(c.technical_details[k])+'</code></dd></div>';
+        });
+        h+='</dl></div></div>';
+      }
     }
     if(c.doc_links&&c.doc_links.length){
       h+='<div class="mt-3"><h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">'+

@@ -93,9 +93,12 @@ async function fetchMailboxStatus(token) {
 const SR_SECRET_PREFIX = 'sr:secret:';
 
 function storeSecret(identifier, token) {
-  // Always keep in sessionStorage for current tab.
+  // The decryption key is stored client-side only and never transmitted to the
+  // server (it lives in the URL fragment + browser storage). It is the user's
+  // own key for their own data, so no consent gate applies — without it the
+  // user could not read their own encrypted mailbox. It is wiped on mailbox
+  // delete / expiry (see removeSecret callers). Documented in /privacy §2.5.
   try { sessionStorage.setItem(SR_SECRET_PREFIX + identifier, token); } catch (_) {}
-  // Persist in localStorage if user consented (or always — secret is needed for decryption).
   try { localStorage.setItem(SR_SECRET_PREFIX + identifier, token); } catch (_) {}
 }
 
@@ -110,6 +113,18 @@ function loadSecret(identifier) {
 function removeSecret(identifier) {
   try { localStorage.removeItem(SR_SECRET_PREFIX + identifier); } catch (_) {}
   try { sessionStorage.removeItem(SR_SECRET_PREFIX + identifier); } catch (_) {}
+}
+
+// withReportKey appends the locally-stored decryption key as a URL fragment to a
+// /report/{token}... path so the report auto-decrypts and the link stays
+// shareable. Returns the path unchanged if no key is stored or it already has a
+// fragment. The key never reaches the server (fragments are not sent in HTTP).
+function withReportKey(reportPath) {
+  if (!reportPath || reportPath.indexOf('#') !== -1) return reportPath;
+  const m = reportPath.match(/\/report\/([^/?#]+)/);
+  if (!m) return reportPath;
+  const secret = loadSecret(m[1]);
+  return secret ? reportPath + '#' + secret : reportPath;
 }
 
 // ── Mailbox creation (E2E crypto path) ───────────────────────────────────────
@@ -298,7 +313,7 @@ function updateMailboxStatusText(data) {
   if (!statusText) return;
   if (data.latest_report_path) {
     setStatusDot('ready');
-    statusText.innerHTML = `Analyse abgeschlossen (Score: <strong>${data.latest_score}/10</strong>). <a href="${data.latest_report_path}">Report öffnen →</a>`;
+    statusText.innerHTML = `Analyse abgeschlossen (Score: <strong>${data.latest_score}/10</strong>). <a href="${withReportKey(data.latest_report_path)}">Report öffnen →</a>`;
     return;
   }
   if (data.latest_message_id) {
@@ -494,7 +509,7 @@ function handleCheckStatusEvent(data) {
   if (data.latest_report_path) {
     // Report ready — fetch real check data, then start animation (once)
     if (!_animStarted) {
-      _pendingHref = data.latest_report_path;
+      _pendingHref = withReportKey(data.latest_report_path);
       _fetchReportChecks(data.latest_report_path).then(() => {
         document.getElementById('check-wait-msg')?.classList.add('d-none');
         document.getElementById('check-steps')?.classList.remove('d-none');
@@ -644,6 +659,11 @@ function startMailboxPollingFallback(token, onStatus) {
 function setupCheckFilter() {
   const bar = document.getElementById('check-filter-bar');
   if (!bar) return;
+  // Guard against double-binding: setupCheckFilter runs at boot AND again after
+  // client-side decryption. Without this guard the click handler is attached
+  // twice and each click toggles the button on then off again (no net effect).
+  if (bar.dataset.filterBound === '1') return;
+  bar.dataset.filterBound = '1';
 
   const allBtn      = bar.querySelector('[data-filter="all"]');
   const filterBtns  = [...bar.querySelectorAll('[data-filter]:not([data-filter="all"])')];
@@ -676,13 +696,14 @@ function setupCheckFilter() {
       }
     });
 
-    // Hide group cards whose every item is now hidden
+    // Hide group cards whose every item is now hidden. Match both the
+    // server-rendered accordion (.mp-check-accordion) and the client-side
+    // decrypted one (.accordion-flush inside a card with mp-check-items).
     document.querySelectorAll('.card').forEach((card) => {
-      const accordion = card.querySelector('.mp-check-accordion');
-      if (!accordion) return;
-      const allItems     = accordion.querySelectorAll('.mp-check-item');
-      const visibleItems = accordion.querySelectorAll('.mp-check-item:not(.mp-filter-hidden)');
-      card.classList.toggle('d-none', allItems.length > 0 && visibleItems.length === 0);
+      const items = card.querySelectorAll('.mp-check-item');
+      if (items.length === 0) return;
+      const visibleItems = card.querySelectorAll('.mp-check-item:not(.mp-filter-hidden)');
+      card.classList.toggle('d-none', visibleItems.length === 0);
     });
 
     // Keep "All" button in sync: active when nothing else is selected
@@ -829,7 +850,7 @@ async function loadPreviousMailboxes() {
         `<strong>${Number(data.latest_score).toFixed(1)}</strong><span>/10</span></span>`
       : '';
     const reportBtn = data.latest_report_path
-      ? `<a href="${data.latest_report_path}" class="btn btn-sm btn-primary py-0 px-2">Report</a>`
+      ? `<a href="${withReportKey(data.latest_report_path)}" class="btn btn-sm btn-primary py-0 px-2">Report</a>`
       : '';
 
     return `<div class="d-flex align-items-center gap-2 py-2 px-3 rounded border mp-prev-mb-item${expired ? ' mp-prev-mb-expired' : ''}"

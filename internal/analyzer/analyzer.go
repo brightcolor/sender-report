@@ -1649,13 +1649,14 @@ func rspamdHeuristic(ctx context.Context, endpointURL, password, raw string) mod
 		"symbol_count":   strconv.Itoa(len(parsed.Symbols)),
 	}
 	// Add top symbols (by absolute weight) for structured display in the UI.
-	// Value format: "<score>|<description>" so the template can split and colour them.
+	// Value format: "<score>|<description>|<explanation>" — both the Go template
+	// and the client-side decrypted renderer split on "|" and use these parts.
 	maxSyms := 15
 	if len(allSyms) < maxSyms {
 		maxSyms = len(allSyms)
 	}
 	for _, s := range allSyms[:maxSyms] {
-		details["sym:"+s.Name] = fmt.Sprintf("%+.2f|%s", s.Score, s.Description)
+		details["sym:"+s.Name] = fmt.Sprintf("%+.2f|%s|%s", s.Score, s.Description, rspamdSymbolExplain(s.Name))
 	}
 
 	switch action {
@@ -1857,4 +1858,212 @@ func readLimited(r interface{ Read([]byte) (int, error) }, limit int64) ([]byte,
 		return nil, err
 	}
 	return []byte(b.String()), nil
+}
+
+// rspamdSymbolExplain returns a German admin-facing explanation for a Rspamd
+// symbol. Prefix matching handles symbol families (e.g. DMARC_POLICY_*).
+func rspamdSymbolExplain(name string) string {
+	// Exact matches first.
+	switch name {
+	// ── Authentication ───────────────────────────────────────────────────────
+	case "DMARC_POLICY_ALLOW", "DMARC_POLICY_ALLOW_WITH_FAILURES":
+		return "DMARC-Prüfung bestanden. SPF oder DKIM ist aligned mit der sichtbaren From-Domain."
+	case "DMARC_POLICY_REJECT":
+		return "DMARC-Policy ist 'reject'. Die Mail scheitert am DMARC-Check – strenge Ablehnung durch den Empfänger."
+	case "DMARC_POLICY_QUARANTINE":
+		return "DMARC-Policy ist 'quarantine'. Die Mail wird wahrscheinlich im Spam-Ordner landen."
+	case "DMARC_POLICY_SOFTFAIL":
+		return "DMARC-Policy ergibt Soft Fail. Authentifizierung ist nicht vollständig aligned."
+	case "DMARC_NA":
+		return "Kein DMARC-Record für die From-Domain gefunden. DMARC ist nicht konfiguriert."
+	case "R_DKIM_ALLOW", "DKIM_ALLOW":
+		return "DKIM-Signatur vorhanden und gültig. Der private Schlüssel stimmt mit dem DNS-Record überein."
+	case "R_DKIM_REJECT", "DKIM_REJECT":
+		return "DKIM-Signatur ungültig oder manipuliert. Der Verifizierungsversuch ist fehlgeschlagen."
+	case "R_DKIM_TEMPFAIL", "DKIM_TEMPFAIL":
+		return "DKIM-Prüfung temporär fehlgeschlagen (DNS-Timeout). Kein dauerhaftes Problem, aber kein Vertrauensbonus."
+	case "R_DKIM_NA", "DKIM_NA":
+		return "Keine DKIM-Signatur in der Mail. DKIM ist am Absender-MTA nicht konfiguriert."
+	case "R_SPF_ALLOW", "SPF_ALLOW":
+		return "SPF-Prüfung bestanden. Die sendende IP ist im SPF-Record der Envelope-From-Domain autorisiert."
+	case "R_SPF_FAIL", "SPF_FAIL":
+		return "SPF Hard Fail. Die sendende IP ist explizit nicht autorisiert (-all im SPF-Record)."
+	case "R_SPF_SOFTFAIL", "SPF_SOFTFAIL":
+		return "SPF Soft Fail. Die sendende IP ist nicht autorisiert, aber keine harte Ablehnung (~all)."
+	case "R_SPF_NEUTRAL", "SPF_NEUTRAL":
+		return "SPF Neutral. Der Record trifft keine Aussage über diese IP (? Qualifier)."
+	case "R_SPF_NA", "SPF_NA":
+		return "Kein SPF-Record für die Envelope-From-Domain. SPF ist nicht konfiguriert."
+	case "R_SPF_DNSFAIL", "SPF_DNSFAIL":
+		return "SPF-Prüfung wegen DNS-Fehler nicht abgeschlossen. Temporäres Problem."
+	case "ARC_ALLOW":
+		return "ARC-Chain (Authenticated Received Chain) ist gültig. Weitergeleitete Mail mit intaktem Auth-Nachweis."
+	case "ARC_INVALID":
+		return "ARC-Chain vorhanden, aber ungültig. Mögliche Manipulation nach Weiterleitung."
+	case "ARC_NA":
+		return "Keine ARC-Header. Mail wurde nicht weitergeleitet oder ARC nicht genutzt."
+
+	// ── DNSBL / IP-Reputation ────────────────────────────────────────────────
+	case "RCVD_IN_DNSWL_NONE":
+		return "IP steht auf keiner DNSWL-Whitelist. Kein Vertrauensbonus durch Whitelist-Listung."
+	case "RCVD_IN_DNSWL_LOW":
+		return "IP auf DNSWL als Low-Trust gelistet. Geringe positive Reputation."
+	case "RCVD_IN_DNSWL_MED":
+		return "IP auf DNSWL als Medium-Trust gelistet. Mittlere positive Reputation (z. B. bekannte Mailinglisten)."
+	case "RCVD_IN_DNSWL_HI":
+		return "IP auf DNSWL als High-Trust gelistet. Sehr gute Reputation (große Provider wie Gmail, Outlook)."
+	case "RCVD_IN_MSPIKE_H2":
+		return "IP hat gute Reputation in der Senderscore-Datenbank (Mimecast/MSPIKE Level H2)."
+	case "RCVD_IN_MSPIKE_H3", "RCVD_IN_MSPIKE_H4", "RCVD_IN_MSPIKE_H5":
+		return "IP hat sehr gute Reputation in der Senderscore-Datenbank (MSPIKE)."
+	case "RCVD_IN_MSPIKE_L4", "RCVD_IN_MSPIKE_L5":
+		return "IP hat schlechte Reputation in der Senderscore-Datenbank (MSPIKE). Spam-Risiko erhöht."
+	case "RCVD_IN_SBL", "RCVD_IN_SBL_CSS":
+		return "IP auf Spamhaus SBL (Spam Block List) gelistet. Direkt mit Spam-Quellen assoziiert."
+	case "RCVD_IN_XBL":
+		return "IP auf Spamhaus XBL (Exploits Block List) gelistet. Botnet, Proxy oder kompromittierter Host."
+	case "RCVD_IN_PBL":
+		return "IP auf Spamhaus PBL (Policy Block List) gelistet. Typischerweise dynamische/Consumer-IP ohne Mailserver-Berechtigung."
+	case "RCVD_IN_ZEN":
+		return "IP auf Spamhaus ZEN gelistet (kombinierte SBL/XBL/PBL). Schwerwiegendes Spam-Signal."
+	case "RCVD_IN_RP_CERTIFIED":
+		return "IP ist Return Path Certified – seriöse ESPs mit strengen Versandstandards."
+
+	// ── Header-Vollständigkeit ───────────────────────────────────────────────
+	case "MISSING_DATE":
+		return "Kein Date-Header. RFC 5322 schreibt ihn vor; das Fehlen deutet auf einen fehlkonfigurierten MTA hin."
+	case "MISSING_FROM":
+		return "Kein From-Header. RFC-Pflichtfeld; ohne From wird die Mail von praktisch allen Filtern abgelehnt."
+	case "MISSING_MID", "MISSING_MESSAGE_ID":
+		return "Keine Message-ID. RFC-Pflichtfeld; fehlt sie, beeinträchtigt das Threading in Mailclients und erhöht den Spam-Score."
+	case "MISSING_MIME_VERSION":
+		return "Kein MIME-Version-Header. Bei HTML-Mails ist er Pflicht; das Fehlen deutet auf schlechte MIME-Konstruktion hin."
+	case "MISSING_SUBJECT":
+		return "Kein Subject-Header. Erhöht Spam-Score deutlich; kein legitimer MTA lässt den Betreff weg."
+	case "MISSING_TO":
+		return "Kein To-Header. RFC-Pflicht; das Fehlen weist auf Massenversand ohne korrekten Envelope hin."
+	case "INVALID_DATE":
+		return "Das Date-Header-Datum ist ungültig oder liegt stark in der Vergangenheit/Zukunft. Serverzeit prüfen."
+	case "DATE_IN_FUTURE":
+		return "Datum liegt in der Zukunft. Falsch gestellte Serverzeit oder manipulierter Header."
+	case "DATE_IN_PAST":
+		return "Datum liegt weit in der Vergangenheit. Falsch gestellte Serverzeit oder verzögerte Queue."
+
+	// ── MIME / Struktur ──────────────────────────────────────────────────────
+	case "MIME_HTML_ONLY":
+		return "Mail enthält nur HTML ohne text/plain-Alternative. Erhöht Spam-Score; Plaintext-Part empfohlen."
+	case "MIME_GOOD":
+		return "MIME-Struktur korrekt (multipart/alternative mit text/plain und text/html). Gutes Zeichen."
+	case "MIME_HTML_NO_TEXT":
+		return "HTML-Part vorhanden, aber kein lesbarer Textinhalt extrahierbar. Möglicherweise bild-lastiger Aufbau."
+	case "MIME_BAD_UNICODE":
+		return "Ungültige Unicode-Zeichen im Inhalt. Kann auf Encoding-Fehler oder Obfuskation hinweisen."
+	case "MIME_BASE64_TEXT":
+		return "Textteil ist base64-kodiert. Ungewöhnlich; einige Filter bewerten das negativ."
+	case "MIME_CHARSET_UNICODE":
+		return "Unicode-Charset (UTF-8/UTF-16) verwendet. Neutral, aber Charset korrekt angeben."
+
+	// ── URLs / Links ─────────────────────────────────────────────────────────
+	case "HAS_ONLY_HTML_PART":
+		return "Nur HTML-Part, kein Plaintext. Häufiges Muster bei Marketing-Mails; Filter bewerten es negativ."
+	case "HTTP_REDIRECTOR":
+		return "Link führt über einen HTTP-Redirector. Verschleiert das eigentliche Ziel; Spam-Signal."
+	case "R_SUSPICIOUS_URL":
+		return "Verdächtige URL erkannt (Muster ähnelt bekannten Phishing- oder Spam-Domains)."
+	case "URIBL_BLOCKED":
+		return "URL-Abfrage durch URIBL geblockt (Abfrage-Limit erreicht). Kein aussagekräftiger Befund."
+	case "URIBL_SBL":
+		return "URL-Domain auf Spamhaus SBL gelistet. Direkte Spam-Assoziation der verlinkten Domain."
+	case "URIBL_ZEN_URIBL":
+		return "URL-Domain auf Spamhaus ZEN URIBL gelistet. Stark mit Spam assoziierte Domain."
+	case "SURBL_ABUSE":
+		return "URL-Domain auf SURBL Abuse-Liste. Domain ist für Phishing oder Spam bekannt."
+	case "SURBL_MULTI":
+		return "URL-Domain auf SURBL gelistet. Kombinations-Check mehrerer SURBL-Listen."
+
+	// ── Absender / Envelope ──────────────────────────────────────────────────
+	case "FROM_HAS_DN":
+		return "From enthält einen Anzeigenamen (Display Name). Normal, aber Mismatch zwischen Name und Adresse ist Phishing-Signal."
+	case "FROM_NEQ_ENVFROM":
+		return "Header-From und Envelope-From (MAIL FROM) stimmen nicht überein. Kann legitim sein (ESP), erhöht aber Spam-Score."
+	case "TO_MATCH_ENVRCPT_ALL":
+		return "Alle To-Adressen stimmen mit dem Envelope-Rcpt überein. Saubere Konfiguration."
+	case "TO_MATCH_ENVRCPT_SOME":
+		return "Nur ein Teil der To-Adressen stimmt mit dem Envelope überein. Möglicherweise BCC-Versand oder fehlkonfiguriert."
+	case "TO_DN_EQ_ADDR_FROM":
+		return "Der Anzeigename im To-Header stimmt mit der From-Adresse überein. Ungewöhnlich."
+	case "REPLYTO_DN_EQ_FROM_DN":
+		return "Reply-To hat denselben Anzeigenamen wie From. Harmlos, wenn intentional."
+	case "FORGED_SENDER":
+		return "Absender-Domain ist wahrscheinlich gefälscht. Starkes Phishing-Signal."
+	case "FROM_EXCESS_BASE64":
+		return "From-Header ist unnötig base64-kodiert. Verschleierungs-Taktik oder Encoder-Fehler."
+
+	// ── Reputation / Scoring ─────────────────────────────────────────────────
+	case "BAYES_HAM":
+		return "Bayes-Klassifikator stuft die Mail als legitim (Ham) ein. Inhalt ähnelt bekannten Non-Spam-Mails."
+	case "BAYES_SPAM":
+		return "Bayes-Klassifikator stuft die Mail als Spam ein. Inhalt ähnelt bekannten Spam-Mustern."
+	case "NEURAL_HAM":
+		return "Neuronales Netz klassifiziert die Mail als legitim."
+	case "NEURAL_SPAM":
+		return "Neuronales Netz klassifiziert die Mail als Spam."
+
+	// ── Sonstiges ────────────────────────────────────────────────────────────
+	case "ONCE_RECEIVED":
+		return "Nur ein Received-Header. Mail wurde ohne Zwischenhop direkt zugestellt – unüblich für Unternehmensinfrastruktur."
+	case "TWO_RECEIVED":
+		return "Genau zwei Received-Header. Typisch bei direktem Versand über einen Relayhost."
+	case "MULTIPLE_RECEIVED":
+		return "Viele Received-Header. Lange Routing-Kette; normal bei komplexer Infrastruktur, aber kann Queue-Probleme anzeigen."
+	case "HELO_LOCALHOST":
+		return "HELO/EHLO ist 'localhost' oder ähnlich. Fehlkonfigurierter MTA; fast alle Filter werten das stark negativ."
+	case "HELO_NUMERIC":
+		return "HELO/EHLO ist eine IP-Adresse. Anstatt des Hostnamens wird eine IP übermittelt – RFC-widrig."
+	case "HELO_NORES_IP_1", "HELO_NORES_IP_2":
+		return "HELO-Name löst nicht zur sendenden IP auf (kein Forward-confirmed rDNS). PTR-Konfiguration prüfen."
+	case "RCPT_COUNT_ONE":
+		return "Genau ein Empfänger. Für transaktionale Mails normal und positiv."
+	case "MX_INVALID":
+		return "MX-Record der Absender-Domain ist ungültig oder nicht auflösbar."
+	case "MX_MISSING":
+		return "Kein MX-Record für die Absender-Domain. Bounce-Delivery ist nicht möglich."
+	case "MAILLIST":
+		return "Mail zeigt Merkmale einer Mailinglisten-Nachricht (List-* Header). ARC bei Weiterleitungen wichtig."
+	case "DMARC_DNSFAIL":
+		return "DMARC-Abfrage wegen DNS-Fehler nicht abgeschlossen. Temporäres Problem."
+	}
+
+	// Prefix matching für Familien ohne exakten Match.
+	switch {
+	case strings.HasPrefix(name, "DMARC_"):
+		return "DMARC-bezogenes Signal. Prüft das Alignment von SPF/DKIM mit der sichtbaren From-Domain."
+	case strings.HasPrefix(name, "R_DKIM_") || strings.HasPrefix(name, "DKIM_"):
+		return "DKIM-Signal. Betrifft die kryptografische Signatur der Mail."
+	case strings.HasPrefix(name, "R_SPF_") || strings.HasPrefix(name, "SPF_"):
+		return "SPF-Signal. Prüft ob die sendende IP im DNS-Record der Absender-Domain autorisiert ist."
+	case strings.HasPrefix(name, "RCVD_IN_"):
+		return "IP-Reputationscheck (DNSBL/Whitelist). Die sendende IP wird gegen eine externe Liste geprüft."
+	case strings.HasPrefix(name, "URIBL_") || strings.HasPrefix(name, "SURBL_"):
+		return "URL-Blacklist-Treffer. Eine verlinkte Domain ist auf einer Spam- oder Phishing-Liste gelistet."
+	case strings.HasPrefix(name, "BAYES_"):
+		return "Bayes-Klassifikator. Bewertet den Inhalt statistisch anhand erlernter Spam-/Ham-Muster."
+	case strings.HasPrefix(name, "NEURAL_"):
+		return "Neuronales Netz. KI-basierte Klassifikation des Mail-Inhalts."
+	case strings.HasPrefix(name, "FUZZY_"):
+		return "Fuzzy-Hash-Treffer. Inhalt ähnelt einer bekannten Spam-Mail in der Datenbank."
+	case strings.HasPrefix(name, "MISSING_"):
+		return "Pflicht-Header fehlt. RFC 5322 schreibt diesen Header vor; sein Fehlen deutet auf einen fehlkonfigurierten MTA hin."
+	case strings.HasPrefix(name, "HELO_"):
+		return "HELO/EHLO-Signal. Betrifft den Hostnamen, mit dem sich der sendende MTA vorstellt."
+	case strings.HasPrefix(name, "MX_"):
+		return "MX-Record-Check. Prüft ob die Absender-Domain korrekte Empfangssserver konfiguriert hat."
+	case strings.HasPrefix(name, "ARC_"):
+		return "ARC (Authenticated Received Chain). Bewahrt Auth-Ergebnisse über Weiterleitungen hinweg."
+	case strings.HasPrefix(name, "MIME_"):
+		return "MIME-Struktur-Signal. Betrifft den technischen Aufbau der Nachricht (Multipart, Encoding, Charset)."
+	case strings.HasPrefix(name, "FROM_") || strings.HasPrefix(name, "TO_") || strings.HasPrefix(name, "REPLYTO_"):
+		return "Absender/Empfänger-Signal. Prüft Konsistenz und Vertrauenswürdigkeit der Adress-Header."
+	}
+	return ""
 }
