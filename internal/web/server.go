@@ -31,6 +31,7 @@ import (
 	"github.com/brightcolor/sender-report/internal/config"
 	"github.com/brightcolor/sender-report/internal/model"
 	reportpdf "github.com/brightcolor/sender-report/internal/pdf"
+	"github.com/brightcolor/sender-report/internal/statsfiles"
 	"github.com/brightcolor/sender-report/internal/ratelimit"
 	"github.com/brightcolor/sender-report/internal/sealedbox"
 	"github.com/brightcolor/sender-report/internal/store"
@@ -450,7 +451,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	// Phase 2: mailbox creation is now client-side (crypto key generation in browser).
 	// The home page renders an empty widget; JavaScript fills it after generating
 	// the X25519 key pair and calling POST /api/mailboxes with {identifier, public_key}.
-	stats, _ := s.store.GetGlobalStats(r.Context())
+	stats := statsfiles.Read(s.cfg.DataDir)
 	data := HomeData{
 		AppName:   s.cfg.AppName,
 		Domain:    domain,
@@ -1601,11 +1602,7 @@ func (s *Server) statsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	stats, err := s.store.GetGlobalStats(r.Context())
-	if err != nil {
-		http.Error(w, "stats unavailable", http.StatusInternalServerError)
-		return
-	}
+	stats := statsfiles.Read(s.cfg.DataDir)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=30")
 	if err := json.NewEncoder(w).Encode(stats); err != nil {

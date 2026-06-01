@@ -18,6 +18,7 @@ import (
 
 	"github.com/brightcolor/sender-report/internal/analyzer"
 	"github.com/brightcolor/sender-report/internal/cleanup"
+	"github.com/brightcolor/sender-report/internal/statsfiles"
 	"github.com/brightcolor/sender-report/internal/config"
 	"github.com/brightcolor/sender-report/internal/envmigrate"
 	"github.com/brightcolor/sender-report/internal/db"
@@ -83,6 +84,7 @@ func main() {
 	defer cancel()
 
 	cleanup.Start(ctx, logger, st, cfg.CleanupInterval, cfg.RetentionTTL)
+	statsfiles.StartWriter(ctx, logger, st, cfg.DataDir)
 
 	webServer, err := web.New(cfg, st, logger, metrics)
 	if err != nil {
