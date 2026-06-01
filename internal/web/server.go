@@ -30,6 +30,7 @@ import (
 
 	"github.com/brightcolor/sender-report/internal/config"
 	"github.com/brightcolor/sender-report/internal/model"
+	reportpdf "github.com/brightcolor/sender-report/internal/pdf"
 	"github.com/brightcolor/sender-report/internal/ratelimit"
 	"github.com/brightcolor/sender-report/internal/sealedbox"
 	"github.com/brightcolor/sender-report/internal/store"
@@ -343,6 +344,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/mailboxes", s.createMailbox)
 	mux.HandleFunc("/api/mailboxes/", s.mailboxAPI)
 	mux.HandleFunc("/api/reports/", s.reportAPI)
+	mux.HandleFunc("/api/pdf/", s.reportPDFHandler)
 	mux.HandleFunc("/api/payload/", s.payloadAPI)
 	mux.HandleFunc("/mailbox/", s.mailboxPage)
 	mux.HandleFunc("/report/", s.reportPage)
@@ -1586,6 +1588,87 @@ type statusRecorder struct {
 func (r *statusRecorder) WriteHeader(status int) {
 	r.status = status
 	r.ResponseWriter.WriteHeader(status)
+}
+
+// reportPDFHandler generates a PDF for a report and returns it as application/pdf.
+// GET /api/pdf/{token}?pass=1&warn=1&fail=1&info=1&hero=1&meta=1&details=1
+func (s *Server) reportPDFHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	token := strings.TrimPrefix(r.URL.Path, "/api/pdf/")
+	if token == "" || strings.Contains(token, "/") {
+		http.NotFound(w, r)
+		return
+	}
+	ctx := r.Context()
+	mb, err := s.store.GetMailboxByToken(ctx, token)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	withReports, err := s.store.ListMessagesWithReports(ctx, mb.ID, 1)
+	if err != nil || len(withReports) == 0 || withReports[0].Report == nil {
+		http.Error(w, "no report found", http.StatusNotFound)
+		return
+	}
+	msg := withReports[0].Message
+	repVal, err := s.store.GetReportByMessageID(ctx, msg.ID)
+	rep := &repVal
+	if err != nil {
+		http.Error(w, "no report found", http.StatusNotFound)
+		return
+	}
+
+	q := r.URL.Query()
+	boolParam := func(key string, def bool) bool {
+		v := q.Get(key)
+		if v == "" {
+			return def
+		}
+		return v == "1" || v == "true"
+	}
+
+	opts := reportpdf.Options{
+		IncludePass:    boolParam("pass", true),
+		IncludeWarn:    boolParam("warn", true),
+		IncludeFail:    boolParam("fail", true),
+		IncludeInfo:    boolParam("info", true),
+		IncludeHero:    boolParam("hero", true),
+		IncludeMeta:    boolParam("meta", true),
+		IncludeDetails: boolParam("details", true),
+	}
+
+	groups := groupReportChecks(rep.Checks)
+	pdfGroups := make([]reportpdf.CheckGroup, len(groups))
+	for i, g := range groups {
+		pdfGroups[i] = reportpdf.CheckGroup{Name: g.Name, Hint: g.Hint, Checks: g.Checks}
+	}
+
+	data := reportpdf.ReportData{
+		AppName:     s.cfg.AppName,
+		PublicURL:   s.cfg.PublicBaseURL,
+		Mailbox:     mb,
+		Message:     msg,
+		Report:      *rep,
+		Groups:      pdfGroups,
+		GeneratedAt: time.Now().UTC(),
+	}
+
+	pdfBytes, err := reportpdf.Generate(data, opts)
+	if err != nil {
+		s.logger.Printf("pdf generate error: %v", err)
+		http.Error(w, "PDF generation failed", http.StatusInternalServerError)
+		return
+	}
+
+	filename := fmt.Sprintf("deliverability-report-%s.pdf", token[:8])
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.Header().Set("Content-Length", strconv.Itoa(len(pdfBytes)))
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(pdfBytes)
 }
 
 // Flush forwards to the underlying ResponseWriter so that Server-Sent Events

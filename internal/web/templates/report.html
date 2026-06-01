@@ -1419,46 +1419,60 @@ function renderDecryptedReport(p) {
     });
   }
 
-  // "PDF erstellen" klicken
+  // "PDF erstellen" klicken → serverseitige PDF-Generierung, kein Druckdialog
   var printBtn = document.getElementById('mp-pdf-print-btn');
   if (printBtn) {
     printBtn.addEventListener('click', function() {
-      var body = document.body;
-
-      // Status-Filter-Klassen setzen
-      ['pass','warn','fail','info'].forEach(function(s) {
-        var cb = document.getElementById('pdf-chk-' + s);
-        body.classList.toggle('mp-pdf-hide-' + s, !(cb && cb.checked));
+      var token = '{{.Mailbox.Token}}';
+      var p = function(id) {
+        var el = document.getElementById(id);
+        return (el && el.checked) ? '1' : '0';
+      };
+      var params = new URLSearchParams({
+        pass:    p('pdf-chk-pass'),
+        warn:    p('pdf-chk-warn'),
+        fail:    p('pdf-chk-fail'),
+        info:    p('pdf-chk-info'),
+        hero:    p('pdf-chk-hero'),
+        meta:    p('pdf-chk-meta'),
+        details: p('pdf-chk-details'),
       });
 
-      // Inhalts-Optionen
-      body.classList.toggle('mp-pdf-no-hero',    !(document.getElementById('pdf-chk-hero')    || {}).checked);
-      body.classList.toggle('mp-pdf-no-meta',    !(document.getElementById('pdf-chk-meta')    || {}).checked);
-      body.classList.toggle('mp-pdf-summary',    !(document.getElementById('pdf-chk-details') || {}).checked);
-      body.classList.toggle('mp-pdf-show-share',  !!(document.getElementById('pdf-chk-share') || {}).checked);
+      // Button-Feedback während des Downloads
+      var origHtml = printBtn.innerHTML;
+      printBtn.disabled = true;
+      printBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Erstelle PDF…';
 
-      // Modal schließen, dann drucken
       var bsModal = bootstrap.Modal.getInstance(modal);
       if (bsModal) bsModal.hide();
-      setTimeout(function() { window.print(); }, 350);
+
+      fetch('/api/pdf/' + token + '?' + params.toString())
+        .then(function(res) {
+          if (!res.ok) throw new Error('PDF-Generierung fehlgeschlagen (' + res.status + ')');
+          return res.blob();
+        })
+        .then(function(blob) {
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = 'deliverability-report-' + token.slice(0,8) + '.pdf';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+        })
+        .catch(function(err) {
+          alert('Fehler: ' + err.message);
+        })
+        .finally(function() {
+          printBtn.disabled = false;
+          printBtn.innerHTML = origHtml;
+        });
     });
   }
 
-  // beforeprint: Accordion aufklappen (außer bei "nur Zusammenfassung")
-  function expandAll() {
-    var summaryOnly = document.body.classList.contains('mp-pdf-summary');
-    document.querySelectorAll('.accordion-collapse').forEach(function(el) {
-      if (!summaryOnly) {
-        el.style.display = 'block';
-      }
-      el.dataset.printExpanded = '1';
-    });
-    var d = document.getElementById('mp-print-date');
-    if (d) d.textContent = new Date().toLocaleString('de-DE', {
-      day:'2-digit', month:'2-digit', year:'numeric',
-      hour:'2-digit', minute:'2-digit'
-    });
-  }
+  // Dummy-Funktion damit beforeprint/afterprint nicht crasht wenn noch vorhanden
+  function expandAll() {}
 
   // afterprint: alles zurücksetzen
   function collapseAll() {
