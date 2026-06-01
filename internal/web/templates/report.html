@@ -135,7 +135,7 @@
 
         <!-- ── Link-Sharing (nur für verschlüsselte Reports mit Key) ──── -->
         {{if .Encrypted}}
-        <div id="mp-share-block" class="card mb-3 d-none">
+        <div id="mp-share-block" class="card mb-3 d-none" style="max-width:560px">
           <div class="card-header py-2 d-flex align-items-center gap-2">
             <i class="bi bi-share text-primary"></i>
             <span class="fw-semibold small">Report teilen</span>
@@ -965,32 +965,38 @@ function showDecrypted(payload) {
 
   // Befülle Share-Block mit gekürzten Links (vollständig im Clipboard).
   var shareBlock = document.getElementById('mp-share-block');
-  if (shareBlock) {
-    var fragment = location.hash.slice(1); // key ohne '#'
-    var baseUrl  = location.origin + location.pathname; // /report/{token}/{msgref}
-    var fullUrl  = baseUrl + (fragment ? '#' + fragment : '');
+  if (shareBlock && TOKEN) {
+    // Key aus localStorage holen (history.replaceState hat das Fragment bereits entfernt).
+    var secretKey = localStorage.getItem('sr:secret:' + TOKEN)
+                 || sessionStorage.getItem('sr:secret:' + TOKEN)
+                 || location.hash.slice(1); // Fallback falls Fragment noch da
+    var baseUrl  = location.origin + location.pathname;
+    var fullUrl  = secretKey ? baseUrl + '#' + secretKey : baseUrl;
     var noKeyUrl = baseUrl;
 
     var elFull   = document.getElementById('mp-share-full');
     var elNoKey  = document.getElementById('mp-share-nokey');
     var elKey    = document.getElementById('mp-share-key');
 
-    if (elFull)  { elFull.value  = fullUrl;  elFull.dataset.full  = fullUrl;  }
-    if (elNoKey) { elNoKey.value = noKeyUrl; elNoKey.dataset.full = noKeyUrl; }
-    if (elKey)   { elKey.value   = fragment; elKey.dataset.full   = fragment; }
+    if (elFull)  { elFull.value  = fullUrl;    elFull.dataset.full  = fullUrl;    }
+    if (elNoKey) { elNoKey.value = noKeyUrl;   elNoKey.dataset.full = noKeyUrl;   }
+    if (elKey)   { elKey.value   = secretKey || ''; elKey.dataset.full = secretKey || ''; }
 
-    // Copy-Buttons: kopieren den vollen Wert, egal wie gekürzt angezeigt.
-    shareBlock.querySelectorAll('.mp-copy-share').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var inp = document.getElementById(btn.dataset.target);
-        if (!inp) return;
-        var val = inp.dataset.full || inp.value;
-        navigator.clipboard.writeText(val).then(function() {
-          var ic = btn.querySelector('i');
-          if (ic) { ic.className = 'bi bi-check'; setTimeout(function(){ ic.className = 'bi bi-clipboard'; }, 1500); }
-        }).catch(function(){});
+    // Copy-Buttons: kopieren immer den vollen Wert.
+    if (!shareBlock.dataset.bound) {
+      shareBlock.dataset.bound = '1';
+      shareBlock.querySelectorAll('.mp-copy-share').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var inp = document.getElementById(btn.dataset.target);
+          if (!inp) return;
+          var val = inp.dataset.full || inp.value;
+          navigator.clipboard.writeText(val).then(function() {
+            var ic = btn.querySelector('i');
+            if (ic) { ic.className = 'bi bi-check'; setTimeout(function(){ ic.className = 'bi bi-clipboard'; }, 1500); }
+          }).catch(function(){});
+        });
       });
-    });
+    }
 
     shareBlock.classList.remove('d-none');
   }
