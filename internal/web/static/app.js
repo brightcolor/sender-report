@@ -281,29 +281,21 @@ function updateMailboxIdentity(data) {
     expires.textContent  = formatExpiry(data.expires_at);
   }
 
-  // 3-spaltig-klickbarer Share-Block (analog zum Report)
+  // Vollständiger Link inkl. Schlüssel (maskiert) – klickbar zum Kopieren
   if (linkRow) {
-    const fullUrl   = data.mailbox_url || '';
-    const baseUrl   = fullUrl.split('#')[0];
-    const secretKey = fullUrl.includes('#') ? fullUrl.split('#')[1] : '';
-    const keyMasked = maskKey(secretKey);
-    const fullMasked = secretKey ? baseUrl + '#' + keyMasked : baseUrl;
+    const fullUrl    = data.mailbox_url || '';
+    const baseUrl    = fullUrl.split('#')[0];
+    const secretKey  = fullUrl.includes('#') ? fullUrl.split('#')[1] : '';
+    const fullMasked = secretKey ? baseUrl + '#' + maskKey(secretKey) : baseUrl;
 
-    const elFull  = document.getElementById('mb-share-full');
-    const elNoKey = document.getElementById('mb-share-nokey');
-    const elKey   = document.getElementById('mb-share-key');
-    if (elFull)  { elFull.textContent  = fullMasked;        elFull.dataset.val  = fullUrl; }
-    if (elNoKey) { elNoKey.textContent = baseUrl;           elNoKey.dataset.val = baseUrl; }
-    if (elKey)   { elKey.textContent   = keyMasked;         elKey.dataset.val   = secretKey; }
+    const elFull = document.getElementById('mb-share-full');
+    if (elFull) { elFull.textContent = fullMasked; elFull.dataset.val = fullUrl; }
 
-    // Click-Handler auf die Boxen (einmalig binden)
-    [['mb-share-full-box','full'],['mb-share-nokey-box','nokey'],['mb-share-key-box','key']].forEach(([id, which]) => {
-      const box = document.getElementById(id);
-      if (box && !box.dataset.bound) {
-        box.dataset.bound = '1';
-        box.addEventListener('click', () => mbCopyShare(which));
-      }
-    });
+    const box = document.getElementById('mb-share-full-box');
+    if (box && !box.dataset.bound) {
+      box.dataset.bound = '1';
+      box.addEventListener('click', () => mbCopyShare('full'));
+    }
 
     linkRow.classList.remove('d-none');
   }

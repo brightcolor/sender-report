@@ -141,42 +141,13 @@
               <i class="bi bi-lock-fill text-success me-1"></i>E2E verschlüsselt
             </span>
           </div>
-          <!-- Share-Block: 3-spaltig, klickbar – gleich wie im Report -->
+          <!-- Vollständiger Link inkl. Schlüssel – klickbar zum Kopieren -->
           <div id="mailbox-link-row" class="d-none">
-            <div class="row g-2">
-              <div class="col-12 col-md-4">
-                <p class="small text-secondary mb-1">
-                  <i class="bi bi-link-45deg me-1"></i>Vollständiger Link <span class="text-success">(inkl. Schlüssel)</span>
-                </p>
-                <div class="mp-share-box" id="mb-share-full-box" role="button" tabindex="0"
-                     title="Klicken zum Kopieren"
-                     onkeydown="if(event.key==='Enter'||event.key===' ')mbCopyShare('full')">
-                  <code class="mp-share-text" id="mb-share-full"></code>
-                  <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren</span>
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <p class="small text-secondary mb-1">
-                  <i class="bi bi-link me-1"></i>Link ohne Schlüssel
-                </p>
-                <div class="mp-share-box" id="mb-share-nokey-box" role="button" tabindex="0"
-                     title="Klicken zum Kopieren"
-                     onkeydown="if(event.key==='Enter'||event.key===' ')mbCopyShare('nokey')">
-                  <code class="mp-share-text" id="mb-share-nokey"></code>
-                  <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren</span>
-                </div>
-              </div>
-              <div class="col-12 col-md-4">
-                <p class="small text-secondary mb-1">
-                  <i class="bi bi-key me-1"></i>Nur der Schlüssel
-                </p>
-                <div class="mp-share-box" id="mb-share-key-box" role="button" tabindex="0"
-                     title="Klicken zum Kopieren"
-                     onkeydown="if(event.key==='Enter'||event.key===' ')mbCopyShare('key')">
-                  <code class="mp-share-text" id="mb-share-key"></code>
-                  <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren</span>
-                </div>
-              </div>
+            <div class="mp-share-box" id="mb-share-full-box" role="button" tabindex="0"
+                 title="Klicken zum Kopieren – vollständiger Link inkl. Schlüssel"
+                 onkeydown="if(event.key==='Enter'||event.key===' ')mbCopyShare('full')">
+              <code class="mp-share-text" id="mb-share-full"></code>
+              <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Link kopieren (inkl. Schlüssel)</span>
             </div>
           </div>
         </div>
