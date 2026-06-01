@@ -707,7 +707,11 @@ function setupMailboxPolling() {
     if (!token) return;
     if (typeof EventSource !== 'undefined') {
       startMailboxSSE(token, (data) => {
-        if (data.latest_message_id || data.latest_report_path) {
+        // Nur weiterleiten wenn der User aktiv einen Check gestartet hat
+        // (check-loader sichtbar = Check läuft). Verhindert automatische
+        // Weiterleitung zu alten Reports beim Laden der Seite.
+        const checkActive = !document.getElementById('check-loader')?.classList.contains('d-none');
+        if (checkActive && (data.latest_message_id || data.latest_report_path)) {
           handleCheckStatusEvent(data);
         }
       });
