@@ -429,11 +429,17 @@ func drawCheck(f *fpdf.Fpdf, chk model.CheckResult, w float64, details bool) {
 	f.SetX(14)
 	y := f.GetY()
 
-	// Estimate needed height
+	// Estimate needed height for the summary row + optional detail blocks
 	detailH := 0.0
-	if details && chk.Explanation != "" {
-		lines := f.SplitLines([]byte(latin1(chk.Explanation)), w-28)
-		detailH = float64(len(lines))*4 + 2
+	if details {
+		if chk.Explanation != "" {
+			lines := f.SplitLines([]byte(latin1(chk.Explanation)), w-30)
+			detailH += float64(len(lines))*4 + 5
+		}
+		if chk.Recommendation != "" && (chk.Status == "warn" || chk.Status == "fail") {
+			lines := f.SplitLines([]byte(latin1(chk.Recommendation)), w-30)
+			detailH += float64(len(lines))*4 + 7
+		}
 	}
 	neededH := 10 + detailH
 	if y+neededH > 275 {
@@ -446,15 +452,15 @@ func drawCheck(f *fpdf.Fpdf, chk model.CheckResult, w float64, details bool) {
 
 	// Status bar (left colored stripe)
 	setFillColor(f, col)
-	f.Rect(14, y, 2, 9, "F")
+	f.Rect(14, y, 2, 10, "F")
 
-	// Row background (alternating)
+	// Row background
 	setFillColor(f, colWhite)
 	setDrawColor(f, colBorder)
 	f.SetLineWidth(0.15)
-	f.Rect(16, y, w-2, 9, "FD")
+	f.Rect(16, y, w-2, 10, "FD")
 
-	// Status badge
+	// Status badge (top-right)
 	setFillColor(f, col)
 	setTextColor(f, colWhite)
 	setFont(f, "B", 6)
@@ -471,50 +477,69 @@ func drawCheck(f *fpdf.Fpdf, chk model.CheckResult, w float64, details bool) {
 	f.SetXY(w-badgeW-12, y+2.5)
 	f.CellFormat(10, 4, delta, "", 0, "R", false, 0, "")
 
-	// Symbol
+	// Symbol icon
 	setFillColor(f, col)
 	setTextColor(f, colWhite)
 	setFont(f, "B", 7)
-	f.RoundedRect(17.5, y+2, 5, 5, 0.8, "1234", "F")
-	f.SetXY(17.5, y+2)
+	f.RoundedRect(17.5, y+2.5, 5, 5, 0.8, "1234", "F")
+	f.SetXY(17.5, y+2.5)
 	f.CellFormat(5, 5, statusSymbol(chk.Status), "", 0, "C", false, 0, "")
 
 	// Check name
 	setTextColor(f, colBlack)
 	setFont(f, "B", 8)
-	f.SetXY(24, y+1.5)
-	f.CellFormat(w-60, 4.5, latin1(chk.Name), "", 0, "L", false, 0, "")
+	f.SetXY(24, y+1.8)
+	f.CellFormat(w-badgeW-14-24, 5, latin1(chk.Name), "", 0, "L", false, 0, "")
 
-	// Summary
+	// Summary — full text, wrapped
 	setTextColor(f, colDkGray)
 	setFont(f, "", 7)
-	f.SetXY(24, y+5.5)
-	summary := chk.Summary
-	if len(summary) > 80 {
-		summary = summary[:77] + "..."
+	summaryLines := f.SplitLines([]byte(latin1(chk.Summary)), w-30)
+	if len(summaryLines) > 0 {
+		f.SetXY(24, y+6.2)
+		f.CellFormat(w-30, 4, string(summaryLines[0]), "", 0, "L", false, 0, "")
 	}
-	f.CellFormat(w-60, 3.5, latin1(summary), "", 0, "L", false, 0, "")
 
-	f.SetY(y + 9)
+	f.SetY(y + 10)
 
-	// Details (explanation)
-	if details && chk.Explanation != "" {
-		f.SetX(16)
-		setFillColor(f, rgb{238, 242, 250})
-		setTextColor(f, colDkGray)
-		setFont(f, "", 7)
-
-		lines := f.SplitLines([]byte(latin1(chk.Explanation)), w-28)
-		blockH := float64(len(lines))*4 + 3
-		yy := f.GetY()
-		f.Rect(16, yy, w-2, blockH, "F")
-		f.SetXY(19, yy+1.5)
-		for _, line := range lines {
-			f.SetX(19)
-			f.CellFormat(w-10, 4, string(line), "", 1, "L", false, 0, "")
+	if details {
+		// ── Explanation block ────────────────────────────────────────────
+		if chk.Explanation != "" {
+			drawDetailBlock(f, latin1(chk.Explanation), w, rgb{238, 242, 250}, colDkGray, "")
 		}
-		f.Ln(1)
+
+		// ── Recommendation block (only for warn/fail) ─────────────────
+		if chk.Recommendation != "" && (chk.Status == "warn" || chk.Status == "fail") {
+			drawDetailBlock(f, latin1(chk.Recommendation), w, rgb{255, 243, 205}, rgb{102, 77, 3}, "Empfehlung: ")
+		}
 	}
+}
+
+// drawDetailBlock renders a coloured text block below a check row.
+func drawDetailBlock(f *fpdf.Fpdf, text string, w float64, bg rgb, fg rgb, prefix string) {
+	f.SetX(16)
+	setFillColor(f, bg)
+	setTextColor(f, fg)
+	setFont(f, "", 7)
+
+	full := prefix + text
+	lines := f.SplitLines([]byte(full), w-8)
+	blockH := float64(len(lines))*4 + 4
+	yy := f.GetY()
+
+	// Check page break before drawing block
+	if yy+blockH > 278 {
+		f.AddPage()
+		yy = f.GetY()
+	}
+
+	f.Rect(16, yy, w-2, blockH, "F")
+	f.SetXY(20, yy+2)
+	for _, line := range lines {
+		f.SetX(20)
+		f.CellFormat(w-8, 4, string(line), "", 1, "L", false, 0, "")
+	}
+	f.Ln(1)
 }
 
 func filterChecks(checks []model.CheckResult, opts Options) []model.CheckResult {
