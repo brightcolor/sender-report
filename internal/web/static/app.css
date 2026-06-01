@@ -1136,3 +1136,15 @@ body,
 @media (max-width: 576px) {
   .mp-addr-box { flex-wrap: wrap; }
 }
+
+/* ── Share-Inputs: sichtbar gekürzt mit … ───────────────────────────────── */
+#mp-share-block input[type="text"] {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  direction: ltr;
+  cursor: pointer;
+}
+#mp-share-block input[type="text"]:focus {
+  text-overflow: clip;
+}
