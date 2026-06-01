@@ -208,12 +208,16 @@ func processInbound(ctx context.Context, st *store.Store, engine *analyzer.Engin
 	if mb.PublicKey != "" {
 		pubBytes, hexErr := hex.DecodeString(mb.PublicKey)
 		if hexErr == nil && len(pubBytes) == 32 {
-			payload, encErr := buildEncryptedPayload(raw, headers, subject, report, pubBytes)
+			payload, encErr := buildEncryptedPayload(raw, headers, subject, tmpMsg, report, pubBytes)
 			if encErr == nil {
 				storeMsg.PayloadEnc  = payload
 				storeMsg.RawSource   = "[encrypted]"
 				storeMsg.HeaderBlock = "[encrypted]"
 				storeMsg.Subject     = "[encrypted]"
+				storeMsg.SMTPFrom    = "[encrypted]"
+				storeMsg.RemoteIP    = "[encrypted]"
+				storeMsg.HELO        = "[encrypted]"
+				storeMsg.ReceivedAt  = time.Time{} // zero — real time in payload
 				// Strip sensitive check details; keep score cleartext via report.Score.
 				report = stripReportForStorage(report)
 			} else {
@@ -247,20 +251,28 @@ func processInbound(ctx context.Context, st *store.Store, engine *analyzer.Engin
 
 // encryptedPayload is the JSON structure sealed into messages.payload_enc.
 type encryptedPayload struct {
-	RawSource   string              `json:"raw_source"`
-	HeaderBlock string              `json:"header_block"`
-	Subject     string              `json:"subject"`
+	RawSource   string               `json:"raw_source"`
+	HeaderBlock string               `json:"header_block"`
+	Subject     string               `json:"subject"`
+	SMTPFrom    string               `json:"smtp_from"`
+	RemoteIP    string               `json:"remote_ip"`
+	HELO        string               `json:"helo"`
+	ReceivedAt  string               `json:"received_at"` // RFC3339
 	Report      model.AnalysisReport `json:"report"`
 }
 
 // buildEncryptedPayload seals all sensitive message + report content with the
 // mailbox public key. Returns a base64url-encoded sealed blob (no padding).
 // base64url uses ~33% less space than hex and matches the JS _fromBase64url helper.
-func buildEncryptedPayload(raw, headers, subject string, report model.AnalysisReport, pubKey []byte) (string, error) {
+func buildEncryptedPayload(raw, headers, subject string, msg model.Message, report model.AnalysisReport, pubKey []byte) (string, error) {
 	p := encryptedPayload{
 		RawSource:   raw,
 		HeaderBlock: headers,
 		Subject:     subject,
+		SMTPFrom:    msg.SMTPFrom,
+		RemoteIP:    msg.RemoteIP,
+		HELO:        msg.HELO,
+		ReceivedAt:  msg.ReceivedAt.Format(time.RFC3339),
 		Report:      report,
 	}
 	plainJSON, err := json.Marshal(p)

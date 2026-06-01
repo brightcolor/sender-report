@@ -101,10 +101,10 @@
               <span class="info-box-icon text-bg-secondary"><i class="bi bi-clock"></i></span>
               <div class="info-box-content">
                 <span class="info-box-text">Empfangen</span>
-                <span class="info-box-number"
+                <span id="mp-meta-received" class="info-box-number"
                       style="font-size:.875rem"
-                      data-time="{{.Message.ReceivedAt.Format "2006-01-02T15:04:05Z07:00"}}">
-                  {{.Message.ReceivedAt.Format "2006-01-02 15:04:05 MST"}}
+                      data-time="{{if not .Message.ReceivedAt.IsZero}}{{.Message.ReceivedAt.Format "2006-01-02T15:04:05Z07:00"}}{{end}}">
+                  {{if .Message.ReceivedAt.IsZero}}🔒 verschlüsselt{{else}}{{.Message.ReceivedAt.Format "2006-01-02 15:04:05 MST"}}{{end}}
                 </span>
               </div>
             </div>
@@ -114,7 +114,7 @@
               <span class="info-box-icon text-bg-secondary"><i class="bi bi-envelope-at"></i></span>
               <div class="info-box-content" style="min-width:0">
                 <span class="info-box-text">Envelope-From</span>
-                <span class="info-box-number text-truncate d-block" style="font-size:.875rem">
+                <span id="mp-meta-smtp-from" class="info-box-number text-truncate d-block" style="font-size:.875rem">
                   {{if .Message.SMTPFrom}}{{.Message.SMTPFrom}}{{else}}(leer){{end}}
                 </span>
               </div>
@@ -125,7 +125,7 @@
               <span class="info-box-icon text-bg-secondary"><i class="bi bi-router"></i></span>
               <div class="info-box-content" style="min-width:0">
                 <span class="info-box-text">Quelle</span>
-                <span class="info-box-number text-truncate d-block" style="font-size:.875rem">
+                <span id="mp-meta-source" class="info-box-number text-truncate d-block" style="font-size:.875rem">
                   {{.Message.RemoteIP}} / {{.Message.HELO}}
                 </span>
               </div>
@@ -878,12 +878,30 @@ function showDecrypted(payload) {
     if (typeof localizeStaticTimes === 'function') localizeStaticTimes();
   }
 
-  // Update subject info-box with decrypted subject.
+  // Update all metadata info-boxes with decrypted values.
   var subjectEl = document.getElementById('mp-meta-subject');
-  if (subjectEl && payload.subject) {
+  if (subjectEl) {
     var subj = payload.subject || '(kein Betreff)';
     subjectEl.textContent = subj;
     subjectEl.title       = subj;
+  }
+  var smtpFromEl = document.getElementById('mp-meta-smtp-from');
+  if (smtpFromEl && payload.smtp_from) {
+    smtpFromEl.textContent = payload.smtp_from || '(leer)';
+    smtpFromEl.title       = payload.smtp_from || '';
+  }
+  var sourceEl = document.getElementById('mp-meta-source');
+  if (sourceEl && (payload.remote_ip || payload.helo)) {
+    sourceEl.textContent = (payload.remote_ip || '') + ' / ' + (payload.helo || '');
+    sourceEl.title       = sourceEl.textContent;
+  }
+  var receivedEl = document.getElementById('mp-meta-received');
+  if (receivedEl && payload.received_at) {
+    // Re-use localizeStaticTimes pattern: set data-time and let formatter run.
+    receivedEl.dataset.time  = payload.received_at;
+    receivedEl.textContent   = typeof formatExpiry === 'function'
+      ? new Date(payload.received_at).toLocaleString('de-DE', {dateStyle:'short', timeStyle:'medium'})
+      : payload.received_at;
   }
 
   // Turn the E2E badge green to signal successful decryption.
