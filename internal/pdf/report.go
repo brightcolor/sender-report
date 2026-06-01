@@ -13,6 +13,8 @@ import (
 	"github.com/brightcolor/sender-report/internal/model"
 )
 
+// ── Public types ──────────────────────────────────────────────────────────────
+
 // Options controls which sections appear in the generated PDF.
 type Options struct {
 	IncludePass    bool
@@ -42,31 +44,45 @@ type ReportData struct {
 	GeneratedAt time.Time
 }
 
-// colour constants (R,G,B)
+// ── Color palette (Bootstrap 5 / AdminLTE light mode) ────────────────────────
+
 type rgb struct{ r, g, b int }
 
 var (
-	colBlue    = rgb{13, 110, 253}
-	colGreen   = rgb{25, 135, 84}
-	colOrange  = rgb{253, 126, 20}
-	colRed     = rgb{220, 53, 69}
-	colCyan    = rgb{13, 202, 240}
-	colGray    = rgb{108, 117, 125}
-	colLightBg = rgb{248, 249, 250}
-	colBorder  = rgb{222, 226, 230}
+	colPrimary = rgb{13, 110, 253}  // bs-primary
+	colSuccess = rgb{25, 135, 84}   // bs-success
+	colWarning = rgb{253, 126, 20}  // bs-warning (orange)
+	colDanger  = rgb{220, 53, 69}   // bs-danger
+	colCyan    = rgb{13, 202, 240}  // bs-info
+	colGray    = rgb{108, 117, 125} // bs-secondary
+	colLight   = rgb{248, 249, 250} // bs-light  (#f8f9fa)
+	colALTEBg  = rgb{244, 246, 249} // AdminLTE body background
+	colBorder  = rgb{222, 226, 230} // bs-border (#dee2e6)
 	colWhite   = rgb{255, 255, 255}
-	colBlack   = rgb{33, 37, 41}
-	colDkGray  = rgb{73, 80, 87}
+	colDark    = rgb{33, 37, 41}    // bs-dark (#212529)
+	colSubtext = rgb{73, 80, 87}    // slightly lighter than dark
+
+	// Group header: AdminLTE light blue
+	colGrpBg = rgb{235, 242, 255}
+	colGrpFg = rgb{10, 66, 180}
+
+	// Detail block tints
+	colExplBg = rgb{241, 243, 255} // light indigo — explanation
+	colExplFg = rgb{73, 80, 87}
+	colRecoBg = rgb{255, 248, 230} // light amber — recommendation
+	colRecoFg = rgb{102, 68, 3}
 )
+
+// ── Status helpers ────────────────────────────────────────────────────────────
 
 func statusColor(status string) rgb {
 	switch status {
 	case "pass":
-		return colGreen
+		return colSuccess
 	case "warn":
-		return colOrange
+		return colWarning
 	case "fail":
-		return colRed
+		return colDanger
 	case "info":
 		return colCyan
 	default:
@@ -104,82 +120,125 @@ func statusSymbol(status string) string {
 	}
 }
 
-// latin1 converts a UTF-8 string to fpdf-compatible Latin-1 approximation.
-// Characters outside Latin-1 are replaced by a safe ASCII approximation.
+func scoreColor(score float64) rgb {
+	switch {
+	case score >= 7.5:
+		return colSuccess
+	case score >= 5.5:
+		return colWarning
+	default:
+		return colDanger
+	}
+}
+
+func scoreLabel(score float64) string {
+	switch {
+	case score >= 9:
+		return "Ausgezeichnet"
+	case score >= 7.5:
+		return "Sehr gut"
+	case score >= 5.5:
+		return "Verbesserungsbedarf"
+	default:
+		return "Kritisch"
+	}
+}
+
+// lighten blends c toward white by factor (0 = original, 1 = white).
+func lighten(c rgb, factor float64) rgb {
+	lerp := func(a int) int { return a + int(float64(255-a)*factor) }
+	return rgb{lerp(c.r), lerp(c.g), lerp(c.b)}
+}
+
+// ── Latin-1 conversion ────────────────────────────────────────────────────────
+
+// latin1 converts UTF-8 to fpdf-compatible Latin-1 approximation.
 func latin1(s string) string {
 	var b strings.Builder
-	replacements := map[rune]string{
-		'ä': "ae", 'ö': "oe", 'ü': "ue", 'Ä': "Ae", 'Ö': "Oe", 'Ü': "Ue",
-		'ß': "ss", '–': "-", '—': "-", '‘': "'", '’': "'",
-		'“': "\"", '”': "\"", '…': "...", '→': "->", '←': "<-",
-		'✓': "+", '✗': "x", '✔': "+", '⚠': "!", '•': "*",
+	rep := map[rune]string{
+		'ä': "ae", 'ö': "oe", 'ü': "ue",
+		'Ä': "Ae", 'Ö': "Oe", 'Ü': "Ue",
+		'ß': "ss", '–': "-", '—': "-",
+		'‘': "'", '’': "'", '“': "\"", '”': "\"",
+		'…': "...", '→': "->", '←': "<-",
+		'✓': "+", '✗': "x", '✔': "+",
+		'⚠': "!", '•': "*",
 	}
 	for _, r := range s {
 		if r < 128 {
 			b.WriteRune(r)
 			continue
 		}
-		if sub, ok := replacements[r]; ok {
+		if sub, ok := rep[r]; ok {
 			b.WriteString(sub)
 			continue
 		}
 		if utf8.RuneLen(r) <= 2 && r <= 0xFF {
-			// Latin-1 supplement — fpdf handles these natively
 			b.WriteRune(r)
 		}
-		// else: skip unknown characters
 	}
 	return b.String()
 }
+
+// ── Drawing primitives ────────────────────────────────────────────────────────
+
+func setFont(f *fpdf.Fpdf, style string, size float64) { f.SetFont("Helvetica", style, size) }
+func setFill(f *fpdf.Fpdf, c rgb)                      { f.SetFillColor(c.r, c.g, c.b) }
+func setTextColor(f *fpdf.Fpdf, c rgb)                 { f.SetTextColor(c.r, c.g, c.b) }
+func setDraw(f *fpdf.Fpdf, c rgb)                      { f.SetDrawColor(c.r, c.g, c.b) }
+
+// ── Main entry point ──────────────────────────────────────────────────────────
 
 // Generate creates a PDF report and returns the raw bytes.
 func Generate(data ReportData, opts Options) ([]byte, error) {
 	f := fpdf.New("P", "mm", "A4", "")
 	f.SetMargins(14, 14, 14)
-	f.SetAutoPageBreak(true, 14)
+	f.SetAutoPageBreak(true, 16)
 	f.AddPage()
 
 	pageW, _ := f.GetPageSize()
-	contentW := pageW - 28 // left + right margin
+	cw := pageW - 28 // content width (182mm for A4)
 
-	// ── Header bar ────────────────────────────────────────────────────────
+	// Register footer (called automatically on every page by fpdf)
+	appNameL1 := latin1(data.AppName)
+	f.SetFooterFunc(func() {
+		f.SetY(-13)
+		setDraw(f, colBorder)
+		f.SetLineWidth(0.2)
+		f.Line(14, f.GetY(), pageW-14, f.GetY())
+		f.Ln(1)
+		setFont(f, "", 6.5)
+		setTextColor(f, colGray)
+		f.CellFormat(0, 4,
+			fmt.Sprintf("%s  –  Deliverability Report  –  Seite %d", appNameL1, f.PageNo()),
+			"", 0, "C", false, 0, "")
+	})
+
 	drawHeader(f, data, pageW)
-	f.Ln(6)
 
-	// ── Score Hero ────────────────────────────────────────────────────────
 	if opts.IncludeHero {
-		drawHero(f, data, contentW)
+		drawHero(f, data, cw)
 		f.Ln(4)
 	}
-
-	// ── Metadaten ─────────────────────────────────────────────────────────
 	if opts.IncludeMeta {
-		drawMeta(f, data, contentW)
+		drawMeta(f, data, cw)
 		f.Ln(4)
 	}
 
-	// ── Check-Gruppen ─────────────────────────────────────────────────────
 	for _, grp := range data.Groups {
 		checks := filterChecks(grp.Checks, opts)
 		if len(checks) == 0 {
 			continue
 		}
-		drawGroupHeader(f, grp, contentW)
+		if f.GetY() > 248 {
+			f.AddPage()
+		}
+		drawGroupHeader(f, grp, cw)
 		for _, chk := range checks {
-			drawCheck(f, chk, contentW, opts.IncludeDetails)
+			drawCheck(f, chk, cw, opts.IncludeDetails)
 		}
 		f.Ln(3)
 	}
-
-	// ── Footer auf jeder Seite ─────────────────────────────────────────────
-	f.SetFooterFunc(func() {
-		f.SetY(-12)
-		setFont(f, "", 7)
-		setTextColor(f, colGray)
-		f.CellFormat(0, 4,
-			fmt.Sprintf("%s  –  Deliverability Report  –  Seite %d", data.AppName, f.PageNo()),
-			"", 0, "C", false, 0, "")
-	})
 
 	var buf bytes.Buffer
 	if err := f.Output(&buf); err != nil {
@@ -188,179 +247,183 @@ func Generate(data ReportData, opts Options) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// ── Drawing helpers ────────────────────────────────────────────────────────
+// ── Section renderers ─────────────────────────────────────────────────────────
 
-func setFont(f *fpdf.Fpdf, style string, size float64) {
-	f.SetFont("Helvetica", style, size)
-}
-
-func setFillColor(f *fpdf.Fpdf, c rgb) {
-	f.SetFillColor(c.r, c.g, c.b)
-}
-
-func setTextColor(f *fpdf.Fpdf, c rgb) {
-	f.SetTextColor(c.r, c.g, c.b)
-}
-
-func setDrawColor(f *fpdf.Fpdf, c rgb) {
-	f.SetDrawColor(c.r, c.g, c.b)
-}
-
+// drawHeader renders the blue top bar + the light info strip below it.
 func drawHeader(f *fpdf.Fpdf, data ReportData, pageW float64) {
-	// Blue background bar
-	setFillColor(f, colBlue)
-	f.Rect(0, 0, pageW, 22, "F")
+	const barH, stripH = 22.0, 9.0
 
-	// Logo mark (small filled square + green dot)
-	setFillColor(f, colWhite)
+	// ── Blue bar ──────────────────────────────────────────────────────
+	setFill(f, colPrimary)
+	f.Rect(0, 0, pageW, barH, "F")
+
+	// Logo: white rounded square
+	setFill(f, colWhite)
 	f.RoundedRect(10, 5, 12, 12, 1.5, "1234", "F")
-
-	// Envelope body (blue on white)
-	setFillColor(f, colBlue)
+	// Envelope body (primary blue on white)
+	setFill(f, colPrimary)
 	f.Rect(11.5, 7, 9, 6, "F")
-	// Envelope flap (V-shape approximation via lines)
-	setDrawColor(f, colBlue)
-	f.SetLineWidth(0.5)
+	// Envelope V-flap (white lines)
+	setDraw(f, colWhite)
+	f.SetLineWidth(0.55)
 	f.Line(11.5, 7.5, 16, 11)
 	f.Line(16, 11, 20.5, 7.5)
-
-	// Green check badge (tiny filled circle bottom-right of logo)
-	setFillColor(f, colGreen)
+	// Green check badge (bottom-right of logo)
+	setFill(f, colSuccess)
 	f.Circle(21, 16, 3, "F")
 	setTextColor(f, colWhite)
-	setFont(f, "B", 5)
+	setFont(f, "B", 5.5)
 	f.SetXY(19.2, 14.2)
 	f.CellFormat(3.6, 3.6, "+", "", 0, "C", false, 0, "")
 
-	// App name
+	// App name (left)
 	setTextColor(f, colWhite)
-	setFont(f, "B", 13)
-	f.SetXY(25, 6.5)
-	f.CellFormat(80, 8, latin1(data.AppName), "", 0, "L", false, 0, "")
+	setFont(f, "B", 12)
+	f.SetXY(25, 7)
+	f.CellFormat(90, 8, latin1(data.AppName), "", 0, "L", false, 0, "")
 
-	// Document type (right-aligned)
+	// "DELIVERABILITY REPORT" (right-aligned)
 	setFont(f, "", 8)
-	f.SetXY(0, 6.5)
-	f.CellFormat(pageW-12, 8, "DELIVERABILITY REPORT", "", 0, "R", false, 0, "")
+	f.SetXY(0, 7)
+	f.CellFormat(pageW-13, 8, "DELIVERABILITY REPORT", "", 0, "R", false, 0, "")
 
-	// Sub-line: mailbox | score | date
-	setFillColor(f, colLightBg)
-	f.Rect(0, 22, pageW, 10, "F")
-	setDrawColor(f, colBorder)
+	// ── Info strip ────────────────────────────────────────────────────
+	setFill(f, colLight)
+	f.Rect(0, barH, pageW, stripH, "F")
+	setDraw(f, colBorder)
 	f.SetLineWidth(0.2)
-	f.Line(0, 32, pageW, 32)
+	f.Line(0, barH+stripH, pageW, barH+stripH)
 
-	setTextColor(f, colDkGray)
-	setFont(f, "", 8)
-	f.SetXY(14, 24.5)
-	scoreStr := fmt.Sprintf("%.1f/10", data.Report.Score)
-	dateStr := data.GeneratedAt.Format("02.01.2006  15:04")
-	f.CellFormat(70, 5, latin1("Mailbox: "+data.Mailbox.Address), "", 0, "L", false, 0, "")
-	f.CellFormat(35, 5, "Score: "+scoreStr, "", 0, "C", false, 0, "")
-	f.CellFormat(0, 5, latin1("Erstellt: "+dateStr), "", 0, "R", false, 0, "")
+	setFont(f, "", 7.5)
+	setTextColor(f, colSubtext)
+	f.SetXY(14, barH+2)
+	f.CellFormat(75, 5, latin1("Mailbox: "+data.Mailbox.Address), "", 0, "L", false, 0, "")
+	f.CellFormat(40, 5, fmt.Sprintf("Score: %.1f / 10", data.Report.Score), "", 0, "C", false, 0, "")
+	f.CellFormat(0, 5, latin1("Erstellt: "+data.GeneratedAt.Format("02.01.2006  15:04")), "", 0, "R", false, 0, "")
 
-	f.SetY(36)
+	f.SetY(barH + stripH + 5)
 }
 
+// drawHero renders the score card with donut ring, label and count pills.
 func drawHero(f *fpdf.Fpdf, data ReportData, w float64) {
-	x := f.GetX()
+	const (
+		x      = 14.0
+		cardH  = 38.0
+		accentW = 4.0
+		ringR  = 14.0  // outer ring radius
+		innerR = 9.5   // white inner radius (donut)
+	)
 	y := f.GetY()
 	score := data.Report.Score
+	col := scoreColor(score)
+	label := scoreLabel(score)
 
-	// Determine hero color
-	heroColor := colGreen
-	heroLabel := "Sehr gut"
-	switch {
-	case score >= 9:
-		heroColor = colGreen
-		heroLabel = "Ausgezeichnet"
-	case score >= 7.5:
-		heroColor = colGreen
-		heroLabel = "Sehr gut"
-	case score >= 5.5:
-		heroColor = colOrange
-		heroLabel = "Verbesserungsbedarf"
-	default:
-		heroColor = colRed
-		heroLabel = "Kritisch"
-	}
-
-	// Card background
-	setFillColor(f, colLightBg)
-	setDrawColor(f, colBorder)
+	// ── Card shell ────────────────────────────────────────────────────
+	// 1. White fill
+	setFill(f, colWhite)
+	f.RoundedRect(x, y, w, cardH, 2, "1234", "F")
+	// 2. Colored left accent (only left corners rounded)
+	setFill(f, col)
+	f.Rect(x, y, accentW, cardH, "F")
+	f.RoundedRect(x, y, accentW, cardH, 2, "14", "F")
+	// 3. Border on top (drawn last so it overlays the accent)
+	setDraw(f, colBorder)
 	f.SetLineWidth(0.2)
-	f.RoundedRect(x, y, w, 32, 2, "1234", "FD")
+	f.RoundedRect(x, y, w, cardH, 2, "1234", "D")
 
-	// Left accent stripe (colored)
-	setFillColor(f, heroColor)
-	f.RoundedRect(x, y, 3, 32, 2, "1234", "F")
-	f.Rect(x+1.5, y, 1.5, 32, "F")
+	// ── Score donut ring ──────────────────────────────────────────────
+	cx := x + accentW + 24
+	cy := y + cardH/2
 
-	// Score circle
-	cx := x + 22
-	cy := y + 16
-	setFillColor(f, heroColor)
-	f.Circle(cx, cy, 12, "F")
-	setTextColor(f, colWhite)
-	setFont(f, "B", 14)
-	scoreText := fmt.Sprintf("%.1f", score)
-	f.SetXY(cx-9, cy-6)
-	f.CellFormat(18, 8, scoreText, "", 0, "C", false, 0, "")
-	setFont(f, "", 6)
-	f.SetXY(cx-9, cy+2)
-	f.CellFormat(18, 4, "/10", "", 0, "C", false, 0, "")
+	// Gray track
+	setFill(f, colALTEBg)
+	setDraw(f, colBorder)
+	f.SetLineWidth(0.25)
+	f.Circle(cx, cy, ringR, "FD")
 
-	// Hero label + subtitle
-	setTextColor(f, colBlack)
+	// Colored fill (masked by white inner → donut effect)
+	setFill(f, col)
+	f.Circle(cx, cy, ringR-0.5, "F")
+
+	// White inner circle
+	setFill(f, colWhite)
+	f.Circle(cx, cy, innerR, "F")
+
+	// Score number
 	setFont(f, "B", 13)
-	f.SetXY(x+38, y+5)
-	f.CellFormat(w-42, 8, latin1(heroLabel), "", 0, "L", false, 0, "")
+	setTextColor(f, col)
+	f.SetXY(cx-8, cy-5.5)
+	f.CellFormat(16, 7, fmt.Sprintf("%.1f", score), "", 0, "C", false, 0, "")
+	// "/10" label
+	setFont(f, "", 6)
+	setTextColor(f, colGray)
+	f.SetXY(cx-8, cy+1.8)
+	f.CellFormat(16, 4, "/10", "", 0, "C", false, 0, "")
+
+	// ── Right panel ───────────────────────────────────────────────────
+	rx := cx + ringR + 4
+	rw := x + w - rx - 4
+	ry := y + 5.5
+
+	// "GESAMTSCORE" micro label
+	setFont(f, "", 6.5)
+	setTextColor(f, colGray)
+	f.SetXY(rx, ry)
+	f.CellFormat(rw, 4.5, "GESAMTSCORE", "", 1, "L", false, 0, "")
+
+	// Hero label
+	setFont(f, "B", 13)
+	setTextColor(f, colDark)
+	f.SetXY(rx, ry+5)
+	f.CellFormat(rw, 9, latin1(label), "", 1, "L", false, 0, "")
 
 	// Count pills
 	counts := map[string]int{"pass": 0, "warn": 0, "fail": 0, "info": 0}
 	for _, c := range data.Report.Checks {
 		counts[c.Status]++
 	}
-	pillX := x + 38
-	pillY := y + 16
-	for _, pair := range []struct {
-		status string
-		label  string
-	}{
-		{"pass", "bestanden"}, {"warn", "Warnungen"}, {"fail", "Fehler"}, {"info", "Infos"},
-	} {
-		col := statusColor(pair.status)
-		n := counts[pair.status]
-		label := fmt.Sprintf("%d %s", n, pair.label)
-		setFillColor(f, col)
-		setTextColor(f, colWhite)
-		setFont(f, "B", 7)
-		lw := float64(len(label))*1.9 + 6
-		f.RoundedRect(pillX, pillY, lw, 6, 1, "1234", "F")
+	pills := []struct{ status, suffix string }{
+		{"pass", "bestanden"},
+		{"warn", "Warnungen"},
+		{"fail", "Fehler"},
+		{"info", "Infos"},
+	}
+	pillX := rx
+	pillY := ry + 17
+	setFont(f, "B", 6)
+	for _, p := range pills {
+		pCol := statusColor(p.status)
+		txt := fmt.Sprintf("%d %s", counts[p.status], p.suffix)
+		tw := f.GetStringWidth(txt)
+		pillW := tw + 6
+		setFill(f, lighten(pCol, 0.82))
+		f.RoundedRect(pillX, pillY, pillW, 5.5, 1, "1234", "F")
+		setTextColor(f, pCol)
 		f.SetXY(pillX, pillY)
-		f.CellFormat(lw, 6, latin1(label), "", 0, "C", false, 0, "")
-		pillX += lw + 3
+		f.CellFormat(pillW, 5.5, txt, "", 0, "C", false, 0, "")
+		pillX += pillW + 2.5
 	}
 
-	f.SetY(y + 36)
+	f.SetY(y + cardH)
 }
 
+// drawMeta renders the 2×2 metadata info-box grid.
 func drawMeta(f *fpdf.Fpdf, data ReportData, w float64) {
+	const (
+		x      = 14.0
+		cellH  = 13.0
+		gap    = 4.0
+	)
 	y := f.GetY()
-	x := f.GetX()
-	cellW := (w - 4) / 2
-	h := 12.0
+	cellW := (w - gap) / 2
 
-	type metaItem struct{ label, value string }
 	subject := data.Message.Subject
 	if subject == "" {
 		subject = "(kein Betreff)"
 	}
-	received := ""
+	received := "(verschluesselt)"
 	if !data.Message.ReceivedAt.IsZero() {
-		received = data.Message.ReceivedAt.Format("02.01.2006 15:04:05")
-	} else {
-		received = "(verschluesselt)"
+		received = data.Message.ReceivedAt.Format("02.01.2006  15:04:05")
 	}
 	smtpFrom := data.Message.SMTPFrom
 	if smtpFrom == "" {
@@ -371,177 +434,223 @@ func drawMeta(f *fpdf.Fpdf, data ReportData, w float64) {
 		source += " / " + data.Message.HELO
 	}
 
-	items := []metaItem{
+	items := [4]struct{ label, value string }{
 		{"Betreff", subject},
 		{"Empfangen", received},
 		{"Envelope-From", smtpFrom},
 		{"Quelle", source},
 	}
 
-	setDrawColor(f, colBorder)
+	setDraw(f, colBorder)
 	f.SetLineWidth(0.2)
+
 	for i, item := range items {
 		col := i % 2
 		row := i / 2
-		ix := x + float64(col)*(cellW+4)
-		iy := y + float64(row)*(h+2)
+		ix := x + float64(col)*(cellW+gap)
+		iy := y + float64(row)*(cellH+2)
 
-		setFillColor(f, colLightBg)
-		f.RoundedRect(ix, iy, cellW, h, 1.5, "1234", "FD")
+		// Card: white fill + border
+		setFill(f, colWhite)
+		f.RoundedRect(ix, iy, cellW, cellH, 1.5, "1234", "FD")
 
+		// Left gray accent
+		setFill(f, colGray)
+		f.Rect(ix, iy, 3, cellH, "F")
+		f.RoundedRect(ix, iy, 3, cellH, 1.5, "14", "F")
+
+		// Label (small, muted)
+		setFont(f, "", 6.5)
 		setTextColor(f, colGray)
-		setFont(f, "", 7)
-		f.SetXY(ix+3, iy+1.5)
-		f.CellFormat(cellW-6, 4, latin1(item.label), "", 0, "L", false, 0, "")
+		f.SetXY(ix+5, iy+1.5)
+		f.CellFormat(cellW-7, 4, latin1(item.label), "", 0, "L", false, 0, "")
 
-		setTextColor(f, colBlack)
-		setFont(f, "B", 8)
-		f.SetXY(ix+3, iy+5.5)
-		// Truncate long values
+		// Value (bold, dark)
+		setFont(f, "B", 7.5)
+		setTextColor(f, colDark)
 		val := item.value
-		if len(val) > 45 {
-			val = val[:42] + "..."
+		if len(val) > 44 {
+			val = val[:41] + "..."
 		}
-		f.CellFormat(cellW-6, 5, latin1(val), "", 0, "L", false, 0, "")
+		f.SetXY(ix+5, iy+6.5)
+		f.CellFormat(cellW-7, 5, latin1(val), "", 0, "L", false, 0, "")
 	}
 
-	f.SetY(y + float64(len(items)/2)*(h+2) + 2)
+	f.SetY(y + 2*(cellH+2))
 }
 
+// drawGroupHeader renders a light-blue AdminLTE-style section divider.
 func drawGroupHeader(f *fpdf.Fpdf, grp CheckGroup, w float64) {
-	f.SetX(14)
+	const x = 14.0
+	const h = 8.5
 	y := f.GetY()
-	if y > 260 {
-		f.AddPage()
-	}
 
-	setFillColor(f, colBlue)
-	setTextColor(f, colWhite)
-	f.SetLineWidth(0)
-	f.RoundedRect(14, f.GetY(), w, 8, 1.5, "1234", "F")
-	setFont(f, "B", 9)
-	f.SetXY(17, f.GetY()+1.5)
-	f.CellFormat(w-6, 5, latin1(grp.Name), "", 1, "L", false, 0, "")
-	f.Ln(1)
+	// Light blue background
+	setFill(f, colGrpBg)
+	f.Rect(x, y, w, h, "F")
+
+	// Primary left accent
+	setFill(f, colPrimary)
+	f.Rect(x, y, 3, h, "F")
+
+	// Bottom border
+	setDraw(f, colBorder)
+	f.SetLineWidth(0.15)
+	f.Line(x, y+h, x+w, y+h)
+
+	// Group name
+	setFont(f, "B", 8)
+	setTextColor(f, colGrpFg)
+	f.SetXY(x+5, y+2)
+	f.CellFormat(w-8, 5, latin1(grp.Name), "", 1, "L", false, 0, "")
+
+	f.Ln(0.5)
 }
 
+// drawCheck renders one check row plus optional detail blocks.
 func drawCheck(f *fpdf.Fpdf, chk model.CheckResult, w float64, details bool) {
-	f.SetX(14)
-	y := f.GetY()
+	const (
+		x     = 14.0
+		rowH  = 11.5
+		iconR = 3.5
+	)
 
-	// Estimate needed height for the summary row + optional detail blocks
-	detailH := 0.0
+	// Estimate total height (row + detail blocks) for page-break check
+	extraH := 0.0
 	if details {
 		if chk.Explanation != "" {
-			lines := f.SplitLines([]byte(latin1(chk.Explanation)), w-30)
-			detailH += float64(len(lines))*4 + 5
+			setFont(f, "", 6.5)
+			lines := f.SplitLines([]byte(latin1(chk.Explanation)), w-10)
+			extraH += float64(len(lines))*4 + 5
 		}
 		if chk.Recommendation != "" && (chk.Status == "warn" || chk.Status == "fail") {
-			lines := f.SplitLines([]byte(latin1(chk.Recommendation)), w-30)
-			detailH += float64(len(lines))*4 + 7
+			setFont(f, "", 6.5)
+			lines := f.SplitLines([]byte(latin1(chk.Recommendation)), w-10)
+			extraH += float64(len(lines))*4 + 11
 		}
 	}
-	neededH := 10 + detailH
-	if y+neededH > 275 {
+	if f.GetY()+rowH+extraH > 275 {
 		f.AddPage()
 		drawGroupHeader(f, CheckGroup{Name: "(Fortsetzung)"}, w)
 	}
 
 	col := statusColor(chk.Status)
-	y = f.GetY()
+	y := f.GetY()
 
-	// Status bar (left colored stripe)
-	setFillColor(f, col)
-	f.Rect(14, y, 2, 10, "F")
+	// ── Row background ────────────────────────────────────────────────
+	setFill(f, colWhite)
+	f.Rect(x, y, w, rowH, "F")
+	// Bottom separator line
+	setDraw(f, colBorder)
+	f.SetLineWidth(0.12)
+	f.Line(x, y+rowH, x+w, y+rowH)
 
-	// Row background
-	setFillColor(f, colWhite)
-	setDrawColor(f, colBorder)
-	f.SetLineWidth(0.15)
-	f.Rect(16, y, w-2, 10, "FD")
+	// Left status stripe (3mm)
+	setFill(f, col)
+	f.Rect(x, y, 3, rowH, "F")
 
-	// Status badge (top-right)
-	setFillColor(f, col)
+	// ── Status icon circle ────────────────────────────────────────────
+	iconCx := x + 3 + 5.5
+	iconCy := y + rowH/2
+	setFill(f, col)
+	f.Circle(iconCx, iconCy, iconR, "F")
 	setTextColor(f, colWhite)
-	setFont(f, "B", 6)
+	setFont(f, "B", 7)
+	f.SetXY(iconCx-iconR, iconCy-iconR)
+	f.CellFormat(iconR*2, iconR*2, statusSymbol(chk.Status), "", 0, "C", false, 0, "")
+
+	// ── Status badge (top-right) ──────────────────────────────────────
+	setFont(f, "B", 5.5)
 	badgeLabel := statusLabel(chk.Status)
-	badgeW := float64(len(badgeLabel))*1.6 + 4
-	f.RoundedRect(w-badgeW, y+1.5, badgeW, 5, 0.8, "1234", "F")
-	f.SetXY(w-badgeW, y+1.5)
+	badgeW := f.GetStringWidth(badgeLabel) + 4
+	badgeX := x + w - badgeW - 1.5
+	setFill(f, col)
+	f.RoundedRect(badgeX, y+3, badgeW, 5, 0.8, "1234", "F")
+	setTextColor(f, colWhite)
+	f.SetXY(badgeX, y+3)
 	f.CellFormat(badgeW, 5, badgeLabel, "", 0, "C", false, 0, "")
 
-	// Score delta
+	// ── Score delta ───────────────────────────────────────────────────
+	setFont(f, "B", 6.5)
 	delta := fmt.Sprintf("%+.1f", chk.ScoreDelta)
+	deltaW := f.GetStringWidth(delta) + 2
 	setTextColor(f, col)
-	setFont(f, "B", 7)
-	f.SetXY(w-badgeW-12, y+2.5)
-	f.CellFormat(10, 4, delta, "", 0, "R", false, 0, "")
+	f.SetXY(badgeX-deltaW-1, y+3)
+	f.CellFormat(deltaW, 5, delta, "", 0, "R", false, 0, "")
 
-	// Symbol icon
-	setFillColor(f, col)
-	setTextColor(f, colWhite)
-	setFont(f, "B", 7)
-	f.RoundedRect(17.5, y+2.5, 5, 5, 0.8, "1234", "F")
-	f.SetXY(17.5, y+2.5)
-	f.CellFormat(5, 5, statusSymbol(chk.Status), "", 0, "C", false, 0, "")
+	// ── Check name ────────────────────────────────────────────────────
+	nameX := iconCx + iconR + 2.5
+	nameW := badgeX - deltaW - nameX - 2
+	setFont(f, "B", 7.5)
+	setTextColor(f, colDark)
+	f.SetXY(nameX, y+1.5)
+	f.CellFormat(nameW, 5, latin1(chk.Name), "", 0, "L", false, 0, "")
 
-	// Check name
-	setTextColor(f, colBlack)
-	setFont(f, "B", 8)
-	f.SetXY(24, y+1.8)
-	f.CellFormat(w-badgeW-14-24, 5, latin1(chk.Name), "", 0, "L", false, 0, "")
-
-	// Summary — full text, wrapped
-	setTextColor(f, colDkGray)
-	setFont(f, "", 7)
-	summaryLines := f.SplitLines([]byte(latin1(chk.Summary)), w-30)
-	if len(summaryLines) > 0 {
-		f.SetXY(24, y+6.2)
-		f.CellFormat(w-30, 4, string(summaryLines[0]), "", 0, "L", false, 0, "")
+	// ── Summary (first wrapped line) ──────────────────────────────────
+	setFont(f, "", 6.5)
+	setTextColor(f, colGray)
+	summLines := f.SplitLines([]byte(latin1(chk.Summary)), nameW)
+	if len(summLines) > 0 {
+		f.SetXY(nameX, y+6.5)
+		f.CellFormat(nameW, 4, string(summLines[0]), "", 0, "L", false, 0, "")
 	}
 
-	f.SetY(y + 10)
+	f.SetY(y + rowH)
 
-	if details {
-		// ── Explanation block ────────────────────────────────────────────
-		if chk.Explanation != "" {
-			drawDetailBlock(f, latin1(chk.Explanation), w, rgb{238, 242, 250}, colDkGray, "")
-		}
+	if !details {
+		return
+	}
 
-		// ── Recommendation block (only for warn/fail) ─────────────────
-		if chk.Recommendation != "" && (chk.Status == "warn" || chk.Status == "fail") {
-			drawDetailBlock(f, latin1(chk.Recommendation), w, rgb{255, 243, 205}, rgb{102, 77, 3}, "Empfehlung: ")
-		}
+	// ── Detail blocks ─────────────────────────────────────────────────
+	if chk.Explanation != "" {
+		drawDetailBox(f, latin1(chk.Explanation), w, colExplBg, colExplFg, "Erklaerung")
+	}
+	if chk.Recommendation != "" && (chk.Status == "warn" || chk.Status == "fail") {
+		drawDetailBox(f, latin1(chk.Recommendation), w, colRecoBg, colRecoFg, "Empfehlung")
 	}
 }
 
-// drawDetailBlock renders a coloured text block below a check row.
-func drawDetailBlock(f *fpdf.Fpdf, text string, w float64, bg rgb, fg rgb, prefix string) {
-	f.SetX(16)
-	setFillColor(f, bg)
-	setTextColor(f, fg)
-	setFont(f, "", 7)
+// drawDetailBox renders a tinted labeled text block below a check row.
+func drawDetailBox(f *fpdf.Fpdf, text string, w float64, bg, fg rgb, headerLabel string) {
+	const x = 14.0
 
-	full := prefix + text
-	lines := f.SplitLines([]byte(full), w-8)
-	blockH := float64(len(lines))*4 + 4
+	// Header label row
+	const hdrH = 5.5
 	yy := f.GetY()
-
-	// Check page break before drawing block
-	if yy+blockH > 278 {
+	if yy+hdrH > 278 {
 		f.AddPage()
 		yy = f.GetY()
 	}
+	setFill(f, bg)
+	f.Rect(x, yy, w, hdrH, "F")
+	setFont(f, "B", 6.5)
+	setTextColor(f, fg)
+	f.SetXY(x+4, yy+1)
+	f.CellFormat(w-8, hdrH-1, headerLabel, "", 1, "L", false, 0, "")
 
-	f.Rect(16, yy, w-2, blockH, "F")
-	f.SetXY(20, yy+2)
+	// Text body
+	setFont(f, "", 6.5)
+	lines := f.SplitLines([]byte(text), w-10)
+	bodyH := float64(len(lines))*4 + 4
+
+	yy = f.GetY()
+	if yy+bodyH > 278 {
+		f.AddPage()
+		yy = f.GetY()
+	}
+	// Slightly lighter bg for body
+	setFill(f, lighten(bg, 0.3))
+	f.Rect(x, yy, w, bodyH, "F")
+	setTextColor(f, fg)
+	f.SetXY(x+4, yy+2)
 	for _, line := range lines {
-		f.SetX(20)
+		f.SetX(x + 4)
 		f.CellFormat(w-8, 4, string(line), "", 1, "L", false, 0, "")
 	}
 	f.Ln(1)
 }
 
+// filterChecks returns only the checks matching the given options.
 func filterChecks(checks []model.CheckResult, opts Options) []model.CheckResult {
 	out := make([]model.CheckResult, 0, len(checks))
 	for _, c := range checks {
