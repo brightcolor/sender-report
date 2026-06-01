@@ -67,7 +67,7 @@
             <div class="flex-grow-1">
               <p class="text-uppercase fw-bold small text-secondary mb-1" style="letter-spacing:.06em">
                 Gesamtscore
-                {{if .Encrypted}}<span class="badge text-bg-secondary ms-2" style="font-size:.65rem; vertical-align:middle"><i class="bi bi-lock-fill me-1"></i>E2E verschlüsselt</span>{{end}}
+                {{if .Encrypted}}<span id="mp-e2e-badge-report" class="badge text-bg-secondary ms-2" style="font-size:.65rem; vertical-align:middle"><i class="bi bi-lock-fill me-1"></i>E2E verschlüsselt</span>{{end}}
               </p>
               <h1 class="h2 fw-bold mb-1">{{.HeroTitle}}</h1>
               <p class="text-secondary mb-3">{{.HeroSubtitle}}</p>
@@ -88,7 +88,7 @@
               <span class="info-box-icon text-bg-secondary"><i class="bi bi-chat-left-text"></i></span>
               <div class="info-box-content" style="min-width:0">
                 <span class="info-box-text">Betreff</span>
-                <span class="info-box-number text-truncate d-block"
+                <span id="mp-meta-subject" class="info-box-number text-truncate d-block"
                       title="{{if .Message.Subject}}{{.Message.Subject}}{{else}}(kein Betreff){{end}}"
                       style="font-size:.875rem">
                   {{if .Message.Subject}}{{.Message.Subject}}{{else}}(kein Betreff){{end}}
@@ -876,6 +876,21 @@ function showDecrypted(payload) {
     if (typeof colorScoreDeltas    === 'function') colorScoreDeltas();
     if (typeof setupCheckFilter    === 'function') setupCheckFilter();
     if (typeof localizeStaticTimes === 'function') localizeStaticTimes();
+  }
+
+  // Update subject info-box with decrypted subject.
+  var subjectEl = document.getElementById('mp-meta-subject');
+  if (subjectEl && payload.subject) {
+    var subj = payload.subject || '(kein Betreff)';
+    subjectEl.textContent = subj;
+    subjectEl.title       = subj;
+  }
+
+  // Turn the E2E badge green to signal successful decryption.
+  var badge = document.getElementById('mp-e2e-badge-report');
+  if (badge) {
+    badge.classList.replace('text-bg-secondary', 'text-bg-success');
+    badge.innerHTML = '<i class="bi bi-unlock-fill me-1"></i>Entschlüsselt';
   }
 }
 
