@@ -1000,12 +1000,21 @@ function showDecrypted(payload) {
     var baseUrl  = location.origin + location.pathname;
     var fullUrl  = secretKey ? baseUrl + '#' + secretKey : baseUrl;
 
+    // Schlüssel-Anzeige: niemals vollständig sichtbar – max. erste Hälfte + '…'
+    function maskKey(key) {
+      if (!key) return '—';
+      var half = Math.ceil(key.length / 2);
+      return key.slice(0, half) + '…';
+    }
+    var keyMasked  = maskKey(secretKey);
+    var fullMasked = secretKey ? baseUrl + '#' + keyMasked : baseUrl;
+
     var elFull  = document.getElementById('mp-share-full');
     var elNoKey = document.getElementById('mp-share-nokey');
     var elKey   = document.getElementById('mp-share-key');
-    if (elFull)  { elFull.textContent  = fullUrl;            elFull.dataset.val  = fullUrl; }
+    if (elFull)  { elFull.textContent  = fullMasked;         elFull.dataset.val  = fullUrl; }
     if (elNoKey) { elNoKey.textContent = baseUrl;            elNoKey.dataset.val = baseUrl; }
-    if (elKey)   { elKey.textContent   = secretKey || '—';  elKey.dataset.val   = secretKey || ''; }
+    if (elKey)   { elKey.textContent   = keyMasked;          elKey.dataset.val   = secretKey || ''; }
 
     // Click-Handler auf die Boxen.
     [['mp-share-full-box','full'],['mp-share-nokey-box','nokey'],['mp-share-key-box','key']].forEach(function(pair) {
