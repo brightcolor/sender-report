@@ -1,4 +1,6 @@
 services:
+
+  # ── Sender-Report ────────────────────────────────────────────────────────
   sender-report:
     image: ${SENDER_REPORT_IMAGE:-ghcr.io/brightcolor/sender-report:latest}
     pull_policy: always
@@ -9,15 +11,17 @@ services:
       - "${HTTP_PORT:-9090}:8080"
       - "${SMTP_PORT:-25}:2525"
     environment:
-      # Tell the binary where to find the mounted .env so it can auto-append
-      # new variables on every container start (e.g. after a Watchtower pull).
+      # Teilt dem Binary mit, wo die .env liegt, damit neue Variablen
+      # automatisch angehängt werden (z. B. nach einem Watchtower-Update).
       - ENV_FILE=/config/.env
     volumes:
       - ./data:/data
-      # Mount the .env file read-write so the binary can append missing variables.
+      # .env read-write mounten, damit das Binary fehlende Variablen ergänzen kann.
       - ./.env:/config/.env:rw
-      # Mount certificates only when ENABLE_TLS=true, then set TLS_CERT_FILE/TLS_KEY_FILE in .env.
+      # TLS-Zertifikate für HTTPS — nur nötig wenn ENABLE_TLS=true:
       # - ./certs:/certs:ro
+    depends_on:
+      - rspamd
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz"]
@@ -27,3 +31,29 @@ services:
       start_period: 20s
     mem_limit: 512m
     cpus: 0.50
+
+  # ── Rspamd (Standard-Spamfilter) ─────────────────────────────────────────
+  # Aktivieren: ENABLE_RSPAMD=true, RSPAMD_URL=http://rspamd:11334/checkv2
+  rspamd:
+    image: rspamd/rspamd:latest
+    container_name: rspamd
+    restart: unless-stopped
+    mem_limit: 256m
+    # Kein Port-Expose nötig — sender-report erreicht rspamd intern über
+    # den Docker-Netzwerknamen 'rspamd'.
+    # Optionales Rspamd-Web-UI (read-only, kein Passwort):
+    # ports:
+    #   - "11334:11334"
+
+  # ── SpamAssassin (optional, auskommentiert) ───────────────────────────────
+  # Um SpamAssassin zusätzlich zu Rspamd zu aktivieren:
+  #   1. Diesen Block einkommentieren
+  #   2. In .env setzen: ENABLE_SPAMASSASSIN=true
+  #   3. sender-report depends_on um 'spamd' erweitern
+  #
+  # spamd:
+  #   image: instantlinux/spamassassin:latest
+  #   container_name: spamd
+  #   restart: unless-stopped
+  #   mem_limit: 512m
+  #   # Port 783 nur intern — kein Expose nach außen nötig.

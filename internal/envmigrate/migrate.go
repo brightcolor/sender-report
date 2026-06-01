@@ -82,11 +82,11 @@ var All = []VarDef{
 	// ── Optional checks ───────────────────────────────────────────────────────
 	{Group: "Optional checks", Key: "ENABLE_RBL_CHECKS", Default: "false", Comment: "Enable DNSBL/RBL IP reputation checks"},
 	{Key: "RBL_PROVIDERS", Default: "zen.spamhaus.org,bl.spamcop.net,b.barracudacentral.org,psbl.surriel.com,dnsbl.dronebl.org,bl.blocklist.de", Comment: "Comma-separated list of RBL zones"},
-	{Key: "ENABLE_SPAMASSASSIN", Default: "false", Comment: "Enable SpamAssassin integration"},
-	{Key: "SPAMASSASSIN_HOSTPORT", Default: "spamd:783", Comment: "SpamAssassin spamd address"},
-	{Key: "ENABLE_RSPAMD", Default: "false", Comment: "Enable Rspamd integration"},
+	{Key: "ENABLE_RSPAMD", Default: "true", Comment: "Enable Rspamd integration (default: true — requires rspamd service)"},
 	{Key: "RSPAMD_URL", Default: "http://rspamd:11334/checkv2", Comment: "Rspamd checkv2 endpoint"},
 	{Key: "RSPAMD_PASSWORD", Default: "", Comment: "Rspamd controller password (leave empty when using secure_ip)"},
+	{Key: "ENABLE_SPAMASSASSIN", Default: "false", Comment: "Enable SpamAssassin integration (optional, disabled by default)"},
+	{Key: "SPAMASSASSIN_HOSTPORT", Default: "spamd:783", Comment: "SpamAssassin spamd address (only used when ENABLE_SPAMASSASSIN=true)"},
 
 	// ── Alerting ──────────────────────────────────────────────────────────────
 	{Group: "Alerting", Key: "ALERT_WEBHOOK_URL", Default: "", Comment: "Webhook URL for error/warning notifications (JSON POST)"},
