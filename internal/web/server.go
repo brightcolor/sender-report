@@ -1316,7 +1316,7 @@ func reportHeroSubtitle(score float64) string {
 	case score >= 9:
 		return "Die wichtigsten Authentifizierungs- und Inhaltschecks sehen gut aus."
 	case score >= 7.5:
-		return "Die Basis stimmt, einzelne Warnungen sollten vor groesseren Kampagnen geklaert werden."
+		return "Die Basis stimmt, einzelne Warnungen sollten vor größeren Kampagnen geklärt werden."
 	case score >= 5.5:
 		return "Mehrere Signale können die Inbox-Platzierung bei Gmail, Outlook, Yahoo oder Apple Mail verschlechtern."
 	default:

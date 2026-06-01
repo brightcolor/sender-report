@@ -352,13 +352,13 @@ func mxRecordCheck(ctx context.Context, domain string) model.CheckResult {
 	}
 	mxs, err := net.DefaultResolver.LookupMX(ctx, domain)
 	if err != nil || len(mxs) == 0 {
-		return warn("mx_records", "MX-Records", -0.3, fmt.Sprintf("Fuer %s wurde kein MX-Record gefunden.", domain), fmt.Sprintf("Falls %s E-Mails empfangen soll, in der DNS-Zone einen MX-Record setzen, z. B. %s. MX 10 mail.%s.", domain, domain, domain))
+		return warn("mx_records", "MX-Records", -0.3, fmt.Sprintf("Für %s wurde kein MX-Record gefunden.", domain), fmt.Sprintf("Falls %s E-Mails empfangen soll, in der DNS-Zone einen MX-Record setzen, z. B. %s. MX 10 mail.%s.", domain, domain, domain))
 	}
 	values := make([]string, 0, len(mxs))
 	for _, mx := range mxs {
 		values = append(values, fmt.Sprintf("%s MX %d %s", domain, mx.Pref, strings.TrimSuffix(mx.Host, ".")))
 	}
-	return withDetails(pass("mx_records", "MX-Records", 0.1, fmt.Sprintf("Fuer %s sind %d MX-Record(s) vorhanden.", domain, len(mxs)), ""), map[string]string{
+	return withDetails(pass("mx_records", "MX-Records", 0.1, fmt.Sprintf("Für %s sind %d MX-Record(s) vorhanden.", domain, len(mxs)), ""), map[string]string{
 		"domain":     domain,
 		"mx_records": strings.Join(values, "\n"),
 	})
@@ -419,7 +419,7 @@ func dmarcAlignmentCheck(fromDomain, spfResult, dkimResult string, alignedSPF, a
 func tlsTransportCheck(received []string) model.CheckResult {
 	raw := strings.ToLower(strings.Join(received, "\n"))
 	if strings.Contains(raw, "tls") || strings.Contains(raw, "esmtps") || strings.Contains(raw, "cipher") {
-		return pass("tls_transport", "TLS Transport", 0.1, "Received-Header enthalten Hinweise auf verschluesselten Transport.", "")
+		return pass("tls_transport", "TLS Transport", 0.1, "Received-Header enthalten Hinweise auf verschlüsselten Transport.", "")
 	}
 	return info("tls_transport", "TLS Transport", 0.0, "Aus den Received-Headern ist kein TLS-Transport eindeutig erkennbar.", "TLS für SMTP aktivieren und sicherstellen, dass vorgelagerte MTAs TLS-Informationen in Received-Headern dokumentieren.")
 }
@@ -739,9 +739,9 @@ func defaultRecommendation(c model.CheckResult, ctx checkContext) string {
 	case "message_id":
 		return "Mailserver oder Versandsoftware so konfigurieren, dass jede Nachricht eine eindeutige Message-ID erzeugt, z. B. `<unique-id@" + emptyFallback(ctx.FromDomain, "example.org") + ">`."
 	case "mime_ct", "mime_boundary", "multipart_alt":
-		return "Das Template als RFC-konforme MIME-Mail erzeugen. Fuer HTML-Mails empfohlen: `multipart/alternative` mit `text/plain` und `text/html`, sauberer Boundary und `Content-Type: multipart/alternative; boundary=...`."
+		return "Das Template als RFC-konforme MIME-Mail erzeugen. Für HTML-Mails empfohlen: `multipart/alternative` mit `text/plain` und `text/html`, sauberer Boundary und `Content-Type: multipart/alternative; boundary=...`."
 	case "plain_text":
-		return "Im Versandtemplate einen text/plain-Part zusaetzlich zum HTML-Part ausliefern."
+		return "Im Versandtemplate einen text/plain-Part zusätzlich zum HTML-Part ausliefern."
 	case "attachments":
 		return "Anhänge nur verwenden, wenn noetig. Große Dateien extern verlinken, Dateinamen klar halten und riskante Dateitypen wie ausführbare Dateien vermeiden."
 	case "image_text_ratio":
@@ -1481,13 +1481,13 @@ func rblProviderMeta(provider, remoteIP string) rblProvider {
 		return rblProvider{
 			Name:      "Spamhaus",
 			DelistURL: "https://check.spamhaus.org/",
-			Delisting: "Spamhaus Reputation Checker öffnen, IP/Domain pruefen und die angezeigte Liste beachten. Bei SBL muss in der Regel der ISP/Provider das Abuse-Problem bestätigt beheben und die Entfernung anstoßen; bei XBL/CSS erst Malware, Proxy oder kompromittierte Accounts entfernen; bei PBL nur delisten, wenn die IP wirklich ein legitimer Mailserver ist.",
+			Delisting: "Spamhaus Reputation Checker öffnen, IP/Domain prüfen und die angezeigte Liste beachten. Bei SBL muss in der Regel der ISP/Provider das Abuse-Problem bestätigt beheben und die Entfernung anstoßen; bei XBL/CSS erst Malware, Proxy oder kompromittierte Accounts entfernen; bei PBL nur delisten, wenn die IP wirklich ein legitimer Mailserver ist.",
 		}
 	case "bl.spamcop.net":
 		return rblProvider{
 			Name:      "SpamCop Blocking List",
 			DelistURL: "https://www.spamcop.net/bl.shtml",
-			Delisting: "SpamCop ist zeitbasiert. Es gibt normalerweise kein manuelles Express-Delisting; nach Ende neuer Spam-Reports laeuft das Listing automatisch aus. Pruefe SpamCop-Reports, kompromittierte Accounts, offene Relays, infizierte Hosts und fehlgeleitete Bounces.",
+			Delisting: "SpamCop ist zeitbasiert. Es gibt normalerweise kein manuelles Express-Delisting; nach Ende neuer Spam-Reports läuft das Listing automatisch aus. Prüfe SpamCop-Reports, kompromittierte Accounts, offene Relays, infizierte Hosts und fehlgeleitete Bounces.",
 		}
 	case "b.barracudacentral.org", "bb.barracudacentral.org":
 		return rblProvider{
@@ -1511,19 +1511,19 @@ func rblProviderMeta(provider, remoteIP string) rblProvider {
 		return rblProvider{
 			Name:      "blocklist.de",
 			DelistURL: "https://www.blocklist.de/en/delist.html?ip=" + url.QueryEscape(remoteIP),
-			Delisting: "blocklist.de delistet Angreifer-IP-Adressen nach Behebung vorzeitig über die Delist-Seite; sonst laeuft das Listing typischerweise automatisch aus. Vorher Logins, SSH/FTP/Web-/Mail-Bruteforce, kompromittierte Dienste und Fail2Ban-Meldungen prüfen.",
+			Delisting: "blocklist.de delistet Angreifer-IP-Adressen nach Behebung vorzeitig über die Delist-Seite; sonst läuft das Listing typischerweise automatisch aus. Vorher Logins, SSH/FTP/Web-/Mail-Bruteforce, kompromittierte Dienste und Fail2Ban-Meldungen prüfen.",
 		}
 	case "cbl.abuseat.org":
 		return rblProvider{
 			Name:      "Composite Blocking List",
 			DelistURL: "https://www.abuseat.org/lookup.cgi?ip=" + url.QueryEscape(remoteIP),
-			Delisting: "CBL-Lookup mit der IP oeffnen, Ursache lesen und erst nach Beseitigung von Malware, Proxy, Botnet-Verkehr oder kompromittierten SMTP-Zugangsdaten delisten.",
+			Delisting: "CBL-Lookup mit der IP öffnen, Ursache lesen und erst nach Beseitigung von Malware, Proxy, Botnet-Verkehr oder kompromittierten SMTP-Zugangsdaten delisten.",
 		}
 	default:
 		return rblProvider{
 			Name:      "generische DNSBL",
 			DelistURL: "https://" + provider,
-			Delisting: "Provider-Dokumentation der DNSBL oeffnen, Listinggrund prüfen, Ursache technisch beheben und erst danach eine Entfernung beantragen. Falls keine Delisting-Seite existiert, Abuse-Kontakt des Providers oder automatische Expiry-Regeln beachten.",
+			Delisting: "Provider-Dokumentation der DNSBL öffnen, Listinggrund prüfen, Ursache technisch beheben und erst danach eine Entfernung beantragen. Falls keine Delisting-Seite existiert, Abuse-Kontakt des Providers oder automatische Expiry-Regeln beachten.",
 		}
 	}
 }
@@ -1553,7 +1553,7 @@ func rblListedRecommendation(remoteIP string, listedProviders []string) string {
 }
 
 func rblGenericRecommendation(remoteIP string) string {
-	return fmt.Sprintf("Wenn ein RBL-Listing auftritt: Ursache für IP %s zuerst abstellen, Versand temporär stoppen, Logs und Queue prüfen, dann ueber die jeweilige Provider-Seite delisten. Ohne behobene Ursache fuehrt Delisting fast immer zu erneutem Listing.", emptyFallback(remoteIP, "<sender-ip>"))
+	return fmt.Sprintf("Wenn ein RBL-Listing auftritt: Ursache für IP %s zuerst abstellen, Versand temporär stoppen, Logs und Queue prüfen, dann über die jeweilige Provider-Seite delisten. Ohne behobene Ursache führt Delisting fast immer zu erneutem Listing.", emptyFallback(remoteIP, "<sender-ip>"))
 }
 
 func spamAssassinHeuristic(ctx context.Context, hostport, raw string) model.CheckResult {

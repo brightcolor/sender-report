@@ -92,7 +92,7 @@ var All = []VarDef{
 	{Group: "Alerting", Key: "ALERT_WEBHOOK_URL", Default: "", Comment: "Webhook URL for error/warning notifications (JSON POST)"},
 
 	// ── Privacy page ──────────────────────────────────────────────────────────
-	{Group: "Privacy page", Key: "PRIVACY_OPERATOR_NAME", Default: "", Comment: "Legal name of the operator shown in the Datenschutzerklaerung"},
+	{Group: "Privacy page", Key: "PRIVACY_OPERATOR_NAME", Default: "", Comment: "Legal name of the operator shown in the Datenschutzerklärung"},
 	{Key: "PRIVACY_OPERATOR_ADDRESS", Default: "", Comment: "Postal address of the operator"},
 	{Key: "PRIVACY_OPERATOR_EMAIL", Default: "", Comment: "Contact email of the operator"},
 	{Key: "PRIVACY_HIDE_TEMPLATE_NOTE", Default: "false", Comment: "Set to true to hide the 'this is a template' notice once operator details are filled in"},
