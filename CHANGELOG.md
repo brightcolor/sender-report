@@ -4,11 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-02
+
+First stable release. Consolidates the large body of work accumulated since
+0.1.0 — full E2E encryption, the score-first web UI, client-side PDF export,
+live statistics, the privacy policy, and the rename to sender.report — into a
+clean 1.0 baseline. Going forward this project follows Semantic Versioning:
+new features bump the MINOR version, fixes bump PATCH, breaking changes bump MAJOR.
+
 ### Changed
 - **Renamed the project from MailProbe to Sender-Report** (complete rename): display name, Go module path (`github.com/brightcolor/sender-report`), `cmd/` folder, binary, Docker image (`ghcr.io/brightcolor/sender-report`), `SENDER_REPORT_IMAGE` env var, Prometheus metric prefix (`sender_report_*`), and the brand mark (`SR`). Internal storage keys, cookies, the SQLite filename and cryptographic protocol constants are intentionally kept stable for backward compatibility.
 - **Completed the rename down to internal identifiers (breaking, hard reset).** The remaining `mailprobe` references were removed too: browser storage keys are now `sr:*` (theme, consent, mailboxes, lastmsg), the fallback cookie is `sr_mailbox`, the SQLite filename default is `sender-report.db`, and the cryptographic domain-separation constants are now `senderreport-id-v1` / `senderreport-content-v1`. This **invalidates any pre-existing encrypted mailboxes and mailbox links** and changes all mailbox addresses — a deliberate clean break, no backward compatibility. The `MPE1` blob magic is unchanged. (The `mailprobe` name remains only in this changelog as project history.)
 
 ### Added
+- Client-side PDF report export (jsPDF) with a section/status filter modal — generated entirely in the browser, so it also works for end-to-end-encrypted reports without exposing plaintext to the server.
+- Live platform statistics on the home page (cumulative counters for created mailboxes, analyzed mails, generated reports, and the average score), backed by plain-text counter files in the data volume.
+- SVG favicon served via `/static/favicon.svg` with a `/favicon.ico` redirect.
+- Home-page security explainer describing the brief plaintext-analysis → immediate-encryption flow and the "your link is the key" model, plus a green "Ende-zu-Ende verschlüsselt" badge.
 - Added provider-specific RBL/DNSBL delisting guidance, lookup evidence, TXT evidence, and pre-delisting remediation steps.
 - Added optional built-in HTTPS serving via `ENABLE_TLS`, `TLS_CERT_FILE`, and `TLS_KEY_FILE`.
 - Added configurable HTTP-to-HTTPS redirects via `FORCE_HTTPS`.
@@ -27,6 +39,9 @@ All notable changes to this project will be documented in this file.
 - Documented `TRUSTED_PROXY_CIDRS` in the environment template and README.
 
 ### Changed
+- Brought the privacy policy in line with the actual data flow: transient in-memory plaintext analysis, encrypted-at-rest storage of sensitive fields, the mailbox-creation IP retained for abuse protection, anonymous aggregate counters, and the client-side PDF export.
+- Switched the home-page statistics to cumulative counters that survive cleanup and mailbox expiry (they only ever increase); only the "currently active" figure is a live count.
+- Hardened the home page layout for narrow/mobile screens (card-header badge wrap, action-button wrapping, tighter padding).
 - Reduced repeated technical detail noise in report check accordions by attaching only check-specific values to each check.
 - Expanded explanations and remediation text for authentication, DNS/infrastructure, SpamAssassin, and RBL findings.
 - Made `SMTP_DOMAIN` an optional override instead of a required setting; SMTP acceptance still requires an active temporary mailbox.
@@ -43,6 +58,7 @@ All notable changes to this project will be documented in this file.
 - Adjusted the web UI closer to a mail-tester-style flow: central test address, clear check button, compact metadata, and accordion-style report checks.
 
 ### Fixed
+- Fixed a startup crash after restart where the cumulative-counter backfill used a non-idempotent `INSERT` and hit a `UNIQUE` constraint on `counters.key`.
 - Extract links from decoded HTML source as well as visible text so `href` URLs are included in reports.
 - Only trust `X-Forwarded-For` when the direct client IP matches `TRUSTED_PROXY_CIDRS`, preventing spoofed client IPs from bypassing web rate limits.
 - Decode folded and RFC 2047 encoded `Subject` headers before storing message metadata.
