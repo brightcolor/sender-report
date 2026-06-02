@@ -36,6 +36,21 @@ body,
   transition: none !important;
 }
 
+/* Root mobile-overflow fix. AdminLTE 4 makes .app-wrapper a CSS grid and
+   .app-main a flex column. Flex/grid items don't shrink below their content's
+   min-content width, so a child with a large min-content (the long monospace
+   mailbox address with white-space:nowrap, the stats row) forces the column
+   wider than the viewport → horizontal overflow on phones. Giving the content
+   wrappers an explicit width:100% + min-width:0 makes them track the viewport
+   width (verified: .mp-home-center 645px→390px at a 390px viewport), so the
+   children's own ellipsis/wrapping takes over. .mp-home-center keeps its own
+   max-width:900px cap for desktop centering. */
+.app-wrapper { max-width: 100%; overflow-x: clip; }
+.app-main { min-width: 0; }
+.app-content,
+.app-content > .container-fluid,
+.mp-home-center { width: 100%; min-width: 0; }
+
 /* ── Header: kein Schatten, keine Trennlinie ────────────────────────────── */
 .app-header.navbar {
   border-bottom: none !important;
