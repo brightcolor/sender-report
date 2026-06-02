@@ -110,17 +110,15 @@ CREATE TABLE IF NOT EXISTS counters (
 		return err
 	}
 	// One-time backfill: seed each counter from the current table state so the
-	// switch from live COUNT(*) to cumulative counters is seamless. The
-	// NOT EXISTS guard makes this idempotent — it runs once, then no-ops.
+	// switch from live COUNT(*) to cumulative counters is seamless. INSERT OR
+	// IGNORE makes this idempotent — the first run inserts, later runs hit the
+	// PRIMARY KEY conflict on `key` and are skipped (no-op). A plain INSERT here
+	// would fail on every restart because COUNT(*)/SUM() always return one row.
 	backfill := []string{
-		`INSERT INTO counters(key, value) SELECT 'mailboxes_created', COUNT(*) FROM mailboxes
-		   WHERE NOT EXISTS(SELECT 1 FROM counters WHERE key='mailboxes_created')`,
-		`INSERT INTO counters(key, value) SELECT 'messages_received', COUNT(*) FROM messages
-		   WHERE NOT EXISTS(SELECT 1 FROM counters WHERE key='messages_received')`,
-		`INSERT INTO counters(key, value) SELECT 'reports_generated', COUNT(*) FROM reports
-		   WHERE NOT EXISTS(SELECT 1 FROM counters WHERE key='reports_generated')`,
-		`INSERT INTO counters(key, value) SELECT 'score_sum', COALESCE(SUM(score),0) FROM reports
-		   WHERE NOT EXISTS(SELECT 1 FROM counters WHERE key='score_sum')`,
+		`INSERT OR IGNORE INTO counters(key, value) SELECT 'mailboxes_created', COUNT(*) FROM mailboxes`,
+		`INSERT OR IGNORE INTO counters(key, value) SELECT 'messages_received', COUNT(*) FROM messages`,
+		`INSERT OR IGNORE INTO counters(key, value) SELECT 'reports_generated', COUNT(*) FROM reports`,
+		`INSERT OR IGNORE INTO counters(key, value) SELECT 'score_sum', COALESCE(SUM(score),0) FROM reports`,
 	}
 	for _, q := range backfill {
 		if _, err := db.Exec(q); err != nil {
