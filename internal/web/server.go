@@ -344,6 +344,11 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/static/", s.staticFS)
+	// Browsers and crawlers request /favicon.ico at the root regardless of the
+	// <link rel="icon"> tag; redirect them to the vector favicon.
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/static/favicon.svg", http.StatusMovedPermanently)
+	})
 	mux.HandleFunc("/", s.home)
 	mux.HandleFunc("/about", s.aboutPage)
 	mux.HandleFunc("/privacy", s.privacyPage)
