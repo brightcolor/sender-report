@@ -147,6 +147,38 @@ body,
   .mp-stat-item { flex: 1 0 40%; padding: .4rem .5rem; }
 }
 
+/* ── Trust/Sicherheit-Box (Startseite) ──────────────────────────────────── */
+.mp-trust-box {
+  background: var(--bs-tertiary-bg, #f8f9fa);
+  border: 1px solid var(--bs-border-color);
+  border-radius: .75rem;
+  padding: 1.15rem 1.25rem;
+}
+.mp-trust-points {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: .7rem;
+}
+.mp-trust-points li {
+  display: flex;
+  gap: .6rem;
+  align-items: flex-start;
+  font-size: .85rem;
+  line-height: 1.55;
+  color: var(--bs-secondary-color);
+}
+.mp-trust-points li i {
+  flex-shrink: 0;
+  font-size: 1rem;
+  margin-top: .1rem;
+}
+.mp-trust-points li strong {
+  color: var(--bs-emphasis-color);
+  font-weight: 600;
+}
+
 /* ── Utility ────────────────────────────────────────────────────────────── */
 .font-monospace-address {
   font-family: 'Cascadia Code', 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace !important;
