@@ -1265,6 +1265,21 @@ body,
 }
 @media (max-width: 576px) {
   .mp-addr-box { flex-wrap: wrap; }
+
+  /* Home: let the long "Ende-zu-Ende verschlüsselt" badge drop to its own
+     line instead of overflowing the card header on narrow screens. */
+  .mp-widget-card .card-header { flex-wrap: wrap; row-gap: .4rem; }
+  #mp-e2e-badge { margin-left: 0 !important; }
+
+  /* Action buttons (Check starten / Neue Mailbox) wrap if too wide. */
+  #check-actions { flex-wrap: wrap; }
+  #check-actions .btn { flex: 1 1 auto; }
+
+  /* Slightly tighter side padding so cards get more usable width. */
+  .mp-home-center { padding-left: .85rem; padding-right: .85rem; }
+
+  /* Keep the home navbar aligned with the content's reduced padding. */
+  .mp-page-home .app-header .container-fluid { padding-left: .85rem; padding-right: .85rem; }
 }
 
 
