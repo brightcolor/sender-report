@@ -129,8 +129,31 @@
                 HTML-Anteil, Anhänge)</li>
             </ul>
             <p>
-              Diese Daten werden ausschließlich für die Zustellbarkeitsanalyse verwendet und
-              anschließend automatisch nach Ablauf der konfigurierten Aufbewahrungsfristen gelöscht.
+              <strong>Verarbeitungsablauf:</strong> Eine E-Mail erreicht den Server – wie bei
+              SMTP technisch unvermeidbar – zunächst im Klartext. Unmittelbar nach dem Empfang
+              wird sie im Arbeitsspeicher analysiert (SPF, DKIM, DMARC, Spam-Signale usw.). Für
+              diese Analyse muss der Inhalt für einen kurzen Moment – in der Regel den Bruchteil
+              einer Sekunde – unverschlüsselt im Arbeitsspeicher vorliegen. Er wird dabei
+              <strong>zu keinem Zeitpunkt unverschlüsselt dauerhaft gespeichert</strong>.
+            </p>
+            <div class="alert alert-success d-flex gap-2 py-2" role="note">
+              <i class="bi bi-shield-check text-success flex-shrink-0 mt-1"></i>
+              <div class="small">
+                <strong>Verschlüsselte Speicherung.</strong> Direkt nach der Analyse wird der
+                gesamte sensible Inhalt (Betreff, Absender, sendende IP, HELO, alle Header sowie
+                der vollständige Text- und HTML-Body) mit dem öffentlichen Schlüssel deiner Mailbox
+                <strong>Ende-zu-Ende verschlüsselt</strong> und nur in dieser verschlüsselten Form
+                in der Datenbank abgelegt. Ab diesem Moment können weder der Server noch der
+                Betreiber die Inhalte lesen. Im Klartext verbleiben in der Datenbank lediglich der
+                technische Gesamt-Score (eine Zahl) sowie der Status der Einzelprüfungen
+                (bestanden / Warnung / Fehler) – ohne deren Inhalte. Entschlüsseln kann
+                ausschließlich dein Browser mit dem privaten Schlüssel aus deinem Mailbox-Link
+                (siehe Abschnitt 2.5).
+              </div>
+            </div>
+            <p>
+              Sämtliche gespeicherten Daten werden zusätzlich automatisch nach Ablauf der
+              konfigurierten Aufbewahrungsfristen gelöscht (siehe Abschnitt 4).
             </p>
 
             <h3>2.2 Technische Analysen</h3>
@@ -170,6 +193,14 @@
               gespeichert. Ob und wie lange der Betreiber Logs aufbewahrt, liegt in dessen
               Verantwortung.
             </p>
+            <p>
+              <strong>Mailbox-Erstellung:</strong> Wird eine neue Test-Mailbox angelegt, speichert
+              der Server die IP-Adresse des erstellenden Geräts zusammen mit der Mailbox in der
+              Datenbank. Sie dient ausschließlich dem Missbrauchs- und Überlastungsschutz
+              (Begrenzung der Anzahl gleichzeitiger Mailboxen pro IP-Adresse) und wird gemeinsam
+              mit der Mailbox automatisch gelöscht. Eine Auswertung oder Verknüpfung dieser IP mit
+              den E-Mail-Inhalten findet nicht statt.
+            </p>
 
             <h3>2.4 Browser-Speicher (Cookies und localStorage)</h3>
             <p>
@@ -191,7 +222,7 @@
                   <tr>
                     <td><code>mailprobe_mailbox</code></td>
                     <td>HTTP-Cookie<br><small class="text-secondary">HttpOnly, SameSite=Lax</small></td>
-                    <td>Speichert den Token der aktuell aktiven Mailbox, damit sie beim Seitenaufruf wiedererkannt wird. Nicht durch JavaScript auslesbar.</td>
+                    <td>Speichert den Token der aktuell aktiven Mailbox, damit sie beim Seitenaufruf wiedererkannt wird. Nicht durch JavaScript auslesbar. Wird nur im JavaScript-losen Fallback-Modus gesetzt – im normalen (verschlüsselten) Betrieb erfolgt die Wiedererkennung allein über den Browser-Speicher.</td>
                     <td>Läuft mit der Mailbox ab (Standard: 24 Stunden)</td>
                     <td><span class="badge text-bg-secondary">Nicht erforderlich</span><br><small class="text-secondary">technisch notwendig</small></td>
                   </tr>
@@ -272,8 +303,20 @@
             <h3>2.6 Externe Ressourcen</h3>
             <p>
               Alle CSS- und JavaScript-Bibliotheken (Bootstrap, Bootstrap Icons, OverlayScrollbars,
-              AdminLTE, TweetNaCl) werden <strong>vom eigenen Server</strong> ausgeliefert. Es werden
-              keine externen CDN-Verbindungen hergestellt und keine IP-Adressen an Dritte übermittelt.
+              AdminLTE, TweetNaCl, jsPDF) werden <strong>vom eigenen Server</strong> ausgeliefert. Es
+              werden keine externen CDN-Verbindungen hergestellt und keine IP-Adressen an Dritte
+              übermittelt. Auch der PDF-Export eines Berichts wird vollständig <strong>in deinem
+              Browser</strong> erzeugt – dabei werden keine Daten an den Server zurückgesendet.
+            </p>
+
+            <h3>2.7 Anonyme Nutzungsstatistik</h3>
+            <p>
+              {{.AppName}} führt einige rein zahlenmäßige Gesamtzähler – etwa die Anzahl insgesamt
+              erstellter Mailboxen, analysierter E-Mails und erzeugter Berichte sowie den
+              Durchschnitts-Score. Dabei handelt es sich ausschließlich um aggregierte Summen
+              <strong>ohne jeden Personenbezug</strong>: Es findet keine Zuordnung zu einzelnen
+              Personen, Mailboxen, IP-Adressen oder Sitzungen statt. Diese Zahlen dienen lediglich
+              der Anzeige der Gesamtauslastung auf der Startseite.
             </p>
 
             <!-- 3 -->
@@ -294,6 +337,10 @@
                 <tr>
                   <td>HTTP-Server-Logs (IP, Zeitstempel, Pfad)</td>
                   <td>Art. 6 Abs. 1 lit. f – berechtigtes Interesse an Betrieb und Fehlerdiagnose</td>
+                </tr>
+                <tr>
+                  <td>Speicherung der Mailbox-Erstellungs-IP zum Missbrauchs- und Überlastungsschutz</td>
+                  <td>Art. 6 Abs. 1 lit. f – berechtigtes Interesse an Stabilität und Abwehr von Missbrauch</td>
                 </tr>
                 <tr>
                   <td>Mailbox-Verlauf im Browser (localStorage)</td>
@@ -363,7 +410,8 @@
                 E-Mail-Daten werden automatisch nach Ablauf der konfigurierten Frist gelöscht.</li>
               <li><strong>Einschränkung der Verarbeitung</strong> (Art. 18 DSGVO)</li>
               <li><strong>Datenübertragbarkeit</strong> (Art. 20 DSGVO): Analysedaten sind
-                über die JSON-Export-Funktion im Report verfügbar.</li>
+                über die JSON- und PDF-Export-Funktion im Report verfügbar (beide werden vollständig
+                im Browser erzeugt).</li>
               <li><strong>Widerspruch</strong> (Art. 21 DSGVO)</li>
               <li><strong>Widerruf der Einwilligung</strong> (Art. 7 Abs. 3 DSGVO): Die
                 Einwilligung zum Mailbox-Verlauf kannst du jederzeit widerrufen (siehe
