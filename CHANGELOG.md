@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Renamed the project from MailProbe to Sender-Report** (complete rename): display name, Go module path (`github.com/brightcolor/sender-report`), `cmd/` folder, binary, Docker image (`ghcr.io/brightcolor/sender-report`), `SENDER_REPORT_IMAGE` env var, Prometheus metric prefix (`sender_report_*`), and the brand mark (`SR`). Internal storage keys, cookies, the SQLite filename and cryptographic protocol constants are intentionally kept stable for backward compatibility.
+- **Completed the rename down to internal identifiers (breaking, hard reset).** The remaining `mailprobe` references were removed too: browser storage keys are now `sr:*` (theme, consent, mailboxes, lastmsg), the fallback cookie is `sr_mailbox`, the SQLite filename default is `sender-report.db`, and the cryptographic domain-separation constants are now `senderreport-id-v1` / `senderreport-content-v1`. This **invalidates any pre-existing encrypted mailboxes and mailbox links** and changes all mailbox addresses — a deliberate clean break, no backward compatibility. The `MPE1` blob magic is unchanged. (The `mailprobe` name remains only in this changelog as project history.)
 
 ### Added
 - Added provider-specific RBL/DNSBL delisting guidance, lookup evidence, TXT evidence, and pre-delisting remediation steps.

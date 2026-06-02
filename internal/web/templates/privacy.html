@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="description" content="Datenschutzerklärung für {{.AppName}}" />
   <title>Datenschutz – {{.AppName}}</title>
-  <script>(function(){try{var p=localStorage.getItem('mailprobe-theme')||'auto';var d=p==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.bsTheme=d;document.documentElement.dataset.themePreference=p;}catch(e){document.documentElement.dataset.bsTheme='light';}})()</script>
+  <script>(function(){try{var p=localStorage.getItem('sr:theme')||'auto';var d=p==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.bsTheme=d;document.documentElement.dataset.themePreference=p;}catch(e){document.documentElement.dataset.bsTheme='light';}})()</script>
   <link rel="stylesheet" href="/static/vendor/bootstrap.min.css">
   <link rel="stylesheet" href="/static/vendor/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/static/vendor/overlayscrollbars.min.css">
@@ -220,28 +220,28 @@
                 </thead>
                 <tbody>
                   <tr>
-                    <td><code>mailprobe_mailbox</code></td>
+                    <td><code>sr_mailbox</code></td>
                     <td>HTTP-Cookie<br><small class="text-secondary">HttpOnly, SameSite=Lax</small></td>
                     <td>Speichert den Token der aktuell aktiven Mailbox, damit sie beim Seitenaufruf wiedererkannt wird. Nicht durch JavaScript auslesbar. Wird nur im JavaScript-losen Fallback-Modus gesetzt – im normalen (verschlüsselten) Betrieb erfolgt die Wiedererkennung allein über den Browser-Speicher.</td>
                     <td>Läuft mit der Mailbox ab (Standard: 24 Stunden)</td>
                     <td><span class="badge text-bg-secondary">Nicht erforderlich</span><br><small class="text-secondary">technisch notwendig</small></td>
                   </tr>
                   <tr>
-                    <td><code>mailprobe-theme</code></td>
+                    <td><code>sr:theme</code></td>
                     <td>localStorage</td>
                     <td>Speichert die Farbschema-Einstellung (hell/dunkel/auto) für die Benutzeroberfläche.</td>
                     <td>Unbegrenzt (bis manuelle Löschung)</td>
                     <td><span class="badge text-bg-secondary">Nicht erforderlich</span><br><small class="text-secondary">funktional/Komfort</small></td>
                   </tr>
                   <tr>
-                    <td><code>mailprobe:consent</code></td>
+                    <td><code>sr:consent</code></td>
                     <td>localStorage</td>
                     <td>Speichert deine Einwilligungsentscheidung bezüglich des Mailbox-Verlaufs (<code>granted</code> oder <code>declined</code>).</td>
                     <td>Unbegrenzt (bis manuelle Löschung)</td>
                     <td><span class="badge text-bg-secondary">Nicht erforderlich</span><br><small class="text-secondary">technisch notwendig für Einwilligungsspeicherung</small></td>
                   </tr>
                   <tr>
-                    <td><code>mailprobe:mailboxes</code></td>
+                    <td><code>sr:mailboxes</code></td>
                     <td>localStorage</td>
                     <td>Speichert eine Liste der zuletzt genutzten Mailbox-Tokens, damit frühere Testadressen auf der Startseite angezeigt werden können.</td>
                     <td>Unbegrenzt (bis manuelle Löschung), max. 12 Einträge</td>
@@ -252,7 +252,7 @@
             </div>
             <p>
               Du kannst deine Einwilligung zum Mailbox-Verlauf jederzeit widerrufen, indem du
-              den localStorage-Eintrag <code>mailprobe:consent</code> im Browser löschst
+              den localStorage-Eintrag <code>sr:consent</code> im Browser löschst
               (Browser-Einstellungen → Datenschutz &amp; Sicherheit → Website-Daten löschen).
               Beim nächsten Seitenaufruf erscheint die Einwilligungsabfrage erneut.
             </p>

@@ -6,7 +6,7 @@
 //	seal(plaintext, recipientPublic R):
 //	  (e_sk, e_pk) = ephemeral X25519 key pair, fresh per message
 //	  shared = X25519(e_sk, R)
-//	  key    = HKDF-SHA256(ikm=shared, salt=e_pk‖R, info="mailprobe-content-v1", 32)
+//	  key    = HKDF-SHA256(ikm=shared, salt=e_pk‖R, info="senderreport-content-v1", 32)
 //	  nonce  = 12 random bytes
 //	  ct     = AES-256-GCM.Seal(key, nonce, plaintext, aad=e_pk)
 //	  blob   = "MPE1" ‖ e_pk[32] ‖ nonce[12] ‖ ct
@@ -14,7 +14,7 @@
 //	open(blob, recipientSecret r):
 //	  shared = X25519(r, e_pk)
 //	  R      = X25519.base(r)
-//	  key    = HKDF-SHA256(shared, salt=e_pk‖R, info="mailprobe-content-v1", 32)
+//	  key    = HKDF-SHA256(shared, salt=e_pk‖R, info="senderreport-content-v1", 32)
 //	  plaintext = AES-256-GCM.Open(key, nonce, ct, aad=e_pk)
 //
 // The server only ever holds recipient *public* keys, so it can Seal but never
@@ -43,10 +43,10 @@ const (
 	magic = "MPE1"
 
 	// HKDF info string. Changing this breaks compatibility with existing blobs.
-	hkdfInfo = "mailprobe-content-v1"
+	hkdfInfo = "senderreport-content-v1"
 
 	// Domain separator for the identifier hash.
-	identDomain = "mailprobe-id-v1"
+	identDomain = "senderreport-id-v1"
 
 	keySize   = 32 // X25519 key size
 	nonceSize = 12 // AES-GCM nonce

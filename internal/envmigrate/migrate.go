@@ -61,7 +61,7 @@ var All = []VarDef{
 
 	// ── Storage ───────────────────────────────────────────────────────────────
 	{Group: "Storage", Key: "DATA_DIR", Default: "/data", Comment: "Base directory for persistent data"},
-	{Key: "DB_PATH", Default: "/data/mailprobe.db", Comment: "Path to the SQLite database file"},
+	{Key: "DB_PATH", Default: "/data/sender-report.db", Comment: "Path to the SQLite database file"},
 
 	// ── Lifetime & cleanup ────────────────────────────────────────────────────
 	{Group: "Lifetime & cleanup", Key: "MAILBOX_TTL", Default: "24h", Comment: "How long a mailbox is valid"},

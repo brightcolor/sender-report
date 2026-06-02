@@ -114,7 +114,7 @@ func TestBadKeySizes(t *testing.T) {
 func TestVector(t *testing.T) {
 	recipientSecret := mustHex("0101010101010101010101010101010101010101010101010101010101010101")
 	ephemeralSecret := mustHex("0202020202020202020202020202020202020202020202020202020202020202")
-	plaintext := []byte("mailprobe e2e test vector")
+	plaintext := []byte("sender.report e2e test vector")
 
 	recipientPublic, err := PublicFromSecret(recipientSecret)
 	if err != nil {

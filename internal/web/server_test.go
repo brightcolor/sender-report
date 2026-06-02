@@ -111,7 +111,7 @@ func TestHomeRendersWithoutServerSideMailbox(t *testing.T) {
 	}
 	// Phase 2: no server-side mailbox creation, so no mailbox cookie is set.
 	for _, c := range rr.Result().Cookies() {
-		if c.Name == "mailprobe_mailbox" {
+		if c.Name == "sr_mailbox" {
 			t.Fatalf("unexpected mailbox cookie on home response (Phase 2 uses client-side creation)")
 		}
 	}

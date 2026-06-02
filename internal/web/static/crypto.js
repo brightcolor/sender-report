@@ -26,8 +26,8 @@
   var subtle = (root.crypto || {}).subtle;
 
   var MAGIC = 'MPE1';
-  var HKDF_INFO = 'mailprobe-content-v1';
-  var IDENT_DOMAIN = 'mailprobe-id-v1';
+  var HKDF_INFO = 'senderreport-content-v1';
+  var IDENT_DOMAIN = 'senderreport-id-v1';
   var IDENT_LEN = 10; // bytes -> 16 base32 chars
   var B32 = 'abcdefghijklmnopqrstuvwxyz234567';
 
@@ -149,9 +149,9 @@
   // ── self-test against the Go test vector (sealedbox_test.go: TestVector) ──────
   var VECTOR = {
     secret: '0101010101010101010101010101010101010101010101010101010101010101',
-    blob: '4d504531ce8d3ad1ccb633ec7b70c17814a5c76ecd029685050d344745ba05870e587d596e9a68d5e08c00898a51b0c3379c42e57f2de8d1a1dd076b128cb7422a1a9a3f10c69b25e93a2fe9a3c9ea94b9fdf5094b74a2b03c',
-    plaintext: 'mailprobe e2e test vector',
-    identifier: '3t7lf53kan2txsm7',
+    blob: '4d504531ce8d3ad1ccb633ec7b70c17814a5c76ecd029685050d344745ba05870e587d59971af11d377182deeb95ee45f174b725a8cfa415cd369fed8e453b1e26cf235136f35c76c05bc44dabd72560c872093e6f75f81e20261654e2',
+    plaintext: 'sender.report e2e test vector',
+    identifier: '5zm3ajnzfh72kewy',
   };
   async function cryptoSelfTest() {
     try {

@@ -1272,7 +1272,7 @@ func setMailboxCookie(w http.ResponseWriter, mb model.Mailbox) {
 		maxAge = 0
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:     "mailprobe_mailbox",
+		Name:     "sr_mailbox",
 		Value:    mb.Token,
 		Path:     "/",
 		MaxAge:   maxAge,

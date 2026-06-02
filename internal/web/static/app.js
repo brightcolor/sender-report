@@ -13,7 +13,7 @@ function resolveThemePreference(preference) {
 }
 
 function applyThemePreference(preference) {
-  const selected = preference || localStorage.getItem('mailprobe-theme') || 'auto';
+  const selected = preference || localStorage.getItem('sr:theme') || 'auto';
   const resolved = resolveThemePreference(selected);
   document.documentElement.dataset.bsTheme = resolved;
   document.documentElement.dataset.themePreference = selected;
@@ -38,15 +38,15 @@ function applyThemePreference(preference) {
 }
 
 function setupThemeToggle() {
-  applyThemePreference(localStorage.getItem('mailprobe-theme') || 'auto');
+  applyThemePreference(localStorage.getItem('sr:theme') || 'auto');
   document.getElementById('theme-toggle')?.addEventListener('click', () => {
     const current = document.documentElement.dataset.themePreference || 'auto';
     const next = current === 'auto' ? 'dark' : current === 'dark' ? 'light' : 'auto';
-    localStorage.setItem('mailprobe-theme', next);
+    localStorage.setItem('sr:theme', next);
     applyThemePreference(next);
   });
   window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    if ((localStorage.getItem('mailprobe-theme') || 'auto') === 'auto') applyThemePreference('auto');
+    if ((localStorage.getItem('sr:theme') || 'auto') === 'auto') applyThemePreference('auto');
   });
 }
 
@@ -333,7 +333,7 @@ function updateMailboxIdentity(data) {
     statCard.dataset.token           = data.token;
     statCard.dataset.latestMessageId = '0';
   }
-  sessionStorage.setItem(`mailprobe:lastmsg:${data.token}`, '0');
+  sessionStorage.setItem(`sr:lastmsg:${data.token}`, '0');
 
   // Phase 2: reveal main content, hide loading spinner.
   const loader  = document.getElementById('mb-init-loader');
@@ -678,7 +678,7 @@ function setupMailboxPolling() {
   if (card) {
     // ── Mailbox-Seite: Reload wenn neue Nachricht ──────────────────────────
     const token    = card.dataset.token;
-    const stateKey = `mailprobe:lastmsg:${token}`;
+    const stateKey = `sr:lastmsg:${token}`;
     if (!sessionStorage.getItem(stateKey)) {
       sessionStorage.setItem(stateKey, card.dataset.latestMessageId || '0');
     }
@@ -856,22 +856,22 @@ function colorScoreMinis() {
 // ── Cookie consent & mailbox history ─────────────────────────────────────────
 
 function getConsentState() {
-  try { return localStorage.getItem('mailprobe:consent'); } catch (_) { return null; }
+  try { return localStorage.getItem('sr:consent'); } catch (_) { return null; }
 }
 
 function saveMbToHistory(token) {
   if (!token || getConsentState() !== 'granted') return;
   try {
-    const stored = JSON.parse(localStorage.getItem('mailprobe:mailboxes') || '[]');
+    const stored = JSON.parse(localStorage.getItem('sr:mailboxes') || '[]');
     const updated = [token, ...stored.filter((t) => t !== token)].slice(0, 12);
-    localStorage.setItem('mailprobe:mailboxes', JSON.stringify(updated));
+    localStorage.setItem('sr:mailboxes', JSON.stringify(updated));
   } catch (_) {}
 }
 
 function removeFromHistory(token) {
   try {
-    const stored = JSON.parse(localStorage.getItem('mailprobe:mailboxes') || '[]');
-    localStorage.setItem('mailprobe:mailboxes', JSON.stringify(stored.filter((t) => t !== token)));
+    const stored = JSON.parse(localStorage.getItem('sr:mailboxes') || '[]');
+    localStorage.setItem('sr:mailboxes', JSON.stringify(stored.filter((t) => t !== token)));
   } catch (_) {}
 }
 
@@ -924,7 +924,7 @@ async function loadPreviousMailboxes() {
 
   const currentToken = document.getElementById('check-panel')?.dataset?.token || '';
   let stored = [];
-  try { stored = JSON.parse(localStorage.getItem('mailprobe:mailboxes') || '[]'); } catch (_) {}
+  try { stored = JSON.parse(localStorage.getItem('sr:mailboxes') || '[]'); } catch (_) {}
   const others = stored.filter((t) => t !== currentToken);
   if (others.length === 0) return;
 
@@ -1069,7 +1069,7 @@ function setupCookieConsent() {
 
 // Called from HTML onclick – must be global
 function consentAccept() {
-  try { localStorage.setItem('mailprobe:consent', 'granted'); } catch (_) {}
+  try { localStorage.setItem('sr:consent', 'granted'); } catch (_) {}
   document.getElementById('mp-consent-banner')?.classList.add('d-none');
   const token = document.getElementById('check-panel')?.dataset?.token;
   // Nur speichern wenn Adresse bereits kopiert wurde
@@ -1078,7 +1078,7 @@ function consentAccept() {
 }
 
 function consentDecline() {
-  try { localStorage.setItem('mailprobe:consent', 'declined'); } catch (_) {}
+  try { localStorage.setItem('sr:consent', 'declined'); } catch (_) {}
   document.getElementById('mp-consent-banner')?.classList.add('d-none');
 }
 
@@ -1230,12 +1230,12 @@ async function initHomeMailbox() {
   window.SenderReportCrypto?.cryptoSelfTest().catch(() => {});
 
   // Try to restore an existing mailbox from localStorage.
-  // We look for the most recent identifier in mailprobe:mailboxes whose
+  // We look for the most recent identifier in sr:mailboxes whose
   // secret token is still stored and whose server-side mailbox is alive.
   const crypto = window.SenderReportCrypto;
   if (crypto) {
     try {
-      const raw = localStorage.getItem('mailprobe:mailboxes');
+      const raw = localStorage.getItem('sr:mailboxes');
       const history = raw ? JSON.parse(raw) : [];
       for (const entry of history.slice(0, 5)) {
         const identifier = typeof entry === 'string' ? entry : entry?.token;

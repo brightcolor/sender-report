@@ -34,7 +34,7 @@ Statt eines zufälligen Identifiers **ist der Token das geheime Schlüsselmateri
 Token  = base64url( 0x01 ‖ secret[32] )           // ~45 Zeichen, steht in der URL
 secret = X25519-Privatschlüssel (32 zufällige Bytes)
 public = X25519.base(secret)                       // an den Server übermittelt
-ident  = base32lower( SHA-256("mailprobe-id-v1" ‖ public)[:10] )   // 16 Zeichen
+ident  = base32lower( SHA-256("senderreport-id-v1" ‖ public)[:10] )   // 16 Zeichen
 ```
 
 - **`ident`** ist der lokale Teil der E-Mail-Adresse (`ident@domain`) **und** der
@@ -54,7 +54,7 @@ Sealed-Box-Konstruktion, identisch in Go (`internal/sealedbox`) und JS (`static/
 seal(plaintext, recipientPublic R):
   (e_sk, e_pk) = X25519-Schlüsselpaar (ephemer, pro Nachricht neu)
   shared = X25519(e_sk, R)
-  key    = HKDF-SHA256(ikm=shared, salt=e_pk‖R, info="mailprobe-content-v1", len=32)
+  key    = HKDF-SHA256(ikm=shared, salt=e_pk‖R, info="senderreport-content-v1", len=32)
   nonce  = 12 zufällige Bytes
   ct     = AES-256-GCM.seal(key, nonce, plaintext, aad=e_pk)     // enthält 16-Byte-Tag
   return  "MPE1" ‖ e_pk[32] ‖ nonce[12] ‖ ct
@@ -63,7 +63,7 @@ open(blob, recipientSecret r):
   parse  magic, e_pk, nonce, ct
   shared = X25519(r, e_pk)
   R      = X25519.base(r)
-  key    = HKDF-SHA256(shared, salt=e_pk‖R, info="mailprobe-content-v1", 32)
+  key    = HKDF-SHA256(shared, salt=e_pk‖R, info="senderreport-content-v1", 32)
   return AES-256-GCM.open(key, nonce, ct, aad=e_pk)
 ```
 

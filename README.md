@@ -307,7 +307,7 @@ Operational recommendations:
 
 Data is persisted in Docker volume `sender_report_data`:
 
-- SQLite database (`/data/mailprobe.db` + WAL/SHM)
+- SQLite database (`/data/sender-report.db` + WAL/SHM)
 
 Backup options:
 

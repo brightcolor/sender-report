@@ -1,12 +1,12 @@
-﻿APP=mailprobe
+﻿APP=sender-report
 
 .PHONY: build run test compose-up compose-down
 
 build:
-	go build -o bin/$(APP) ./cmd/mailprobe
+	go build -o bin/$(APP) ./cmd/sender-report
 
 run:
-	go run ./cmd/mailprobe
+	go run ./cmd/sender-report
 
 test:
 	go test ./...

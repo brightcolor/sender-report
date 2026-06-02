@@ -9,7 +9,7 @@ import (
 // CGO_ENABLED=0), so these tests must run in the default build.
 
 func TestOpenCreatesSchema(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "mailprobe.db")
+	dbPath := filepath.Join(t.TempDir(), "sender-report.db")
 	sqlDB, err := Open(dbPath)
 	if err != nil {
 		t.Fatalf("Open returned error: %v", err)

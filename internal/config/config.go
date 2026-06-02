@@ -59,7 +59,7 @@ func Load() (Config, error) {
 		SMTPListenAddr:       getEnv("SMTP_LISTEN_ADDR", ":2525"),
 		PublicBaseURL:        strings.TrimRight(getEnv("PUBLIC_BASE_URL", ""), "/"),
 		SMTPDomain:           strings.ToLower(getEnv("SMTP_DOMAIN", "")),
-		DBPath:               getEnv("DB_PATH", "/data/mailprobe.db"),
+		DBPath:               getEnv("DB_PATH", "/data/sender-report.db"),
 		DataDir:              getEnv("DATA_DIR", "/data"),
 		MailboxTTL:           getEnvDuration("MAILBOX_TTL", 24*time.Hour),
 		RetentionTTL:         getEnvDuration("DATA_RETENTION_TTL", 7*24*time.Hour),
