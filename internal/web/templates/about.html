@@ -4,8 +4,42 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="description" content="sender.report – wie es funktioniert, was geprüft wird und häufige Fragen." />
-  <title>Über sender.report – {{.AppName}}</title>
+  <meta name="description" content="So funktioniert {{.AppName}}: über 50 Checks für E-Mail-Zustellbarkeit (SPF, DKIM, DMARC, Spam-Score, Blacklists, DNS) mit Wichtigkeits-Bewertung – plus Antworten auf häufige Fragen." />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <meta name="theme-color" content="#0d6efd" />
+  <link rel="canonical" href="{{.PublicURL}}/about" />
+  <title>Wie {{.AppName}} prüft: alle Checks &amp; FAQ – SPF, DKIM, DMARC</title>
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="{{.AppName}}" />
+  <meta property="og:title" content="Wie {{.AppName}} deine E-Mail-Zustellbarkeit prüft" />
+  <meta property="og:description" content="Über 50 Checks mit Wichtigkeits-Bewertung und Erklärungen – plus FAQ rund um SPF, DKIM, DMARC und Spam-Score." />
+  <meta property="og:url" content="{{.PublicURL}}/about" />
+  <meta property="og:locale" content="de_DE" />
+  <meta property="og:image" content="{{.PublicURL}}/static/og-image.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- FAQ structured data (rich results) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": "Brauche ich einen Account?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Nein. Es wird automatisch eine temporäre Mailbox erzeugt – ohne Registrierung, ohne E-Mail-Adresse, ohne Passwort." } },
+      { "@type": "Question", "name": "Was passiert mit meinen Testmails?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Sie werden ausschließlich für die Analyse verarbeitet und nach Ablauf der Mailbox automatisch und vollständig gelöscht. Es findet keine Weitergabe an Dritte statt." } },
+      { "@type": "Question", "name": "Wie lange ist eine Mailbox gültig?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Standardmäßig 24 Stunden. In der Mailbox-Ansicht lässt sich die Gültigkeit bei Bedarf verlängern." } },
+      { "@type": "Question", "name": "Welche Prüfungen werden durchgeführt?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Über 50 Checks aus fünf Bereichen: Authentifizierung (SPF, DKIM, DMARC inkl. Policy, Schlüssellänge, Alignment), DNS & Infrastruktur (PTR, HELO, TLS, MX, MTA-STS, DNSSEC), Spam-Signale (SpamAssassin, Rspamd, DNSBL), Format & Inhalt sowie Header & Rohdaten. Das Ergebnis fasst ein Score von 0–10 zusammen." } },
+      { "@type": "Question", "name": "Kann ich sender.report selbst hosten?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Ja. sender.report ist Open Source und läuft als einzelnes Docker-Image inklusive Web-UI, SMTP-Empfang und Datenbank – komplett auf eigener Infrastruktur." } }
+    ]
+  }
+  </script>
+
   <script>(function(){try{var p=localStorage.getItem('sr:theme')||'auto';var d=p==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.bsTheme=d;document.documentElement.dataset.themePreference=p;}catch(e){document.documentElement.dataset.bsTheme='light';}})()</script>
   <link rel="stylesheet" href="/static/vendor/bootstrap.min.css">
   <link rel="stylesheet" href="/static/vendor/bootstrap-icons.min.css">

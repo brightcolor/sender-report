@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-03
+
+### Added
+- **SEO.** The public pages are now discoverable:
+  - Rich `<head>` metadata on the home and about pages: keyword-focused title &
+    description, `canonical`, Open Graph + Twitter Card tags, and a social share
+    image (`/static/og-image.svg`).
+  - JSON-LD structured data: `WebApplication` on the home page and a `FAQPage`
+    on the about page (eligible for FAQ rich results).
+  - `GET /robots.txt` (allows public pages, disallows token-scoped private pages
+    and `/api/`, links the sitemap) and `GET /sitemap.xml` (home, about, privacy).
+  - Private, token-scoped pages (`/report/*`, `/mailbox/*`) are marked
+    `noindex,nofollow` so report contents never get indexed.
+  - All absolute URLs derive from `PUBLIC_BASE_URL` (or the request host when
+    unset) — set `PUBLIC_BASE_URL` for correct canonical/OG/sitemap links.
+
+### Changed
+- Report section headers now glow softly across the whole header in their status
+  colour (green / yellow / red) instead of a uniform blue.
+- The section intro hints are shortened to a single concise line.
+
 ## [1.5.2] - 2026-06-03
 
 ### Changed

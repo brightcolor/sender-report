@@ -4,8 +4,46 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="description" content="Teste deine E-Mail auf Zustellbarkeit – SPF, DKIM, DMARC, Spam-Score und mehr. Self-hosted, kein Account nötig." />
-  <title>{{.AppName}} – E-Mail Deliverability Test</title>
+  <meta name="description" content="Kostenloser E-Mail-Zustellbarkeit-Test: Prüfe SPF, DKIM, DMARC, Spam-Score, Blacklists &amp; Reverse-DNS in Sekunden. Ohne Anmeldung, Ende-zu-Ende-verschlüsselt, self-hosted &amp; Open Source." />
+  <meta name="keywords" content="E-Mail Deliverability Test, SPF prüfen, DKIM Test, DMARC Check, Spam Score Test, Blacklist Check, Mail Tester, E-Mail Zustellbarkeit, deliverability checker" />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <meta name="theme-color" content="#0d6efd" />
+  <link rel="canonical" href="{{.PublicURL}}/" />
+  <title>{{.AppName}} – E-Mail Deliverability Test (SPF, DKIM, DMARC &amp; Spam-Score)</title>
+
+  <!-- Open Graph / social sharing -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="{{.AppName}}" />
+  <meta property="og:title" content="{{.AppName}} – kostenloser E-Mail Deliverability Test" />
+  <meta property="og:description" content="Prüfe SPF, DKIM, DMARC, Spam-Score, Blacklists &amp; mehr in Sekunden – ohne Anmeldung, Ende-zu-Ende-verschlüsselt." />
+  <meta property="og:url" content="{{.PublicURL}}/" />
+  <meta property="og:locale" content="de_DE" />
+  <meta property="og:image" content="{{.PublicURL}}/static/og-image.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{{.AppName}} – E-Mail Deliverability Test" />
+  <meta name="twitter:description" content="SPF, DKIM, DMARC, Spam-Score &amp; Blacklists in Sekunden prüfen – ohne Anmeldung, E2E-verschlüsselt." />
+  <meta name="twitter:image" content="{{.PublicURL}}/static/og-image.svg" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "{{.AppName}}",
+    "url": "{{.PublicURL}}/",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Any (Web)",
+    "description": "Kostenloser E-Mail-Zustellbarkeit-Test: prüft SPF, DKIM, DMARC, Spam-Score, Blacklists und Reverse-DNS. Ohne Anmeldung, Ende-zu-Ende-verschlüsselt, Open Source.",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+    "featureList": [
+      "SPF-, DKIM- und DMARC-Prüfung (kryptografisch verifiziert)",
+      "Spam-Score (SpamAssassin / Rspamd)",
+      "DNSBL / Blacklist-Check",
+      "Reverse-DNS, HELO, MTA-STS, DNSSEC",
+      "Ende-zu-Ende-verschlüsselte Reports"
+    ]
+  }
+  </script>
+
   <script>(function(){try{var p=localStorage.getItem('sr:theme')||'auto';var d=p==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.bsTheme=d;document.documentElement.dataset.themePreference=p;}catch(e){document.documentElement.dataset.bsTheme='light';}})()</script>
   <link rel="stylesheet" href="/static/vendor/bootstrap.min.css">
   <link rel="stylesheet" href="/static/vendor/bootstrap-icons.min.css">

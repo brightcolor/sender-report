@@ -259,6 +259,12 @@ The web server derives its public URL from the incoming request:
 Generated addresses use the detected request host, with the port removed.
 Example: opening `https://probe.example.org` generates addresses like `<token>@probe.example.org`.
 
+> **SEO tip:** the home and about pages emit canonical, Open Graph and JSON-LD
+> tags, and the app serves `/robots.txt` and `/sitemap.xml`. These use
+> `PUBLIC_BASE_URL` for absolute URLs (falling back to the request host). For a
+> public deployment behind a reverse proxy, set `PUBLIC_BASE_URL` (and
+> `TRUSTED_PROXY_CIDRS`) so search engines see stable, correct URLs.
+
 Set `SMTP_DOMAIN` when your SMTP receiving domain differs from the web host, for example:
 
 ```env

@@ -349,6 +349,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/static/favicon.svg", http.StatusMovedPermanently)
 	})
+	mux.HandleFunc("/robots.txt", s.robotsTxt)
+	mux.HandleFunc("/sitemap.xml", s.sitemapXML)
 	mux.HandleFunc("/", s.home)
 	mux.HandleFunc("/about", s.aboutPage)
 	mux.HandleFunc("/privacy", s.privacyPage)
@@ -464,6 +466,46 @@ func (s *Server) metricsPage(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	_, _ = w.Write([]byte(s.metrics.RenderPrometheus()))
+}
+
+// robotsTxt allows crawling of public pages, disallows token-scoped private
+// pages, and points to the sitemap.
+func (s *Server) robotsTxt(w http.ResponseWriter, r *http.Request) {
+	base := s.publicBaseURL(r)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = io.WriteString(w, "User-agent: *\n"+
+		"Allow: /$\n"+
+		"Allow: /about\n"+
+		"Allow: /privacy\n"+
+		"Disallow: /mailbox/\n"+
+		"Disallow: /report/\n"+
+		"Disallow: /raw/\n"+
+		"Disallow: /api/\n"+
+		"Sitemap: "+base+"/sitemap.xml\n")
+}
+
+// sitemapXML lists the public, indexable pages.
+func (s *Server) sitemapXML(w http.ResponseWriter, r *http.Request) {
+	base := s.publicBaseURL(r)
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	pages := []struct {
+		Loc      string
+		Priority string
+	}{
+		{base + "/", "1.0"},
+		{base + "/about", "0.8"},
+		{base + "/privacy", "0.3"},
+	}
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
+	b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
+	for _, p := range pages {
+		b.WriteString("  <url><loc>" + template.HTMLEscapeString(p.Loc) + "</loc><changefreq>weekly</changefreq><priority>" + p.Priority + "</priority></url>\n")
+	}
+	b.WriteString("</urlset>\n")
+	_, _ = io.WriteString(w, b.String())
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
@@ -772,11 +814,13 @@ func (s *Server) aboutPage(w http.ResponseWriter, r *http.Request) {
 		host = h
 	}
 	s.render(w, "about", struct {
-		AppName string
-		Domain  string
+		AppName   string
+		Domain    string
+		PublicURL string
 	}{
-		AppName: s.cfg.AppName,
-		Domain:  host,
+		AppName:   s.cfg.AppName,
+		Domain:    host,
+		PublicURL: s.publicBaseURL(r),
 	})
 }
 
@@ -1350,11 +1394,11 @@ func sortChecks(checks []model.CheckResult) {
 func groupReportChecks(checks []model.CheckResult) []ReportCheckGroup {
 	order := []string{"Authentifizierung", "DNS und Infrastruktur", "Spamfilter", "Format und Inhalt", "Header und Rohdaten"}
 	hints := map[string]string{
-		"Authentifizierung":     "Beweist, dass die Mail wirklich von deiner Domain stammt. SPF, DKIM und DMARC sind heute der wichtigste Faktor für die Zustellung – Gmail und Outlook lehnen ohne sie zunehmend ab.",
-		"DNS und Infrastruktur": "Prüft, ob deine sendende IP und deine Hostnamen sauber im DNS hinterlegt sind (Reverse DNS, HELO, MX, A/AAAA, TLS). Inkonsistenzen hier wirken wie ein schlecht konfigurierter oder gekaperter Server.",
-		"Spamfilter":            "Externe Reputations- und Inhaltsfilter (SpamAssassin, Rspamd, DNSBL). Zeigt, wie verbreitete Filter deine Mail bewerten und welche Einzelsignale dabei zählen.",
-		"Format und Inhalt":     "Aufbau der Nachricht: MIME-Struktur, Text/HTML-Verhältnis, Links, Betreff und Anhänge. Schlechtes Format ist ein klassisches Spam-Signal und kann die Darstellung beim Empfänger zerstören.",
-		"Header und Rohdaten":   "Technische Basis-Header (Date, Message-ID, Received-Kette). Fehlende oder unplausible Pflichtfelder deuten auf einen fehlkonfigurierten Mailserver hin.",
+		"Authentifizierung":     "Beweist, dass die Mail wirklich von deiner Domain stammt (SPF, DKIM, DMARC).",
+		"DNS und Infrastruktur": "Sind sendende IP und Hostnamen sauber im DNS? (rDNS, HELO, MX, TLS)",
+		"Spamfilter":            "Wie verbreitete Spamfilter und Reputationslisten deine Mail bewerten.",
+		"Format und Inhalt":     "Aufbau der Nachricht: MIME, Text/HTML, Links und Betreff.",
+		"Header und Rohdaten":   "Technische Pflicht-Header: Date, Message-ID und Received-Kette.",
 	}
 	grouped := make(map[string][]model.CheckResult)
 	for _, check := range checks {

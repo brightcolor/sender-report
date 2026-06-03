@@ -1018,25 +1018,28 @@ body,
 
 /* ── Check-group status badges ──────────────────────────────────────────── */
 /* Prominent check-group section header — used by both server-rendered and
-   client-side decrypted report layouts. */
+   client-side decrypted report layouts. The whole header glows softly in the
+   group's status colour (green / yellow / red). */
+.mp-group-card { --mp-grp-rgb: var(--bs-primary-rgb); }
+.mp-group-card.mp-grp-fail { --mp-grp-rgb: var(--bs-danger-rgb); }
+.mp-group-card.mp-grp-warn { --mp-grp-rgb: var(--bs-warning-rgb); }
+.mp-group-card.mp-grp-pass { --mp-grp-rgb: var(--bs-success-rgb); }
+
 .mp-group-header {
-  background: linear-gradient(0deg,
-    rgba(var(--bs-primary-rgb), .04),
-    rgba(var(--bs-primary-rgb), .08));
-  border-bottom: 2px solid rgba(var(--bs-primary-rgb), .35);
+  background:
+    radial-gradient(ellipse 75% 150% at 0% 50%, rgba(var(--mp-grp-rgb), .17), transparent 72%),
+    linear-gradient(0deg, rgba(var(--mp-grp-rgb), .05), rgba(var(--mp-grp-rgb), .11));
+  border-bottom: 2px solid rgba(var(--mp-grp-rgb), .38);
   padding: 0;
 }
 [data-bs-theme="dark"] .mp-group-header {
-  background: linear-gradient(0deg,
-    rgba(var(--bs-primary-rgb), .08),
-    rgba(var(--bs-primary-rgb), .14));
+  background:
+    radial-gradient(ellipse 75% 150% at 0% 50%, rgba(var(--mp-grp-rgb), .24), transparent 72%),
+    linear-gradient(0deg, rgba(var(--mp-grp-rgb), .10), rgba(var(--mp-grp-rgb), .19));
 }
 
 /* Coloured left accent on the whole group card by worst status */
-.mp-group-card { border-left: 3px solid var(--bs-border-color); }
-.mp-group-card.mp-grp-fail { border-left-color: var(--bs-danger); }
-.mp-group-card.mp-grp-warn { border-left-color: var(--bs-warning); }
-.mp-group-card.mp-grp-pass { border-left-color: var(--bs-success); }
+.mp-group-card { border-left: 3px solid rgba(var(--mp-grp-rgb), .65); }
 
 /* Clickable, collapsible group header */
 .mp-group-toggle {

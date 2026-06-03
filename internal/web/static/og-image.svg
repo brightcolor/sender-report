@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="sender.report – E-Mail Deliverability Test">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#111a2e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="18%" cy="30%" r="70%">
+      <stop offset="0" stop-color="#0d6efd" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#0d6efd" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Logo mark -->
+  <g transform="translate(96,96)">
+    <rect width="96" height="96" rx="21" fill="#0d6efd"/>
+    <rect x="12" y="24" width="54" height="39" rx="6" fill="white"/>
+    <path d="M12 30 L39 51 L66 30" stroke="#0d6efd" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <circle cx="72" cy="72" r="21" fill="#198754"/>
+    <path d="M63 72 L69.6 78.6 L82.5 64.5" stroke="white" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+  <text x="216" y="170" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="56" font-weight="700" fill="#ffffff">sender.report</text>
+
+  <!-- Headline -->
+  <text x="96" y="330" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="82" font-weight="800" fill="#ffffff">E-Mail Deliverability Test</text>
+  <text x="96" y="410" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="42" font-weight="500" fill="#9fb3d1">SPF · DKIM · DMARC · Spam-Score · Blacklists</text>
+
+  <!-- Feature pills -->
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="30" font-weight="600">
+    <g transform="translate(96,470)">
+      <rect width="300" height="64" rx="32" fill="#0d6efd" fill-opacity="0.16" stroke="#0d6efd" stroke-opacity="0.5"/>
+      <text x="150" y="42" text-anchor="middle" fill="#7db1ff">Ohne Anmeldung</text>
+    </g>
+    <g transform="translate(416,470)">
+      <rect width="360" height="64" rx="32" fill="#198754" fill-opacity="0.16" stroke="#198754" stroke-opacity="0.5"/>
+      <text x="180" y="42" text-anchor="middle" fill="#5cd699">Ende-zu-Ende verschlüsselt</text>
+    </g>
+    <g transform="translate(796,470)">
+      <rect width="240" height="64" rx="32" fill="#6c757d" fill-opacity="0.16" stroke="#9aa6b2" stroke-opacity="0.5"/>
+      <text x="120" y="42" text-anchor="middle" fill="#c4ccd6">Open Source</text>
+    </g>
+  </g>
+</svg>
