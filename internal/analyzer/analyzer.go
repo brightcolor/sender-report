@@ -24,6 +24,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/miekg/dns"
 	"golang.org/x/net/html"
 
 	"github.com/brightcolor/sender-report/internal/model"
@@ -180,6 +181,13 @@ func (e *Engine) Analyze(ctx context.Context, in Input) model.AnalysisReport {
 	report.Checks = append(report.Checks, dkimKeyLengthCheck(ctx, headers.Get("DKIM-Signature")))
 	report.Checks = append(report.Checks, displayNameCheck(headers.Get("From"), fromDomain))
 	report.Checks = append(report.Checks, envelopeBounceMXCheck(ctx, firstNonEmpty(returnPathDomain, envelopeDomain)))
+
+	// DNS maturity signals (Group B): transport security + brand indicators.
+	report.Checks = append(report.Checks, mtaStsCheck(ctx, primaryDomain))
+	report.Checks = append(report.Checks, tlsRptCheck(ctx, primaryDomain))
+	report.Checks = append(report.Checks, bimiCheck(ctx, primaryDomain))
+	report.Checks = append(report.Checks, dnssecCheck(ctx, primaryDomain))
+	report.Checks = append(report.Checks, daneCheck(ctx, primaryDomain))
 
 	// PTR
 	ptrCheck := ptrPlausibility(ctx, in.Message.RemoteIP, in.Message.HELO)
@@ -645,6 +653,152 @@ func envelopeBounceMXCheck(ctx context.Context, bounceDomain string) model.Check
 	return withDetails(pass("envelope_mx", "Bounce-Empfang (Envelope-MX)", 0.1, fmt.Sprintf("Bounce-Domain %s kann Bounces empfangen (%d MX-Record(s)).", bounceDomain, len(mxs)), ""), det)
 }
 
+// ── Group B: DNS maturity signals (extra lookups in the sender's own zone) ──
+
+func normDomain(d string) string {
+	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(d)), ".")
+}
+
+// txtHasPrefix reports whether any TXT record at name starts with prefix.
+func txtHasPrefix(ctx context.Context, name, prefix string) (bool, []string) {
+	recs, err := net.DefaultResolver.LookupTXT(ctx, name)
+	if err != nil || len(recs) == 0 {
+		return false, nil
+	}
+	lp := strings.ToLower(prefix)
+	for _, r := range recs {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(r)), lp) {
+			return true, recs
+		}
+	}
+	return false, recs
+}
+
+func mtaStsCheck(ctx context.Context, domain string) model.CheckResult {
+	domain = normDomain(domain)
+	if domain == "" {
+		return info("mta_sts", "MTA-STS", 0.0, "Keine Domain für den MTA-STS-Check ermittelbar.", "")
+	}
+	name := "_mta-sts." + domain
+	ok, recs := txtHasPrefix(ctx, name, "v=STSv1")
+	det := map[string]string{"dns_name": name, "txt": joinOrNone(recs)}
+	if ok {
+		return withDetails(pass("mta_sts", "MTA-STS", 0.15, "MTA-STS-Policy veröffentlicht – erzwingt verschlüsselten (TLS) Transport zum Mailserver.", ""), det)
+	}
+	return withDetails(info("mta_sts", "MTA-STS", 0.0, "Keine MTA-STS-Policy gefunden (optional, aber ein Reifesignal für sicheren Transport).", "Optional: _mta-sts-TXT-Record plus Policy unter https://mta-sts.<domain>/.well-known/mta-sts.txt veröffentlichen."), det)
+}
+
+func tlsRptCheck(ctx context.Context, domain string) model.CheckResult {
+	domain = normDomain(domain)
+	if domain == "" {
+		return info("tls_rpt", "TLS-RPT", 0.0, "Keine Domain für den TLS-RPT-Check ermittelbar.", "")
+	}
+	name := "_smtp._tls." + domain
+	ok, recs := txtHasPrefix(ctx, name, "v=TLSRPTv1")
+	det := map[string]string{"dns_name": name, "txt": joinOrNone(recs)}
+	if ok {
+		return withDetails(pass("tls_rpt", "TLS-RPT", 0.1, "TLS-RPT-Reporting konfiguriert – du erhältst Berichte über fehlgeschlagene TLS-Verbindungen.", ""), det)
+	}
+	return withDetails(info("tls_rpt", "TLS-RPT", 0.0, "Kein TLS-RPT-Record gefunden (optional; sinnvoll zusammen mit MTA-STS).", "Optional: _smtp._tls-TXT mit v=TLSRPTv1 und rua-Reporting-Adresse setzen."), det)
+}
+
+func bimiCheck(ctx context.Context, domain string) model.CheckResult {
+	domain = normDomain(domain)
+	if domain == "" {
+		return info("bimi", "BIMI", 0.0, "Keine Domain für den BIMI-Check ermittelbar.", "")
+	}
+	name := "default._bimi." + domain
+	ok, recs := txtHasPrefix(ctx, name, "v=BIMI1")
+	det := map[string]string{"dns_name": name, "txt": joinOrNone(recs)}
+	if ok {
+		return withDetails(pass("bimi", "BIMI", 0.1, "BIMI-Record veröffentlicht – Logo-Anzeige bei unterstützenden Providern (setzt durchgesetztes DMARC voraus).", ""), det)
+	}
+	return withDetails(info("bimi", "BIMI", 0.0, "Kein BIMI-Record gefunden (optional; erfordert DMARC p=quarantine/reject und ein SVG-Logo).", "Optional: nach DMARC-Enforcement einen default._bimi-Record mit Logo-URL veröffentlichen."), det)
+}
+
+// resolverServer returns the first system DNS server as host:port, or "" if
+// none is configured. Uses only the operator's own resolver (no public
+// fallback) so DNSSEC/DANE queries stay privacy-consistent with the rest.
+func resolverServer() string {
+	cfg, err := dns.ClientConfigFromFile("/etc/resolv.conf")
+	if err != nil || len(cfg.Servers) == 0 {
+		return ""
+	}
+	port := cfg.Port
+	if port == "" {
+		port = "53"
+	}
+	return net.JoinHostPort(cfg.Servers[0], port)
+}
+
+// dnsRecords queries a specific record type via the system resolver using
+// miekg/dns (needed for DNSKEY/TLSA, which net.Resolver cannot request).
+func dnsRecords(ctx context.Context, server, name string, qtype uint16) []dns.RR {
+	m := new(dns.Msg)
+	m.SetQuestion(dns.Fqdn(name), qtype)
+	m.SetEdns0(4096, true)
+	c := &dns.Client{Timeout: 4 * time.Second}
+	resp, _, err := c.ExchangeContext(ctx, m, server)
+	if err != nil || resp == nil {
+		return nil
+	}
+	return resp.Answer
+}
+
+func dnssecCheck(ctx context.Context, domain string) model.CheckResult {
+	domain = normDomain(domain)
+	if domain == "" {
+		return info("dnssec", "DNSSEC", 0.0, "Keine Domain für den DNSSEC-Check ermittelbar.", "")
+	}
+	server := resolverServer()
+	if server == "" {
+		return info("dnssec", "DNSSEC", 0.0, "DNSSEC nicht prüfbar (kein DNS-Resolver konfiguriert).", "")
+	}
+	ans := dnsRecords(ctx, server, domain, dns.TypeDNSKEY)
+	has := false
+	for _, rr := range ans {
+		if _, ok := rr.(*dns.DNSKEY); ok {
+			has = true
+			break
+		}
+	}
+	det := map[string]string{"domain": domain, "dnskey_records": strconv.Itoa(len(ans))}
+	if has {
+		return withDetails(pass("dnssec", "DNSSEC", 0.1, "Domain ist DNSSEC-signiert (DNSKEY vorhanden) – schützt DNS-Antworten vor Manipulation.", ""), det)
+	}
+	return withDetails(info("dnssec", "DNSSEC", 0.0, "Keine DNSSEC-Signierung erkannt (optional; erhöht die DNS-Integrität und ist Voraussetzung für DANE).", "Optional: DNSSEC bei deinem DNS-Provider/Registrar aktivieren."), det)
+}
+
+func daneCheck(ctx context.Context, domain string) model.CheckResult {
+	domain = normDomain(domain)
+	if domain == "" {
+		return info("dane_tlsa", "DANE/TLSA", 0.0, "Keine Domain für den DANE-Check ermittelbar.", "")
+	}
+	server := resolverServer()
+	if server == "" {
+		return info("dane_tlsa", "DANE/TLSA", 0.0, "DANE nicht prüfbar (kein DNS-Resolver konfiguriert).", "")
+	}
+	mxs, err := net.DefaultResolver.LookupMX(ctx, domain)
+	if err != nil || len(mxs) == 0 {
+		return withDetails(info("dane_tlsa", "DANE/TLSA", 0.0, "Kein MX vorhanden – DANE/TLSA nicht anwendbar.", ""), map[string]string{"domain": domain})
+	}
+	host := strings.TrimSuffix(mxs[0].Host, ".")
+	name := "_25._tcp." + host
+	ans := dnsRecords(ctx, server, name, dns.TypeTLSA)
+	has := false
+	for _, rr := range ans {
+		if _, ok := rr.(*dns.TLSA); ok {
+			has = true
+			break
+		}
+	}
+	det := map[string]string{"mx_host": host, "tlsa_name": name, "tlsa_records": strconv.Itoa(len(ans))}
+	if has {
+		return withDetails(pass("dane_tlsa", "DANE/TLSA", 0.1, fmt.Sprintf("DANE aktiv: TLSA-Record für %s vorhanden – authentifiziertes TLS beim Transport.", host), ""), det)
+	}
+	return withDetails(info("dane_tlsa", "DANE/TLSA", 0.0, "Kein DANE/TLSA-Record auf dem MX gefunden (optional; erfordert DNSSEC).", "Optional: nach DNSSEC TLSA-Records für die MX-Hosts veröffentlichen."), det)
+}
+
 func withDetails(c model.CheckResult, details map[string]string) model.CheckResult {
 	c.TechnicalDetails = details
 	return c
@@ -849,7 +1003,7 @@ func checkCategory(id string) string {
 		"dmarc_policy", "spf_strictness", "dkim_keylength", "display_name":
 		return "Authentifizierung"
 	case "ptr", "helo", "mx_records", "address_records", "tls_transport", "received_chain", "rbl",
-		"ptr_pattern", "envelope_mx":
+		"ptr_pattern", "envelope_mx", "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa":
 		return "DNS und Infrastruktur"
 	case "spamassassin", "rspamd":
 		return "Spamfilter"
@@ -887,6 +1041,16 @@ func defaultExplanation(id string) string {
 		return "Der Anzeigename im From-Header ('Friendly From') ist frei wählbar und wird von Phishing stark missbraucht: ein vertrauter Marken- oder Personenname als Anzeige, während die echte Absenderdomain eine ganz andere ist. Wichtigkeit: hoch – Provider und Security-Gateways erkennen Display-Name-Spoofing und Marken-Imitation und stufen solche Mails als Phishing ein. Anzeigename und tatsächliche Absenderdomain konsistent halten."
 	case "envelope_mx":
 		return "Der Return-Path/Envelope-From ist die Bounce-Adresse: dorthin gehen Unzustellbarkeits-Meldungen (DSN/NDR). Kann diese Domain keine Mail empfangen (kein MX, kein A/AAAA), gehen Bounces verloren – schlecht fürs Listen-Hygiene-Management und ein Qualitätssignal für Filter. Wichtigkeit: mittel – eine empfangsfähige Bounce-Domain gehört zu einem professionellen Versand-Setup."
+	case "mta_sts":
+		return "MTA-STS (RFC 8461) erlaubt einer Domain, verschlüsselten SMTP-Transport (TLS) verbindlich zu verlangen, statt ihn nur opportunistisch zu nutzen. Sendende Server prüfen die per HTTPS veröffentlichte Policy und brechen ab, wenn kein gültiges TLS möglich ist – das schützt vor Downgrade-/Man-in-the-Middle-Angriffen. Wichtigkeit: mittel – kein direkter Inbox-Platzierungsfaktor, aber ein klares Reifesignal und zunehmend Standard bei seriösen Absendern."
+	case "tls_rpt":
+		return "TLS-RPT (RFC 8460) lässt empfangende Server aggregierte Berichte über fehlgeschlagene oder herabgestufte TLS-Verbindungen an eine Reporting-Adresse schicken. So bemerkst du TLS-/MTA-STS-Probleme, bevor sie zu Zustellausfällen führen. Wichtigkeit: gering bis mittel – ein Monitoring-/Reifesignal, sinnvoll in Kombination mit MTA-STS."
+	case "bimi":
+		return "BIMI (Brand Indicators for Message Identification) zeigt bei unterstützenden Providern (Gmail, Apple Mail, Yahoo) dein Markenlogo neben der Nachricht an. Voraussetzung ist eine durchgesetzte DMARC-Policy (quarantine/reject) und ein SVG-Logo (bei manchen Providern zusätzlich ein VMC-Zertifikat). Wichtigkeit: gering für die Zustellung selbst, aber ein starkes Vertrauens-/Reifesignal und Beleg für ein vollständig konfiguriertes Authentifizierungs-Setup."
+	case "dnssec":
+		return "DNSSEC signiert DNS-Antworten kryptografisch und schützt vor DNS-Manipulation (Cache-Poisoning, Spoofing). Eine signierte Absenderzone ist ein Reifesignal und Voraussetzung für DANE. Wichtigkeit: gering bis mittel für die reine Inbox-Platzierung, aber relevant für die Gesamtintegrität der Mail-Infrastruktur."
+	case "dane_tlsa":
+		return "DANE (TLSA-Records, RFC 7672) bindet das TLS-Zertifikat des Mailservers per DNSSEC an die Domain und erzwingt so authentifiziertes TLS beim SMTP-Transport – eine Alternative/Ergänzung zu MTA-STS. Voraussetzung ist DNSSEC. Wichtigkeit: gering für Inbox-Platzierung, aber ein hohes Sicherheits-/Reifesignal, v. a. im europäischen/Behörden-Umfeld."
 	case "from_alignment":
 		return "From-Alignment prüft, ob Envelope-From (SMTP MAIL FROM) und Header-From (sichtbare Absenderadresse) zur gleichen Domain gehören. Abweichungen sind technisch möglich (z. B. ESP-Bounce-Adressen), können aber DMARC-Alignment gefährden und Spamfiltern Muster für Spoofing-Versuche liefern. Wichtigkeit: mittel – viele Nutzer prüfen die sichtbare From-Adresse; Mismatch kann Vertrauen kosten und DMARC-SPF-Alignment brechen. Tipp: Bounce-Domains als Subdomain der From-Domain konfigurieren."
 	case "spf_alignment":

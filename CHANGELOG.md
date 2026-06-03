@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-06-02
+
+### Added
+- DNS maturity / transport-security checks (batch B):
+  - **MTA-STS** (`mta_sts`): detects a published `_mta-sts` policy (enforced TLS transport).
+  - **TLS-RPT** (`tls_rpt`): detects `_smtp._tls` reporting configuration.
+  - **BIMI** (`bimi`): detects a `default._bimi` brand-indicator record.
+  - **DNSSEC** (`dnssec`): checks whether the sender zone is DNSSEC-signed (DNSKEY present).
+  - **DANE/TLSA** (`dane_tlsa`): checks for TLSA records on the primary MX host.
+- New dependency `github.com/miekg/dns` for DNSKEY/TLSA record types the stdlib resolver cannot query. DNSSEC/DANE use only the operator's configured system resolver (no public-resolver fallback) and degrade gracefully when none is available; all five checks are informational/bonus signals and never penalise a sender for not using these optional features.
+
 ## [1.1.0] - 2026-06-02
 
 ### Added
