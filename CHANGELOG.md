@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-06-03
+
+### Changed
+- Per-check summaries in the report list are no longer truncated with an ellipsis;
+  they now wrap and are shown in full (the check title wraps too instead of being cut).
+
 ## [1.6.1] - 2026-06-03
 
 ### Changed

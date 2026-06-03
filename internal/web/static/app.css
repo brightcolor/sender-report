@@ -822,18 +822,13 @@ body,
   display: block;
   font-size: .9375rem;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .mp-chk-name small {
   display: block;
   font-size: .8125rem;
   color: var(--bs-secondary-color);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 44ch;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .mp-delta {
