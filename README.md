@@ -237,7 +237,16 @@ Important variables:
 - `ENABLE_RBL_CHECKS`, `RBL_PROVIDERS` (default: `zen.spamhaus.org,bl.spamcop.net,b.barracudacentral.org,psbl.surriel.com,dnsbl.dronebl.org,bl.blocklist.de`)
 - `ENABLE_SPAMASSASSIN`, `SPAMASSASSIN_HOSTPORT`
 - `ENABLE_RSPAMD`, `RSPAMD_URL`, `RSPAMD_PASSWORD`
+- `ENABLE_DOMAIN_AGE` (force domain-age/RDAP check on for everyone; default `false`)
+- `ENABLE_DOMAIN_BLOCKLIST`, `DOMAIN_BLOCKLIST_PROVIDERS` (force domain/link blocklist checks on for everyone; default `false` / `dbl.spamhaus.org,multi.uribl.com`)
 - `ALERT_WEBHOOK_URL` (optional outbound webhook for operational alerts)
+
+> The three opt-in checks above (domain age, domain/link blocklists) contact
+> external services with the sender/link **domain names** (never mail content).
+> They are OFF by default. Beyond these operator-level force-on switches, every
+> end user can enable them per mailbox on the home page ("Erweiterte
+> Reputations-Checks") after an informed-consent dialog — see `/about#checks-detail`
+> for the full check reference and `/privacy` for the data-flow disclosure.
 
 ### URL and domain autodetection
 
