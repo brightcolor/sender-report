@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/static/vendor/overlayscrollbars.min.css">
   <link rel="stylesheet" href="/static/vendor/adminlte.min.css">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-  <link rel="stylesheet" href="/static/app.css" />
+  <link rel="stylesheet" href="/static/app.css?v={{appVersion}}" />
 </head>
 <body class="layout-fixed">
 <div class="app-wrapper">
@@ -280,9 +280,9 @@
 <script src="/static/vendor/adminlte.min.js"></script>
 {{if .Mailbox.PublicKey}}
 <script src="/static/vendor/tweetnacl.min.js"></script>
-<script src="/static/crypto.js"></script>
+<script src="/static/crypto.js?v={{appVersion}}"></script>
 {{end}}
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v={{appVersion}}"></script>
 {{if .Mailbox.PublicKey}}
 <script>
 readAndStoreTokenFromFragment();

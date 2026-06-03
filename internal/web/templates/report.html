@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/static/vendor/overlayscrollbars.min.css">
   <link rel="stylesheet" href="/static/vendor/adminlte.min.css">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-  <link rel="stylesheet" href="/static/app.css" />
+  <link rel="stylesheet" href="/static/app.css?v={{appVersion}}" />
   {{if .Encrypted}}
   <meta name="mp-encrypted" content="true"
         data-token="{{.Mailbox.Token}}"
@@ -1070,9 +1070,9 @@ Kind regards,
 <script src="/static/vendor/adminlte.min.js"></script>
 {{if .Encrypted}}
 <script src="/static/vendor/tweetnacl.min.js"></script>
-<script src="/static/crypto.js"></script>
+<script src="/static/crypto.js?v={{appVersion}}"></script>
 {{end}}
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v={{appVersion}}"></script>
 <script>
 // ── Report data for client-side PDF generation ─────────────────────────────
 // Non-encrypted: full data embedded here.
@@ -1095,7 +1095,7 @@ window.__mpReport = {
 };
 </script>
 <script src="/static/vendor/jspdf.umd.min.js"></script>
-<script src="/static/pdf-report.js"></script>
+<script src="/static/pdf-report.js?v={{appVersion}}"></script>
 {{if .Encrypted}}
 <script>
 (function() {

@@ -343,7 +343,7 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("/static/", s.staticFS)
+	mux.Handle("/static/", s.staticCacheHeaders(s.staticFS))
 	// Browsers and crawlers request /favicon.ico at the root regardless of the
 	// <link rel="icon"> tag; redirect them to the vector favicon.
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
@@ -365,6 +365,22 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/report/", s.reportPage)
 	mux.HandleFunc("/raw/", s.rawPage)
 	return s.withLogging(s.withSecurityHeaders(s.withRateLimit(s.withHTTPSRedirect(mux))))
+}
+
+// staticCacheHeaders sets caching policy for static assets. Requests carrying a
+// version query (e.g. /static/app.js?v=v1.5.1) are immutable and cached for a
+// year — each release changes the version, busting the cache automatically.
+// Versionless requests (vendor libs, favicon) must be revalidated so a stale
+// app.js can never linger after an update.
+func (s *Server) staticCacheHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("v") != "" {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // withSecurityHeaders adds baseline HTTP security headers to every response.

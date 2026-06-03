@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-06-03
+
+### Fixed
+- **Stale-cache bug after updates.** Static assets (`app.js`, `app.css`,
+  `crypto.js`, `pdf-report.js`) were served without cache-busting, so browsers
+  could keep an outdated `app.js` after a release. The visible symptom: the
+  „Erweiterte Reputations-Checks" modal opened but the *Übernehmen* button did
+  nothing — the page had the new modal markup (fresh HTML) but the old JavaScript
+  (cached) that lacked the save handler, so the modal never closed and no active
+  indicator appeared.
+  - App-owned assets now carry a `?v=<version>` query that changes every release,
+    forcing a fresh fetch.
+  - Static responses send `Cache-Control: immutable` for versioned URLs and
+    `no-cache` (revalidate) for versionless ones, so a stale `app.js` can never
+    linger again.
+  - (The underlying opt-in logic was already correct — verified end-to-end in a
+    real browser; the only issue was asset caching.)
+
 ## [1.5.0] - 2026-06-03
 
 ### Changed
