@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-06-03
+
+### Changed
+- Reverted the shortened section-header hints back to the full explanations
+  (shown in full on their own line beneath the section title).
+
 ## [1.6.0] - 2026-06-03
 
 ### Added

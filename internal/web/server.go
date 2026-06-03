@@ -1394,11 +1394,11 @@ func sortChecks(checks []model.CheckResult) {
 func groupReportChecks(checks []model.CheckResult) []ReportCheckGroup {
 	order := []string{"Authentifizierung", "DNS und Infrastruktur", "Spamfilter", "Format und Inhalt", "Header und Rohdaten"}
 	hints := map[string]string{
-		"Authentifizierung":     "Beweist, dass die Mail wirklich von deiner Domain stammt (SPF, DKIM, DMARC).",
-		"DNS und Infrastruktur": "Sind sendende IP und Hostnamen sauber im DNS? (rDNS, HELO, MX, TLS)",
-		"Spamfilter":            "Wie verbreitete Spamfilter und Reputationslisten deine Mail bewerten.",
-		"Format und Inhalt":     "Aufbau der Nachricht: MIME, Text/HTML, Links und Betreff.",
-		"Header und Rohdaten":   "Technische Pflicht-Header: Date, Message-ID und Received-Kette.",
+		"Authentifizierung":     "Beweist, dass die Mail wirklich von deiner Domain stammt. SPF, DKIM und DMARC sind heute der wichtigste Faktor für die Zustellung – Gmail und Outlook lehnen ohne sie zunehmend ab.",
+		"DNS und Infrastruktur": "Prüft, ob deine sendende IP und deine Hostnamen sauber im DNS hinterlegt sind (Reverse DNS, HELO, MX, A/AAAA, TLS). Inkonsistenzen hier wirken wie ein schlecht konfigurierter oder gekaperter Server.",
+		"Spamfilter":            "Externe Reputations- und Inhaltsfilter (SpamAssassin, Rspamd, DNSBL). Zeigt, wie verbreitete Filter deine Mail bewerten und welche Einzelsignale dabei zählen.",
+		"Format und Inhalt":     "Aufbau der Nachricht: MIME-Struktur, Text/HTML-Verhältnis, Links, Betreff und Anhänge. Schlechtes Format ist ein klassisches Spam-Signal und kann die Darstellung beim Empfänger zerstören.",
+		"Header und Rohdaten":   "Technische Basis-Header (Date, Message-ID, Received-Kette). Fehlende oder unplausible Pflichtfelder deuten auf einen fehlkonfigurierten Mailserver hin.",
 	}
 	grouped := make(map[string][]model.CheckResult)
 	for _, check := range checks {
