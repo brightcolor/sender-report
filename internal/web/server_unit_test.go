@@ -30,7 +30,7 @@ func TestSortChecksSeverityOrder(t *testing.T) {
 
 	sortChecks(checks)
 
-	wantOrder := []string{"fail", "warn", "pass", "info"}
+	wantOrder := []string{"fail", "warn", "info", "pass"}
 	for i, want := range wantOrder {
 		if checks[i].Status != want {
 			t.Fatalf("at %d expected %q, got %q", i, want, checks[i].Status)

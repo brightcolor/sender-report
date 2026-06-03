@@ -1334,7 +1334,9 @@ func setMailboxCookie(w http.ResponseWriter, mb model.Mailbox) {
 }
 
 func sortChecks(checks []model.CheckResult) {
-	rank := map[string]int{"fail": 0, "warn": 1, "pass": 2, "info": 3}
+	// Most actionable first: errors, then warnings, then informational notices,
+	// and finally passed checks (which need no attention) at the bottom.
+	rank := map[string]int{"fail": 0, "warn": 1, "info": 2, "pass": 3}
 	sort.SliceStable(checks, func(i, j int) bool {
 		ri := rank[checks[i].Status]
 		rj := rank[checks[j].Status]

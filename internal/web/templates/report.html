@@ -1221,7 +1221,7 @@ function showDecrypted(payload) {
       grpMap[g].push(c);
     });
     window.__mpReport.groups = grpOrder.map(function(name) {
-      return {name: name, hint: GROUP_HINTS[name] || '', checks: grpMap[name]};
+      return {name: name, hint: GROUP_HINTS[name] || '', checks: sortChecksBySeverity(grpMap[name])};
     });
     if (payload.report && payload.report.score != null) {
       window.__mpReport.score = payload.report.score;
@@ -1300,6 +1300,18 @@ function statusLbl(s) {
   return {pass:'Bestanden',warn:'Warnung',fail:'Fehler',info:'Info'}[s] || s;
 }
 
+// Sort checks so the most actionable bubble to the top within a section:
+// errors → warnings → infos → passed. Mirrors sortChecks() in server.go.
+var CHECK_RANK = { fail: 0, warn: 1, info: 2, pass: 3 };
+function sortChecksBySeverity(checks) {
+  return (checks || []).slice().sort(function(a, b) {
+    var ra = CHECK_RANK[a.status]; if (ra == null) ra = 9;
+    var rb = CHECK_RANK[b.status]; if (rb == null) rb = 9;
+    if (ra !== rb) return ra - rb;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+}
+
 // Render the Rspamd symbol table (parsed from sym:NAME -> "score|desc|explain").
 // Mirrors the server-side template so encrypted reports show identical output.
 function renderRspamdSymbols(td) {
@@ -1344,6 +1356,7 @@ var GROUP_HINTS = {
 };
 
 function renderCheckGroup(name, checks, gi) {
+  checks = sortChecksBySeverity(checks);
   var p=0,w=0,f=0,inf=0;
   checks.forEach(function(c){
     if(c.status==='pass')p++; else if(c.status==='warn')w++;

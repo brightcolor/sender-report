@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-06-03
+
+### Changed
+- Within each report section, checks are now ordered by severity so the most
+  actionable surface first: **Fehler → Warnungen → Infos → Bestanden** (passed
+  checks sink to the bottom, ties broken alphabetically). Applied consistently to
+  the server-rendered report, the client-side decrypted E2E view, and the PDF
+  export. (Previously passed checks could appear above informational notices.)
+
 ## [1.5.1] - 2026-06-03
 
 ### Fixed
