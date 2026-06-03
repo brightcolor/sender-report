@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-02
+
+### Added
+- Deeper deliverability checks (batch A — derived from already-available data, no extra third-party calls):
+  - **DMARC policy strength** (`dmarc_policy`): rates `p=none`/`quarantine`/`reject` and flags a missing `rua=` reporting address.
+  - **SPF strictness** (`spf_strictness`): evaluates the trailing `all` qualifier (`-all`/`~all`/`?all`/dangerous `+all`) and warns when the top-level DNS-lookup count approaches the RFC 7208 limit of 10.
+  - **DKIM key length** (`dkim_keylength`): fetches the DKIM public key via DNS and flags weak RSA keys (<2048 bit); recognises Ed25519.
+  - **PTR hostname pattern** (`ptr_pattern`): flags generic/dynamic-looking reverse-DNS hostnames (a strong spam signal even when FCrDNS passes).
+  - **From display-name spoofing** (`display_name`): flags brand impersonation and foreign e-mail addresses embedded in the From display name.
+  - **Bounce-domain MX** (`envelope_mx`): verifies the Return-Path/Envelope-From domain can actually receive bounces (DSN/NDR).
+
 ## [1.0.0] - 2026-06-02
 
 First stable release. Consolidates the large body of work accumulated since

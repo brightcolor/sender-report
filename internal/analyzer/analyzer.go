@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -172,9 +174,17 @@ func (e *Engine) Analyze(ctx context.Context, in Input) model.AnalysisReport {
 	report.Checks = append(report.Checks, dkimAlignmentCheck(fromDomain, dkimDomain, dkimResult, alignedDKIM))
 	report.Checks = append(report.Checks, dmarcAlignmentCheck(fromDomain, spfResult, dkimResult, alignedSPF, alignedDKIM))
 
+	// Auth depth (Group A): policy strength, SPF strictness, DKIM key length.
+	report.Checks = append(report.Checks, dmarcPolicyCheck(dmarcRecords, dmarcPolicy))
+	report.Checks = append(report.Checks, spfStrictnessCheck(spfRecords))
+	report.Checks = append(report.Checks, dkimKeyLengthCheck(ctx, headers.Get("DKIM-Signature")))
+	report.Checks = append(report.Checks, displayNameCheck(headers.Get("From"), fromDomain))
+	report.Checks = append(report.Checks, envelopeBounceMXCheck(ctx, firstNonEmpty(returnPathDomain, envelopeDomain)))
+
 	// PTR
 	ptrCheck := ptrPlausibility(ctx, in.Message.RemoteIP, in.Message.HELO)
 	report.Checks = append(report.Checks, ptrCheck)
+	report.Checks = append(report.Checks, ptrPatternCheck(ctx, in.Message.RemoteIP))
 
 	// HELO/EHLO
 	helo := strings.TrimSpace(in.Message.HELO)
@@ -424,6 +434,217 @@ func tlsTransportCheck(received []string) model.CheckResult {
 	return info("tls_transport", "TLS Transport", 0.0, "Aus den Received-Headern ist kein TLS-Transport eindeutig erkennbar.", "TLS für SMTP aktivieren und sicherstellen, dass vorgelagerte MTAs TLS-Informationen in Received-Headern dokumentieren.")
 }
 
+// ── Group A: deeper checks derived from already-available data ──────────────
+
+// dmarcPolicyCheck evaluates the strength of the published DMARC policy (p=).
+func dmarcPolicyCheck(records []string, policy string) model.CheckResult {
+	if len(records) == 0 {
+		return info("dmarc_policy", "DMARC-Policy-Stärke", 0.0, "Keine DMARC-Policy auswertbar (kein DMARC-Record).", "Zuerst einen DMARC-Record veröffentlichen.")
+	}
+	p := strings.ToLower(strings.TrimSpace(policy))
+	hasRUA := strings.Contains(strings.ToLower(strings.Join(records, " ")), "rua=")
+	ruaNote := ""
+	if !hasRUA {
+		ruaNote = " Es ist keine rua=-Reporting-Adresse gesetzt – ohne Reports siehst du nicht, wer in deinem Namen sendet."
+	}
+	det := map[string]string{"policy": emptyFallback(p, "none"), "rua_present": strconv.FormatBool(hasRUA), "dmarc_records": strings.Join(records, "\n")}
+	switch p {
+	case "reject":
+		return withDetails(pass("dmarc_policy", "DMARC-Policy-Stärke", 0.3, "DMARC p=reject – stärkster Schutz gegen Domain-Spoofing."+ruaNote, ruaOnlyRec(hasRUA)), det)
+	case "quarantine":
+		return withDetails(pass("dmarc_policy", "DMARC-Policy-Stärke", 0.1, "DMARC p=quarantine – mittlerer Schutz; verdächtige Mails landen im Spam."+ruaNote, "Sobald die Reports sauber sind, auf p=reject erhöhen."), det)
+	case "none":
+		return withDetails(warn("dmarc_policy", "DMARC-Policy-Stärke", -0.3, "DMARC p=none – nur Monitoring, kein aktiver Schutz vor Domain-Spoofing."+ruaNote, "Nach einer Monitoring-Phase auf p=quarantine und später p=reject erhöhen."), det)
+	default:
+		return withDetails(warn("dmarc_policy", "DMARC-Policy-Stärke", -0.2, "DMARC-Record vorhanden, aber keine gültige p=-Policy erkannt.", "Gültige Policy setzen: p=none, p=quarantine oder p=reject."), det)
+	}
+}
+
+func ruaOnlyRec(hasRUA bool) string {
+	if hasRUA {
+		return ""
+	}
+	return "rua=mailto:dmarc@deine-domain für aggregierte Reports ergänzen, um Versandquellen zu überwachen."
+}
+
+// spfStrictnessCheck evaluates the SPF 'all' qualifier and the top-level DNS
+// lookup count (RFC 7208 limits SPF to 10 DNS-querying mechanisms).
+func spfStrictnessCheck(records []string) model.CheckResult {
+	if len(records) == 0 {
+		return info("spf_strictness", "SPF-Strenge", 0.0, "Kein SPF-Record auswertbar.", "Zuerst einen SPF-Record (v=spf1 …) veröffentlichen.")
+	}
+	rec := strings.ToLower(strings.TrimSpace(records[0]))
+	lookups := 0
+	for _, tok := range strings.Fields(rec) {
+		t := strings.TrimLeft(tok, "+-~?")
+		if strings.HasPrefix(t, "include:") || t == "a" || strings.HasPrefix(t, "a:") ||
+			t == "mx" || strings.HasPrefix(t, "mx:") || strings.HasPrefix(t, "ptr") ||
+			strings.HasPrefix(t, "exists:") || strings.HasPrefix(t, "redirect=") {
+			lookups++
+		}
+	}
+	all := ""
+	switch {
+	case strings.Contains(rec, "-all"):
+		all = "-all"
+	case strings.Contains(rec, "~all"):
+		all = "~all"
+	case strings.Contains(rec, "?all"):
+		all = "?all"
+	case strings.Contains(rec, "+all"):
+		all = "+all"
+	}
+	det := map[string]string{"spf_record": records[0], "all_mechanism": emptyFallback(all, "none"), "lookup_mechanisms_toplevel": strconv.Itoa(lookups)}
+	if all == "+all" {
+		return withDetails(fail("spf_strictness", "SPF-Strenge", -1.5, "SPF endet auf +all – das erlaubt JEDEM Server, in deinem Namen zu senden (gefährlich).", "Sofort auf -all (hardfail) oder mindestens ~all (softfail) ändern."), det)
+	}
+	if lookups > 10 {
+		return withDetails(warn("spf_strictness", "SPF-Strenge", -0.6, fmt.Sprintf("SPF hat schon %d Lookup-Mechanismen auf oberster Ebene – das 10-Lookup-Limit (RFC 7208) droht überschritten zu werden (PermError).", lookups), "include-Ketten reduzieren oder per SPF-Flattening zusammenfassen."), det)
+	}
+	switch all {
+	case "-all":
+		return withDetails(pass("spf_strictness", "SPF-Strenge", 0.2, "SPF endet auf -all (hardfail) – strengste und empfohlene Einstellung.", ""), det)
+	case "~all":
+		return withDetails(info("spf_strictness", "SPF-Strenge", 0.0, "SPF endet auf ~all (softfail) – akzeptabel, -all bietet aber stärkeren Schutz.", "Wenn alle legitimen Sendequellen erfasst sind, auf -all umstellen."), det)
+	case "?all":
+		return withDetails(warn("spf_strictness", "SPF-Strenge", -0.3, "SPF endet auf ?all (neutral) – bietet praktisch keinen Schutz.", "Auf -all oder ~all umstellen."), det)
+	default:
+		return withDetails(warn("spf_strictness", "SPF-Strenge", -0.3, "SPF-Record hat keinen abschließenden all-Mechanismus.", "Den Record mit -all (oder ~all) abschließen."), det)
+	}
+}
+
+// dkimKeyLengthCheck fetches the DKIM public key via DNS and evaluates its strength.
+func dkimKeyLengthCheck(ctx context.Context, dkimSig string) model.CheckResult {
+	if strings.TrimSpace(dkimSig) == "" {
+		return info("dkim_keylength", "DKIM-Schlüssellänge", 0.0, "Keine DKIM-Signatur vorhanden – Schlüssellänge nicht prüfbar.", "DKIM-Signierung im ausgehenden MTA aktivieren.")
+	}
+	selector := extractTagValue(dkimSig, "s")
+	domain := extractTagValue(dkimSig, "d")
+	if selector == "" || domain == "" {
+		return info("dkim_keylength", "DKIM-Schlüssellänge", 0.0, "DKIM-Signatur ohne s=/d=-Tag – Schlüssel nicht auffindbar.", "DKIM-Signatur muss s= (Selector) und d= (Domain) enthalten.")
+	}
+	dnsName := selector + "._domainkey." + domain
+	det := map[string]string{"selector": selector, "domain": domain, "dns_name": dnsName}
+	txt, err := net.DefaultResolver.LookupTXT(ctx, dnsName)
+	if err != nil || len(txt) == 0 {
+		return withDetails(warn("dkim_keylength", "DKIM-Schlüssellänge", -0.3, "DKIM-Public-Key konnte per DNS nicht abgerufen werden.", "Prüfen, ob der DKIM-Record unter "+dnsName+" existiert."), det)
+	}
+	joined := strings.Join(txt, "")
+	keyType := emptyFallback(extractTagValue(joined, "k"), "rsa")
+	det["key_type"] = keyType
+	if keyType == "ed25519" {
+		return withDetails(pass("dkim_keylength", "DKIM-Schlüssellänge", 0.1, "DKIM nutzt Ed25519 – modern und sicher.", ""), det)
+	}
+	der, derr := base64.StdEncoding.DecodeString(strings.TrimSpace(extractTagValue(joined, "p")))
+	if derr != nil || len(der) == 0 {
+		return withDetails(warn("dkim_keylength", "DKIM-Schlüssellänge", -0.3, "DKIM-Public-Key (p=) konnte nicht dekodiert werden.", "DKIM-Record auf gültiges Base64 prüfen."), det)
+	}
+	pub, perr := x509.ParsePKIXPublicKey(der)
+	if perr != nil {
+		return withDetails(warn("dkim_keylength", "DKIM-Schlüssellänge", -0.2, "DKIM-Public-Key konnte nicht geparst werden.", "Gültigen RSA- oder Ed25519-Schlüssel veröffentlichen."), det)
+	}
+	rsaPub, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		return withDetails(info("dkim_keylength", "DKIM-Schlüssellänge", 0.0, "DKIM-Schlüsseltyp ist kein RSA – Bit-Länge nicht bewertet.", ""), det)
+	}
+	bits := rsaPub.N.BitLen()
+	det["key_bits"] = strconv.Itoa(bits)
+	switch {
+	case bits < 1024:
+		return withDetails(fail("dkim_keylength", "DKIM-Schlüssellänge", -1.0, fmt.Sprintf("DKIM-RSA-Schlüssel hat nur %d Bit – unsicher und von vielen Providern abgelehnt.", bits), "Auf mindestens 2048-Bit-RSA umstellen und Selector rotieren."), det)
+	case bits < 2048:
+		return withDetails(warn("dkim_keylength", "DKIM-Schlüssellänge", -0.4, fmt.Sprintf("DKIM-RSA-Schlüssel hat %d Bit – Gmail & Co. empfehlen mindestens 2048 Bit.", bits), "Neuen 2048-Bit-DKIM-Schlüssel erzeugen und Selector rotieren."), det)
+	default:
+		return withDetails(pass("dkim_keylength", "DKIM-Schlüssellänge", 0.1, fmt.Sprintf("DKIM-RSA-Schlüssel hat %d Bit – ausreichend stark.", bits), ""), det)
+	}
+}
+
+var dynamicPTRPattern = regexp.MustCompile(`(?i)(\bdynamic\b|\bdyn\b|dhcp|dialup|dial-up|broadband|\bdsl\b|\bpppoe\b|\bcable\b|\bpool\b|\bclient\b|customer|\bcpe\b|\bres\b|residential|static-?ip|\bip[\.-]?\d|\d{1,3}[.-]\d{1,3}[.-]\d{1,3}[.-]\d{1,3})`)
+
+// ptrPatternCheck flags reverse-DNS hostnames that look generic/dynamic (a
+// strong spam signal even when forward-confirmed rDNS technically passes).
+func ptrPatternCheck(ctx context.Context, ip string) model.CheckResult {
+	ip = strings.TrimSpace(ip)
+	if ip == "" || net.ParseIP(ip) == nil {
+		return info("ptr_pattern", "PTR-Hostname-Muster", 0.0, "Keine sendende IP für die PTR-Mustererkennung verfügbar.", "")
+	}
+	names, err := net.DefaultResolver.LookupAddr(ctx, ip)
+	if err != nil || len(names) == 0 {
+		return info("ptr_pattern", "PTR-Hostname-Muster", 0.0, "Kein PTR-Hostname auflösbar – Muster nicht bewertbar (siehe PTR/rDNS-Check).", "")
+	}
+	host := strings.TrimSuffix(strings.ToLower(names[0]), ".")
+	det := map[string]string{"remote_ip": ip, "ptr_hostname": host}
+	if dynamicPTRPattern.MatchString(host) {
+		return withDetails(warn("ptr_pattern", "PTR-Hostname-Muster", -0.6, fmt.Sprintf("PTR-Hostname %q wirkt generisch/dynamisch (Endkunden-/Dynamic-IP-Muster) – ein verbreitetes Spam-Signal.", host), "Beim Hosting-Provider einen dedizierten, sprechenden Mailserver-PTR setzen, z. B. mail.deine-domain – nicht den automatischen Provider-Default."), det)
+	}
+	return withDetails(pass("ptr_pattern", "PTR-Hostname-Muster", 0.1, fmt.Sprintf("PTR-Hostname %q sieht nach einem dedizierten Mailserver aus.", host), ""), det)
+}
+
+var embeddedEmailPattern = regexp.MustCompile(`[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})`)
+
+var impersonationBrands = []string{
+	"paypal", "amazon", "microsoft", "office365", "apple", "icloud", "google", "gmail",
+	"netflix", "paypal", "dhl", "fedex", "ups", "deutsche post", "telekom", "vodafone",
+	"sparkasse", "volksbank", "postbank", "commerzbank", "deutsche bank", "ing-diba", "ing diba",
+	"dkb", "n26", "klarna", "shopify", "facebook", "instagram", "whatsapp", "linkedin",
+}
+
+// displayNameCheck flags From display names that impersonate another brand or
+// embed a foreign e-mail address (classic phishing pattern).
+func displayNameCheck(fromHeader, fromDomain string) model.CheckResult {
+	fromHeader = strings.TrimSpace(fromHeader)
+	if fromHeader == "" {
+		return info("display_name", "From-Anzeigename", 0.0, "Kein From-Header zur Bewertung des Anzeigenamens.", "Gültigen From-Header setzen.")
+	}
+	addr, perr := mail.ParseAddress(fromHeader)
+	display := ""
+	if perr == nil {
+		display = addr.Name
+	}
+	if display == "" {
+		return info("display_name", "From-Anzeigename", 0.0, "Kein Anzeigename im From-Header gesetzt.", "")
+	}
+	dlow := strings.ToLower(display)
+	rdom := strings.ToLower(strings.TrimSpace(fromDomain))
+	det := map[string]string{"display_name": display, "from_domain": emptyFallback(rdom, "none")}
+
+	// (1) Embedded e-mail address with a different domain.
+	if m := embeddedEmailPattern.FindStringSubmatch(display); m != nil {
+		embDom := strings.ToLower(m[1])
+		if rdom != "" && embDom != rdom && !strings.HasSuffix(embDom, "."+rdom) && !strings.HasSuffix(rdom, "."+embDom) {
+			det["embedded_domain"] = embDom
+			return withDetails(warn("display_name", "From-Anzeigename", -0.7, fmt.Sprintf("Anzeigename enthält eine fremde E-Mail-Adresse (%s), während tatsächlich von %s gesendet wird – klassisches Phishing-Muster.", m[0], rdom), "Anzeigename ohne fremde E-Mail-Adressen verwenden; Anzeigename und tatsächliche Absenderdomain konsistent halten."), det)
+		}
+	}
+	// (2) Brand impersonation: brand word in the display name but not in the domain.
+	for _, brand := range impersonationBrands {
+		if strings.Contains(dlow, brand) && (rdom == "" || !strings.Contains(rdom, strings.ReplaceAll(brand, " ", ""))) {
+			det["impersonated_brand"] = brand
+			return withDetails(warn("display_name", "From-Anzeigename", -0.6, fmt.Sprintf("Anzeigename nennt die Marke %q, die Absenderdomain (%s) gehört aber nicht dazu – wirkt wie Markenimitation.", brand, emptyFallback(rdom, "unbekannt")), "Markennamen im Anzeigenamen nur verwenden, wenn von der passenden Domain gesendet wird."), det)
+		}
+	}
+	return withDetails(pass("display_name", "From-Anzeigename", 0.0, "From-Anzeigename zeigt keine Spoofing-/Imitationsmuster.", ""), det)
+}
+
+// envelopeBounceMXCheck verifies the bounce (Return-Path/Envelope-From) domain
+// can actually receive delivery status notifications.
+func envelopeBounceMXCheck(ctx context.Context, bounceDomain string) model.CheckResult {
+	bounceDomain = strings.TrimSpace(strings.TrimSuffix(strings.ToLower(bounceDomain), "."))
+	if bounceDomain == "" {
+		return info("envelope_mx", "Bounce-Empfang (Envelope-MX)", 0.0, "Keine Envelope-/Return-Path-Domain für den Bounce-MX-Check ermittelbar.", "Envelope-From/Return-Path mit einer eigenen Domain setzen.")
+	}
+	det := map[string]string{"bounce_domain": bounceDomain}
+	mxs, err := net.DefaultResolver.LookupMX(ctx, bounceDomain)
+	if err != nil || len(mxs) == 0 {
+		// Fall back to A/AAAA — RFC 5321 allows implicit MX.
+		if ips, ierr := net.DefaultResolver.LookupIPAddr(ctx, bounceDomain); ierr == nil && len(ips) > 0 {
+			return withDetails(info("envelope_mx", "Bounce-Empfang (Envelope-MX)", 0.0, fmt.Sprintf("Bounce-Domain %s hat keinen MX, aber A/AAAA (impliziter MX) – Bounces sind grenzwertig zustellbar.", bounceDomain), "Für sauberes Bounce-Handling einen MX-Record auf der Bounce-Domain setzen."), det)
+		}
+		return withDetails(warn("envelope_mx", "Bounce-Empfang (Envelope-MX)", -0.4, fmt.Sprintf("Bounce-Domain %s hat weder MX noch A/AAAA – Unzustellbarkeits-Benachrichtigungen (Bounces) können nicht zugestellt werden.", bounceDomain), "MX-Record für die Envelope-From/Return-Path-Domain setzen, damit Bounces ankommen."), det)
+	}
+	return withDetails(pass("envelope_mx", "Bounce-Empfang (Envelope-MX)", 0.1, fmt.Sprintf("Bounce-Domain %s kann Bounces empfangen (%d MX-Record(s)).", bounceDomain, len(mxs)), ""), det)
+}
+
 func withDetails(c model.CheckResult, details map[string]string) model.CheckResult {
 	c.TechnicalDetails = details
 	return c
@@ -624,9 +845,11 @@ func addBodyDetails(details map[string]string, ctx checkContext) {
 
 func checkCategory(id string) string {
 	switch id {
-	case "spf", "dkim", "dmarc", "spf_alignment", "dkim_alignment", "dmarc_alignment", "from_alignment", "return_path", "reply_to":
+	case "spf", "dkim", "dmarc", "spf_alignment", "dkim_alignment", "dmarc_alignment", "from_alignment", "return_path", "reply_to",
+		"dmarc_policy", "spf_strictness", "dkim_keylength", "display_name":
 		return "Authentifizierung"
-	case "ptr", "helo", "mx_records", "address_records", "tls_transport", "received_chain", "rbl":
+	case "ptr", "helo", "mx_records", "address_records", "tls_transport", "received_chain", "rbl",
+		"ptr_pattern", "envelope_mx":
 		return "DNS und Infrastruktur"
 	case "spamassassin", "rspamd":
 		return "Spamfilter"
@@ -652,6 +875,18 @@ func checkSeverity(status string) string {
 
 func defaultExplanation(id string) string {
 	switch id {
+	case "dmarc_policy":
+		return "Die DMARC-Policy (p=) bestimmt, was Empfänger mit Mails tun, die DMARC nicht bestehen. p=none = nur Monitoring (kein Schutz), p=quarantine = ab in den Spam, p=reject = komplett ablehnen. Wichtigkeit: hoch – nur quarantine/reject schützen deine Domain aktiv vor Spoofing/Phishing. Gmail & Yahoo erwarten von Bulk-Sendern zunehmend mindestens eine durchgesetzte Policy. Vorgehen: mit p=none + rua-Reporting starten, Quellen sauber konfigurieren, dann schrittweise auf quarantine und reject erhöhen."
+	case "spf_strictness":
+		return "Der abschließende all-Mechanismus eines SPF-Records legt fest, wie streng nicht-autorisierte Server behandelt werden: -all = hardfail (empfohlen), ~all = softfail, ?all = neutral (wirkungslos), +all = erlaubt alle (gefährlich). Außerdem begrenzt RFC 7208 SPF auf 10 DNS-Lookups – wird das überschritten, schlägt SPF mit PermError fehl. Wichtigkeit: hoch – ein zu lascher oder kaputter SPF-Record untergräbt SPF und damit DMARC."
+	case "dkim_keylength":
+		return "Die Stärke des DKIM-Schlüssels bestimmt die Fälschungssicherheit der Signatur. 512/768-Bit-RSA gilt als gebrochen, 1024 Bit als veraltet; empfohlen sind mindestens 2048-Bit-RSA oder Ed25519. Wichtigkeit: mittel bis hoch – große Provider werten schwache Schlüssel ab oder ignorieren sie, wodurch DKIM (und damit DMARC) effektiv ausfällt. Bei Schlüsselwechsel den Selector rotieren."
+	case "ptr_pattern":
+		return "Selbst wenn Forward-confirmed rDNS technisch besteht, achten Spamfilter auf das Muster des PTR-Hostnamens. Namen wie '203-0-113-5.dynamic.isp.net', 'dsl-…', 'pool-…' oder 'customer-…' signalisieren Endkunden-/Dynamic-IPs, von denen seriöse Mailserver normalerweise nicht direkt senden. Wichtigkeit: hoch – SpamAssassin (RDNS_DYNAMIC) und viele Gateways werten solche Muster stark negativ. Lösung: dedizierten, sprechenden Mailserver-PTR beim Hoster setzen."
+	case "display_name":
+		return "Der Anzeigename im From-Header ('Friendly From') ist frei wählbar und wird von Phishing stark missbraucht: ein vertrauter Marken- oder Personenname als Anzeige, während die echte Absenderdomain eine ganz andere ist. Wichtigkeit: hoch – Provider und Security-Gateways erkennen Display-Name-Spoofing und Marken-Imitation und stufen solche Mails als Phishing ein. Anzeigename und tatsächliche Absenderdomain konsistent halten."
+	case "envelope_mx":
+		return "Der Return-Path/Envelope-From ist die Bounce-Adresse: dorthin gehen Unzustellbarkeits-Meldungen (DSN/NDR). Kann diese Domain keine Mail empfangen (kein MX, kein A/AAAA), gehen Bounces verloren – schlecht fürs Listen-Hygiene-Management und ein Qualitätssignal für Filter. Wichtigkeit: mittel – eine empfangsfähige Bounce-Domain gehört zu einem professionellen Versand-Setup."
 	case "from_alignment":
 		return "From-Alignment prüft, ob Envelope-From (SMTP MAIL FROM) und Header-From (sichtbare Absenderadresse) zur gleichen Domain gehören. Abweichungen sind technisch möglich (z. B. ESP-Bounce-Adressen), können aber DMARC-Alignment gefährden und Spamfiltern Muster für Spoofing-Versuche liefern. Wichtigkeit: mittel – viele Nutzer prüfen die sichtbare From-Adresse; Mismatch kann Vertrauen kosten und DMARC-SPF-Alignment brechen. Tipp: Bounce-Domains als Subdomain der From-Domain konfigurieren."
 	case "spf_alignment":
