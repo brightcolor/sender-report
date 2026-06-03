@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-03
+
+### Added
+- **User-controlled opt-in for third-party reputation checks.** The previously
+  operator-only checks (domain age via RDAP, domain/link blocklists) can now be
+  enabled per mailbox by each user directly on the home page, via a new
+  "Erweiterte Reputations-Checks" modal that explains — discreetly but in detail —
+  what each check does and which data (domain names only, never mail content) is
+  sent to which external service. The choice is stored as a local preference and
+  applied to the user's mailbox; default remains OFF.
+  - New per-mailbox columns `check_domain_age` / `check_domain_blocklist`
+    (idempotent migration, default 0).
+  - New endpoint `POST /api/mailboxes/{token}/checks` to update the opt-ins; the
+    create endpoint also accepts `check_domain_age` / `check_domain_blocklist`.
+  - `analyzer.Input` carries per-request flags, OR-combined with the operator
+    `Options` defaults, so the existing global `ENABLE_DOMAIN_AGE` /
+    `ENABLE_DOMAIN_BLOCKLIST` env switches keep working as a force-on default.
+- **Complete check reference on the About page** (`/about#checks-detail`): every
+  check, grouped into the five categories, with an importance rating
+  (Kritisch / Wichtig / Empfohlen / Optional), a plain-language explanation of
+  what it is and why it matters, and authoritative further-reading links
+  (RFCs, dmarc.org, Spamhaus, rspamd, BIMI, …).
+
+### Changed
+- Privacy policy: documents that the domain-age and blocklist checks are
+  user-activated per mailbox (consent under Art. 6 (1)(a) GDPR, revocable by
+  toggling off) and reiterates that only domain names are transmitted.
+
 ## [1.3.0] - 2026-06-02
 
 ### Added

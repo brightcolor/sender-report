@@ -69,38 +69,59 @@ func (s *Store) CountActiveMailboxes(ctx context.Context) (int, error) {
 	return c, nil
 }
 
+// mailboxColumns is the canonical SELECT column list for a mailbox row; kept in
+// one place so scanMailbox always matches every query.
+const mailboxColumns = `id, token, address, COALESCE(public_key,''), created_ip, created_at, expires_at, last_seen_at,
+	COALESCE(check_domain_age,0), COALESCE(check_domain_blocklist,0)`
+
 func (s *Store) GetMailboxByToken(ctx context.Context, token string) (model.Mailbox, error) {
-	row := s.db.QueryRowContext(ctx, `
-		SELECT id, token, address, COALESCE(public_key,''), created_ip, created_at, expires_at, last_seen_at
-		FROM mailboxes WHERE token = ?
-	`, token)
+	row := s.db.QueryRowContext(ctx, `SELECT `+mailboxColumns+` FROM mailboxes WHERE token = ?`, token)
 	return scanMailbox(row)
 }
 
 func (s *Store) GetMailboxByAddress(ctx context.Context, address string) (model.Mailbox, error) {
-	row := s.db.QueryRowContext(ctx, `
-		SELECT id, token, address, COALESCE(public_key,''), created_ip, created_at, expires_at, last_seen_at
-		FROM mailboxes WHERE lower(address) = lower(?)
-	`, address)
+	row := s.db.QueryRowContext(ctx, `SELECT `+mailboxColumns+` FROM mailboxes WHERE lower(address) = lower(?)`, address)
 	return scanMailbox(row)
 }
 
 func (s *Store) GetMailboxByID(ctx context.Context, id int64) (model.Mailbox, error) {
-	row := s.db.QueryRowContext(ctx, `
-		SELECT id, token, address, COALESCE(public_key,''), created_ip, created_at, expires_at, last_seen_at
-		FROM mailboxes WHERE id = ?
-	`, id)
+	row := s.db.QueryRowContext(ctx, `SELECT `+mailboxColumns+` FROM mailboxes WHERE id = ?`, id)
 	return scanMailbox(row)
+}
+
+// UpdateMailboxChecks persists the per-mailbox third-party check opt-ins.
+func (s *Store) UpdateMailboxChecks(ctx context.Context, token string, domainAge, domainBlocklist bool) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE mailboxes SET check_domain_age = ?, check_domain_blocklist = ? WHERE token = ?`,
+		boolToInt(domainAge), boolToInt(domainBlocklist), token)
+	if err != nil {
+		return err
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func scanMailbox(row *sql.Row) (model.Mailbox, error) {
 	var mb model.Mailbox
-	if err := row.Scan(&mb.ID, &mb.Token, &mb.Address, &mb.PublicKey, &mb.CreatedIP, &mb.CreatedAt, &mb.ExpiresAt, &mb.LastSeenAt); err != nil {
+	var checkAge, checkBlocklist int
+	if err := row.Scan(&mb.ID, &mb.Token, &mb.Address, &mb.PublicKey, &mb.CreatedIP, &mb.CreatedAt, &mb.ExpiresAt, &mb.LastSeenAt, &checkAge, &checkBlocklist); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return model.Mailbox{}, ErrNotFound
 		}
 		return model.Mailbox{}, err
 	}
+	mb.CheckDomainAge = checkAge != 0
+	mb.CheckDomainBlocklist = checkBlocklist != 0
 	return mb, nil
 }
 

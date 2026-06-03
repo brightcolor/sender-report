@@ -1542,3 +1542,34 @@ body,
   /* Teilen-Links einschließen */
   body.mp-pdf-show-share #mp-share-block { display: block !important; }
 }
+
+/* ── Check-Referenz (about.html) ───────────────────────────────────────────── */
+.mp-check-ref > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: .5rem;
+  padding: .85rem 0;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+.mp-check-ref > li:last-child { border-bottom: 0; }
+.mp-check-ref > li > .badge {
+  flex-shrink: 0;
+  margin-top: .15rem;
+  min-width: 4.6rem;
+  text-align: center;
+}
+.mp-check-ref > li > div {
+  flex: 1 1 16rem;
+  min-width: 0;
+  font-size: .9rem;
+  line-height: 1.55;
+}
+.mp-check-ref code {
+  font-size: .82em;
+  word-break: break-word;
+}
+
+/* Optionale Reputations-Checks: Modal-Optionen */
+.mp-adv-option { transition: border-color .15s ease, background-color .15s ease; }
+.mp-adv-option:hover { border-color: var(--bs-primary) !important; }

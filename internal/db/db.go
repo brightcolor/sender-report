@@ -1,4 +1,4 @@
-﻿package db
+package db
 
 import (
 	"database/sql"
@@ -98,6 +98,11 @@ CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at);
 	_, _ = db.Exec(`ALTER TABLE mailboxes ADD COLUMN public_key TEXT`)
 	// Phase-3 migration: add payload_enc column to messages for E2E encryption.
 	_, _ = db.Exec(`ALTER TABLE messages ADD COLUMN payload_enc TEXT`)
+	// Phase-6 migration: per-mailbox opt-in for third-party reputation checks
+	// (domain age via RDAP, domain/link blocklists). Default 0 (off) — the user
+	// enables them explicitly and informed on the home page.
+	_, _ = db.Exec(`ALTER TABLE mailboxes ADD COLUMN check_domain_age INTEGER NOT NULL DEFAULT 0`)
+	_, _ = db.Exec(`ALTER TABLE mailboxes ADD COLUMN check_domain_blocklist INTEGER NOT NULL DEFAULT 0`)
 
 	// Phase-5 migration: cumulative counters that survive cleanup and expiry.
 	// Unlike COUNT(*) over the live tables (which shrinks when rows are deleted),

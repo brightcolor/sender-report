@@ -18,14 +18,14 @@ import (
 
 	"github.com/brightcolor/sender-report/internal/analyzer"
 	"github.com/brightcolor/sender-report/internal/cleanup"
-	"github.com/brightcolor/sender-report/internal/statsfiles"
 	"github.com/brightcolor/sender-report/internal/config"
-	"github.com/brightcolor/sender-report/internal/envmigrate"
 	"github.com/brightcolor/sender-report/internal/db"
+	"github.com/brightcolor/sender-report/internal/envmigrate"
 	"github.com/brightcolor/sender-report/internal/model"
 	"github.com/brightcolor/sender-report/internal/ratelimit"
 	"github.com/brightcolor/sender-report/internal/sealedbox"
 	"github.com/brightcolor/sender-report/internal/smtp"
+	"github.com/brightcolor/sender-report/internal/statsfiles"
 	"github.com/brightcolor/sender-report/internal/store"
 	"github.com/brightcolor/sender-report/internal/telemetry"
 	"github.com/brightcolor/sender-report/internal/tlscert"
@@ -71,13 +71,13 @@ func main() {
 	metrics := telemetry.New()
 	alerter := telemetry.NewAlerter(cfg.AlertWebhookURL)
 	engine := analyzer.New(analyzer.Options{
-		EnableRBLChecks:      cfg.EnableRBLChecks,
-		RBLProviders:         cfg.RBLProviders,
-		EnableSpamAssassin:   cfg.EnableSpamAssassin,
-		SpamAssassinHostPort: cfg.SpamAssassinHostPort,
-		EnableRspamd:         cfg.EnableRspamd,
-		RspamdURL:            cfg.RspamdURL,
-		RspamdPassword:       cfg.RspamdPassword,
+		EnableRBLChecks:          cfg.EnableRBLChecks,
+		RBLProviders:             cfg.RBLProviders,
+		EnableSpamAssassin:       cfg.EnableSpamAssassin,
+		SpamAssassinHostPort:     cfg.SpamAssassinHostPort,
+		EnableRspamd:             cfg.EnableRspamd,
+		RspamdURL:                cfg.RspamdURL,
+		RspamdPassword:           cfg.RspamdPassword,
 		EnableDomainAge:          cfg.EnableDomainAge,
 		EnableDomainBlocklist:    cfg.EnableDomainBlocklist,
 		DomainBlocklistProviders: cfg.DomainBlocklistProviders,
@@ -214,7 +214,12 @@ func processInbound(ctx context.Context, st *store.Store, engine *analyzer.Engin
 		Subject:     subject,
 		SizeBytes:   int64(len(rm.Data)),
 	}
-	report := engine.Analyze(ctx, analyzer.Input{Message: tmpMsg, SMTPDomain: cfg.SMTPDomain})
+	report := engine.Analyze(ctx, analyzer.Input{
+		Message:               tmpMsg,
+		SMTPDomain:            cfg.SMTPDomain,
+		EnableDomainAge:       mb.CheckDomainAge,
+		EnableDomainBlocklist: mb.CheckDomainBlocklist,
+	})
 
 	// Phase 3: if the mailbox has an E2E public key, encrypt all sensitive content
 	// into a single sealed payload and clear the plaintext fields before storage.
@@ -224,14 +229,14 @@ func processInbound(ctx context.Context, st *store.Store, engine *analyzer.Engin
 		if hexErr == nil && len(pubBytes) == 32 {
 			payload, encErr := buildEncryptedPayload(raw, headers, subject, tmpMsg, report, pubBytes)
 			if encErr == nil {
-				storeMsg.PayloadEnc  = payload
-				storeMsg.RawSource   = "[encrypted]"
+				storeMsg.PayloadEnc = payload
+				storeMsg.RawSource = "[encrypted]"
 				storeMsg.HeaderBlock = "[encrypted]"
-				storeMsg.Subject     = "[encrypted]"
-				storeMsg.SMTPFrom    = "[encrypted]"
-				storeMsg.RemoteIP    = "[encrypted]"
-				storeMsg.HELO        = "[encrypted]"
-				storeMsg.ReceivedAt  = time.Time{} // zero — real time in payload
+				storeMsg.Subject = "[encrypted]"
+				storeMsg.SMTPFrom = "[encrypted]"
+				storeMsg.RemoteIP = "[encrypted]"
+				storeMsg.HELO = "[encrypted]"
+				storeMsg.ReceivedAt = time.Time{} // zero — real time in payload
 				// Strip sensitive check details; keep score cleartext via report.Score.
 				report = stripReportForStorage(report)
 			} else {

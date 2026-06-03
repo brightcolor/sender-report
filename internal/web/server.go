@@ -31,9 +31,9 @@ import (
 	"github.com/brightcolor/sender-report/internal/config"
 	"github.com/brightcolor/sender-report/internal/model"
 	reportpdf "github.com/brightcolor/sender-report/internal/pdf"
-	"github.com/brightcolor/sender-report/internal/statsfiles"
 	"github.com/brightcolor/sender-report/internal/ratelimit"
 	"github.com/brightcolor/sender-report/internal/sealedbox"
+	"github.com/brightcolor/sender-report/internal/statsfiles"
 	"github.com/brightcolor/sender-report/internal/store"
 	"github.com/brightcolor/sender-report/internal/telemetry"
 	"github.com/brightcolor/sender-report/internal/version"
@@ -64,20 +64,20 @@ type HomeData struct {
 }
 
 type PrivacyData struct {
-	AppName              string
-	OperatorName         string
-	OperatorAddress      string
-	OperatorEmail        string
-	HideTemplateNote     bool
+	AppName          string
+	OperatorName     string
+	OperatorAddress  string
+	OperatorEmail    string
+	HideTemplateNote bool
 }
 
 type MailboxData struct {
-	AppName         string
-	Mailbox         model.Mailbox
-	Messages        []model.MessageWithReport
-	Now             time.Time
-	PublicURL       string
-	MaxExtendDays   int
+	AppName       string
+	Mailbox       model.Mailbox
+	Messages      []model.MessageWithReport
+	Now           time.Time
+	PublicURL     string
+	MaxExtendDays int
 }
 
 type ReportData struct {
@@ -298,20 +298,20 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		metrics = telemetry.New()
 	}
 	t, err := template.New("").Funcs(template.FuncMap{
-		"msgref":              messageReference,
-		"statusIcon":          statusIcon,
-		"statusLabel":         statusLabel,
-		"detailsText":         detailsText,
-		"safeID":              safeID,
-		"scorePercent":        scorePercent,
-		"rspamdSymbols":       rspamdSymbolsFn,
-		"rspamdMeta":          rspamdMetaFn,
-		"rspamdActionClass":   rspamdActionClass,
-		"rspamdScorePercent":  rspamdScorePercent,
-		"rblHits":             rblHitsFn,
-		"rblProviders":        rblProvidersFn,
-		"splitLines":          splitLinesFn,
-		"appVersion":          func() string { return version.Version },
+		"msgref":             messageReference,
+		"statusIcon":         statusIcon,
+		"statusLabel":        statusLabel,
+		"detailsText":        detailsText,
+		"safeID":             safeID,
+		"scorePercent":       scorePercent,
+		"rspamdSymbols":      rspamdSymbolsFn,
+		"rspamdMeta":         rspamdMetaFn,
+		"rspamdActionClass":  rspamdActionClass,
+		"rspamdScorePercent": rspamdScorePercent,
+		"rblHits":            rblHitsFn,
+		"rblProviders":       rblProvidersFn,
+		"splitLines":         splitLinesFn,
+		"appVersion":         func() string { return version.Version },
 		"jsonEncode": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
 			if err != nil {
@@ -508,8 +508,10 @@ func (s *Server) createMailbox(w http.ResponseWriter, r *http.Request) {
 
 	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 		var body struct {
-			Identifier string `json:"identifier"`
-			PublicKey  string `json:"public_key"` // hex-encoded 32-byte X25519 public key
+			Identifier           string `json:"identifier"`
+			PublicKey            string `json:"public_key"` // hex-encoded 32-byte X25519 public key
+			CheckDomainAge       bool   `json:"check_domain_age"`
+			CheckDomainBlocklist bool   `json:"check_domain_blocklist"`
 		}
 		if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err == nil &&
 			body.Identifier != "" && body.PublicKey != "" {
@@ -539,6 +541,12 @@ func (s *Server) createMailbox(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				http.Error(w, "could not create mailbox", http.StatusInternalServerError)
 				return
+			}
+			// Persist optional third-party check opt-ins chosen by the user.
+			if body.CheckDomainAge || body.CheckDomainBlocklist {
+				_ = s.store.UpdateMailboxChecks(ctx, mb.Token, body.CheckDomainAge, body.CheckDomainBlocklist)
+				mb.CheckDomainAge = body.CheckDomainAge
+				mb.CheckDomainBlocklist = body.CheckDomainBlocklist
 			}
 			s.metrics.IncMailboxesCreated()
 			jsonResp(w, http.StatusCreated, s.mailboxJSON(mb, r))
@@ -881,13 +889,15 @@ func (s *Server) payloadAPI(w http.ResponseWriter, r *http.Request) {
 func (s *Server) mailboxJSON(mb model.Mailbox, r *http.Request) map[string]any {
 	base := s.publicBaseURL(r)
 	return map[string]any{
-		"token":       mb.Token,
-		"address":     mb.Address,
-		"encrypted":   mb.PublicKey != "",
-		"expires_at":  mb.ExpiresAt,
-		"mailbox_url": fmt.Sprintf("%s/mailbox/%s", base, mb.Token),
-		"status_path": fmt.Sprintf("/api/mailboxes/%s/status", mb.Token),
-		"events_path": fmt.Sprintf("/api/mailboxes/%s/events", mb.Token),
+		"token":                  mb.Token,
+		"address":                mb.Address,
+		"encrypted":              mb.PublicKey != "",
+		"expires_at":             mb.ExpiresAt,
+		"mailbox_url":            fmt.Sprintf("%s/mailbox/%s", base, mb.Token),
+		"status_path":            fmt.Sprintf("/api/mailboxes/%s/status", mb.Token),
+		"events_path":            fmt.Sprintf("/api/mailboxes/%s/events", mb.Token),
+		"check_domain_age":       mb.CheckDomainAge,
+		"check_domain_blocklist": mb.CheckDomainBlocklist,
 	}
 }
 
@@ -915,6 +925,32 @@ func (s *Server) mailboxAPI(w http.ResponseWriter, r *http.Request) {
 		jsonResp(w, http.StatusOK, resp)
 	case action == "events" && r.Method == http.MethodGet:
 		s.mailboxEvents(w, r, token)
+	case action == "checks" && r.Method == http.MethodPost:
+		// Per-mailbox opt-in for third-party reputation checks. The user makes an
+		// informed choice on the home page (consent modal) before sending the test
+		// mail; the analysis at receipt time reads these flags. See /privacy §2.2.
+		var body struct {
+			CheckDomainAge       bool `json:"check_domain_age"`
+			CheckDomainBlocklist bool `json:"check_domain_blocklist"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1024)).Decode(&body); err != nil {
+			jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+			return
+		}
+		if err := s.store.UpdateMailboxChecks(ctx, token, body.CheckDomainAge, body.CheckDomainBlocklist); err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, store.ErrNotFound) {
+				status = http.StatusNotFound
+			}
+			jsonResp(w, status, map[string]string{"error": "mailbox not found"})
+			return
+		}
+		jsonResp(w, http.StatusOK, map[string]any{
+			"status":                 "updated",
+			"check_domain_age":       body.CheckDomainAge,
+			"check_domain_blocklist": body.CheckDomainBlocklist,
+		})
+
 	case action == "delete" && r.Method == http.MethodPost:
 		err := s.store.DeleteMailboxByToken(ctx, token)
 		if err != nil {
@@ -957,8 +993,8 @@ func (s *Server) mailboxAPI(w http.ResponseWriter, r *http.Request) {
 		halfPoint := mb.CreatedAt.Add(lifetime / 2)
 		if now.Before(halfPoint) {
 			jsonResp(w, http.StatusForbidden, map[string]string{
-				"error":      "too early to extend",
-				"earliest":   halfPoint.UTC().Format(time.RFC3339),
+				"error":    "too early to extend",
+				"earliest": halfPoint.UTC().Format(time.RFC3339),
 			})
 			return
 		}

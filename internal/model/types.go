@@ -11,6 +11,10 @@ type Mailbox struct {
 	CreatedAt  time.Time
 	ExpiresAt  time.Time
 	LastSeenAt time.Time
+	// Per-mailbox opt-in for third-party reputation checks (group C). Chosen by
+	// the user on the home page; default false. See analyzer.Input.
+	CheckDomainAge       bool
+	CheckDomainBlocklist bool
 }
 
 type Message struct {

@@ -199,6 +199,414 @@
       </div>
     </section>
 
+    <!-- ══ Alle Checks im Detail ═════════════════════════════════════════ -->
+    <section class="mp-checks-section border-top" id="checks-detail">
+      <div class="container-xl px-4 py-5 mp-home-container" style="max-width:920px">
+
+        <div class="text-center mb-4">
+          <span class="mp-section-badge mb-3"><i class="bi bi-list-check me-1"></i>Vollständige Referenz</span>
+          <h2 class="fw-bold mb-2" style="font-size:1.65rem">Alle Prüfungen im Detail</h2>
+          <p class="text-secondary mb-0 mx-auto" style="max-width:600px">
+            Was jeder Check bedeutet, wie wichtig er für deine Zustellbarkeit ist und wo du
+            tiefer einsteigen kannst.
+          </p>
+        </div>
+
+        <!-- Legende: Wichtigkeit -->
+        <div class="d-flex flex-wrap justify-content-center gap-2 gap-md-3 mb-4 small">
+          <span><span class="badge text-bg-danger me-1">Kritisch</span><span class="text-secondary">Ohne das landest du fast sicher im Spam</span></span>
+          <span><span class="badge text-bg-warning me-1">Wichtig</span><span class="text-secondary">Deutlicher Einfluss auf die Zustellung</span></span>
+          <span><span class="badge text-bg-primary me-1">Empfohlen</span><span class="text-secondary">Verbessert Reputation &amp; Darstellung</span></span>
+          <span><span class="badge text-bg-secondary me-1">Optional</span><span class="text-secondary">Bonus-Signal für Fortgeschrittene</span></span>
+        </div>
+
+        <div class="accordion mp-faq" id="mp-checks-detail-acc">
+
+          <!-- ── Authentifizierung ─────────────────────────────────────── -->
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#cd-auth">
+                <i class="bi bi-shield-check text-success me-2"></i>Authentifizierung
+                <span class="badge text-bg-light text-secondary ms-2">8 Checks</span>
+              </button>
+            </h3>
+            <div id="cd-auth" class="accordion-collapse collapse show" data-bs-parent="#mp-checks-detail-acc">
+              <div class="accordion-body">
+                <p class="text-secondary small mb-3">
+                  Der mit Abstand wichtigste Bereich. Gmail, Outlook &amp; Yahoo verlangen seit 2024
+                  von allen Absendern gültige Authentifizierung – fehlt sie, wird abgelehnt oder einsortiert.
+                </p>
+                <ul class="mp-check-ref list-unstyled mb-0">
+                  <li>
+                    <span class="badge text-bg-danger">Kritisch</span>
+                    <div>
+                      <strong>SPF</strong> – Sender Policy Framework.
+                      Ein DNS-TXT-Eintrag deiner Domain legt fest, welche Server in ihrem Namen
+                      versenden dürfen. Der empfangende Server prüft, ob die sendende IP erlaubt ist.
+                      Ohne gültiges SPF wirkt deine Mail wie gefälscht.
+                      <a href="https://datatracker.ietf.org/doc/html/rfc7208" target="_blank" rel="noopener">RFC 7208 ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <div>
+                      <strong>SPF-Strenge</strong> – das abschließende <code>all</code>-Tag.
+                      <code>-all</code> (hard fail) schützt am besten, <code>~all</code> (soft fail) ist
+                      noch akzeptabel, <code>+all</code> ist gefährlich (erlaubt jeden). Geprüft wird auch
+                      das RFC-Limit von max. 10 DNS-Lookups.
+                      <a href="https://dmarc.org/wiki/FAQ" target="_blank" rel="noopener">dmarc.org FAQ ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-danger">Kritisch</span>
+                    <div>
+                      <strong>DKIM</strong> – DomainKeys Identified Mail.
+                      Deine Mail wird kryptografisch signiert; der öffentliche Schlüssel liegt im DNS.
+                      Der Empfänger verifiziert, dass die Mail unterwegs nicht verändert wurde und
+                      wirklich von deiner Domain stammt.
+                      <a href="https://datatracker.ietf.org/doc/html/rfc6376" target="_blank" rel="noopener">RFC 6376 ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <div>
+                      <strong>DKIM-Schlüssellänge</strong> – RSA-Schlüssel unter 1024 Bit gelten als
+                      unsicher, 2048 Bit sind heute Standard. Ed25519 wird ebenfalls erkannt. Schwache
+                      Schlüssel können von Filtern abgewertet werden.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-danger">Kritisch</span>
+                    <div>
+                      <strong>DMARC</strong> – baut auf SPF und DKIM auf und sagt dem Empfänger, was bei
+                      einem Fehlschlag passieren soll. Erst DMARC macht Spoofing-Schutz wirksam und
+                      liefert dir Reports.
+                      <a href="https://datatracker.ietf.org/doc/html/rfc7489" target="_blank" rel="noopener">RFC 7489 ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <div>
+                      <strong>DMARC-Policy-Stärke</strong> – <code>p=none</code> überwacht nur,
+                      <code>p=quarantine</code> verschiebt in den Spam, <code>p=reject</code> lehnt
+                      Fälschungen ab. Für echten Schutz wird mindestens <code>quarantine</code> plus eine
+                      <code>rua=</code>-Reportadresse empfohlen.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <div>
+                      <strong>Alignment (SPF / DKIM / DMARC / From)</strong> – die geprüften Domains
+                      müssen zur sichtbaren Absenderadresse (<code>From:</code>) passen. Nur „ausgerichtete"
+                      Bestätigungen zählen für DMARC – ein häufiger, schwer zu findender Fehler.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <div>
+                      <strong>From-Anzeigename</strong> – erkennt Markenimitation und fremde
+                      E-Mail-Adressen im angezeigten Namen (z.&nbsp;B. „PayPal Service &lt;x@gmx.de&gt;").
+                      Ein klassisches Phishing-Muster, das Filter misstrauisch macht.
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── DNS & Infrastruktur ───────────────────────────────────── -->
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cd-dns">
+                <i class="bi bi-hdd-network text-info me-2"></i>DNS &amp; Infrastruktur
+                <span class="badge text-bg-light text-secondary ms-2">11 Checks</span>
+              </button>
+            </h3>
+            <div id="cd-dns" class="accordion-collapse collapse" data-bs-parent="#mp-checks-detail-acc">
+              <div class="accordion-body">
+                <p class="text-secondary small mb-3">
+                  Zeigt, ob deine sendende IP und deine Hostnamen sauber und konsistent im DNS hinterlegt
+                  sind. Inkonsistenzen wirken wie ein schlecht gewarteter oder gekaperter Server.
+                </p>
+                <ul class="mp-check-ref list-unstyled mb-0">
+                  <li>
+                    <span class="badge text-bg-danger">Kritisch</span>
+                    <div>
+                      <strong>PTR / Reverse DNS</strong> – zu deiner sendenden IP muss ein Hostname
+                      hinterlegt sein, der wiederum auf dieselbe IP zurückzeigt (Forward-confirmed rDNS).
+                      Fehlt der PTR, lehnen viele große Provider direkt ab.
+                      <a href="https://datatracker.ietf.org/doc/html/rfc1912" target="_blank" rel="noopener">RFC 1912 ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <div>
+                      <strong>PTR-Muster</strong> – generische oder „dynamisch" aussehende Hostnamen
+                      (z.&nbsp;B. <code>p5dxxxx.dip0.t-ipconnect.de</code>) gelten als Privatanschluss und
+                      sind ein starkes Spam-Signal – selbst wenn der PTR technisch existiert.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <div>
+                      <strong>HELO / EHLO</strong> – der Name, mit dem sich dein Server am Anfang der
+                      SMTP-Verbindung vorstellt, sollte ein gültiger, zur IP passender FQDN sein.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <div>
+                      <strong>MX-Records</strong> – prüft, ob die Domain überhaupt empfangsfähige
+                      Mailserver veröffentlicht. Wichtig für Rückläufer (Bounces) und Glaubwürdigkeit.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <div>
+                      <strong>A / AAAA</strong> – existieren die zugrundeliegenden Host-Adressen
+                      (IPv4/IPv6)? Lücken deuten auf eine unvollständige DNS-Konfiguration hin.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <div>
+                      <strong>TLS-Transport</strong> – wurde die Mail verschlüsselt übertragen
+                      (STARTTLS)? Unverschlüsselte Übertragung ist heute ein Reputations- und
+                      Datenschutzproblem.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <div>
+                      <strong>Bounce-Domain (Envelope-From) MX</strong> – kann die Return-Path-Domain
+                      überhaupt Bounces empfangen? Sonst gehen Unzustellbarkeits-Meldungen verloren.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-secondary">Optional</span>
+                    <div>
+                      <strong>MTA-STS</strong> – erzwingt verschlüsselten Transport zu deinen
+                      Mailservern und verhindert Downgrade-Angriffe.
+                      <a href="https://datatracker.ietf.org/doc/html/rfc8461" target="_blank" rel="noopener">RFC 8461 ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-secondary">Optional</span>
+                    <div>
+                      <strong>TLS-RPT</strong> – lässt dir Berichte über fehlgeschlagene
+                      TLS-Verbindungen zukommen.
+                      <a href="https://datatracker.ietf.org/doc/html/rfc8460" target="_blank" rel="noopener">RFC 8460 ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-secondary">Optional</span>
+                    <div>
+                      <strong>DNSSEC</strong> – ist deine Zone kryptografisch signiert? Schützt deine
+                      DNS-Antworten (inkl. SPF/DKIM/DMARC) vor Manipulation.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-secondary">Optional</span>
+                    <div>
+                      <strong>BIMI &amp; DANE/TLSA</strong> – BIMI zeigt dein Markenlogo im Postfach
+                      (setzt <code>p=quarantine/reject</code> voraus), DANE bindet TLS-Zertifikate per DNS.
+                      Fortgeschrittene Vertrauenssignale.
+                      <a href="https://bimigroup.org/" target="_blank" rel="noopener">bimigroup.org ↗</a>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Spam-Filter & Reputation ──────────────────────────────── -->
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cd-spam">
+                <i class="bi bi-funnel text-warning me-2"></i>Spam-Filter &amp; Reputation
+                <span class="badge text-bg-light text-secondary ms-2">6 Checks</span>
+              </button>
+            </h3>
+            <div id="cd-spam" class="accordion-collapse collapse" data-bs-parent="#mp-checks-detail-acc">
+              <div class="accordion-body">
+                <p class="text-secondary small mb-3">
+                  So bewerten verbreitete Filter und Reputationsdienste deine Mail. Die letzten drei
+                  Checks sind <strong>optional</strong> und müssen auf der Startseite aktiv eingeschaltet
+                  werden, da sie externe Dienste kontaktieren.
+                </p>
+                <ul class="mp-check-ref list-unstyled mb-0">
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <div>
+                      <strong>SpamAssassin</strong> – der De-facto-Standard-Filter vieler Mailserver.
+                      Zeigt den Gesamt-Score und die einzelnen ausgelösten Regeln mit Punktwerten.
+                      <a href="https://spamassassin.apache.org/" target="_blank" rel="noopener">spamassassin.apache.org ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <div>
+                      <strong>Rspamd</strong> – moderner, weit verbreiteter Filter. Liefert eine
+                      detaillierte Symbol-Analyse (welche Merkmale wie stark gewertet wurden).
+                      <a href="https://rspamd.com/" target="_blank" rel="noopener">rspamd.com ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-danger">Kritisch</span>
+                    <div>
+                      <strong>DNSBL / RBL (IP-Reputation)</strong> – steht deine sendende IP auf bekannten
+                      Blacklists (z.&nbsp;B. Spamhaus, Spamcop)? Ein Treffer ist einer der häufigsten
+                      Gründe für komplette Ablehnung. Inkl. Delisting-Hinweisen.
+                      <a href="https://check.spamhaus.org/" target="_blank" rel="noopener">Spamhaus Lookup ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <span class="badge text-bg-light text-secondary border">Opt-in</span>
+                    <div>
+                      <strong>Domain-Alter</strong> – wie lange ist die Absender-Domain registriert?
+                      Brandneue Domains sind ein starkes Spam-Signal. Abfrage via RDAP (rdap.org).
+                      <a href="https://about.rdap.org/" target="_blank" rel="noopener">about.rdap.org ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-light text-secondary border">Opt-in</span>
+                    <div>
+                      <strong>Domain-Blocklist</strong> – steht die Absender-Domain auf einer
+                      Domain-Blockliste (Spamhaus DBL, URIBL)? Treffer führen oft direkt zu Ablehnung.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-light text-secondary border">Opt-in</span>
+                    <div>
+                      <strong>Link-Blocklist</strong> – prüft die Domains aller in der Mail enthaltenen
+                      Links gegen URI-Blocklisten. Ein einziger gelisteter Link kann die ganze Mail
+                      in den Spam befördern.
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Format & Inhalt ───────────────────────────────────────── -->
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cd-content">
+                <i class="bi bi-file-richtext text-primary me-2"></i>Format &amp; Inhalt
+                <span class="badge text-bg-light text-secondary ms-2">7 Checks</span>
+              </button>
+            </h3>
+            <div id="cd-content" class="accordion-collapse collapse" data-bs-parent="#mp-checks-detail-acc">
+              <div class="accordion-body">
+                <p class="text-secondary small mb-3">
+                  Der technische und inhaltliche Aufbau der Nachricht. Schlechtes Format ist ein
+                  klassisches Spam-Signal und kann die Darstellung beim Empfänger zerstören.
+                </p>
+                <ul class="mp-check-ref list-unstyled mb-0">
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <div>
+                      <strong>MIME-Struktur</strong> – ist die Nachricht RFC-konform aufgebaut
+                      (Header, Body, Boundaries, Encoding)? Kaputte Struktur wird abgewertet oder
+                      gar nicht erst korrekt dargestellt.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <div>
+                      <strong>Text/HTML-Verhältnis</strong> – eine reine HTML-Mail ohne Text-Alternative
+                      (multipart/alternative) wirkt unprofessionell und spamverdächtig.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <div>
+                      <strong>HTML-Validität &amp; versteckter Text</strong> – unsauberes HTML und
+                      unsichtbarer Text (z.&nbsp;B. weiß auf weiß) sind typische Spammer-Tricks.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <div>
+                      <strong>Betreff</strong> – Länge, übermäßige GROSSSCHREIBUNG und Ausrufezeichen-Ketten
+                      („!!!") erhöhen den Spam-Score.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <div>
+                      <strong>Links, Tracking &amp; Shortener</strong> – URL-Verkürzer und auffällige
+                      Tracking-Links werden von Filtern kritisch gesehen; sie verschleiern das echte Ziel.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <div>
+                      <strong>Newsletter-Header</strong> – bei Massen-/Marketing-Mails erwarten Provider
+                      einen <code>List-Unsubscribe</code>-Header (idealerweise mit One-Click). Fehlt er,
+                      drohen Spam-Einordnung und Beschwerden.
+                      <a href="https://datatracker.ietf.org/doc/html/rfc8058" target="_blank" rel="noopener">RFC 8058 ↗</a>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Header & Rohdaten ─────────────────────────────────────── -->
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cd-headers">
+                <i class="bi bi-code-square text-secondary me-2"></i>Header &amp; Rohdaten
+                <span class="badge text-bg-light text-secondary ms-2">3 Checks</span>
+              </button>
+            </h3>
+            <div id="cd-headers" class="accordion-collapse collapse" data-bs-parent="#mp-checks-detail-acc">
+              <div class="accordion-body">
+                <p class="text-secondary small mb-3">
+                  Die technischen Basis-Header. Fehlende oder unplausible Pflichtfelder deuten auf einen
+                  fehlkonfigurierten Mailserver hin.
+                </p>
+                <ul class="mp-check-ref list-unstyled mb-0">
+                  <li>
+                    <span class="badge text-bg-warning">Wichtig</span>
+                    <div>
+                      <strong>Message-ID</strong> – jede Mail braucht eine eindeutige, gültige
+                      Message-ID. Fehlt sie, ist das ein deutliches Spam-Signal.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <div>
+                      <strong>Date &amp; Date-Skew</strong> – das Sendedatum muss vorhanden und plausibel
+                      sein. Stark abweichende Zeitstempel deuten auf einen falsch konfigurierten Server hin.
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <div>
+                      <strong>Received-Chain</strong> – die Kette der durchlaufenen Server sollte
+                      lückenlos und konsistent sein und dokumentiert den Weg der Mail.
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <p class="text-center text-secondary small mt-4 mb-0">
+          <i class="bi bi-sliders me-1"></i>Die mit <span class="badge text-bg-light text-secondary border">Opt-in</span>
+          markierten Checks aktivierst du selbst auf der <a href="/">Startseite</a> – informiert und jederzeit widerrufbar.
+        </p>
+
+      </div>
+    </section>
+
     <!-- ══ Privatsphäre ══════════════════════════════════════════════════ -->
     <section class="mp-privacy-section">
       <div class="container-xl px-4 py-5 mp-home-container">

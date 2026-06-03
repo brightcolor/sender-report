@@ -139,12 +139,22 @@
               <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren</span>
             </div>
 
-            <div id="check-actions" class="d-flex gap-2 justify-content-center mb-3">
+            <div id="check-actions" class="d-flex gap-2 justify-content-center mb-2">
               <button id="check-btn" class="btn btn-primary px-4" type="button">
                 <i class="bi bi-play-fill me-1"></i>Check starten
               </button>
               <button id="new-address-btn" class="btn btn-warning px-3" type="button">
                 <i class="bi bi-arrow-clockwise me-1"></i>Neue Mailbox
+              </button>
+            </div>
+
+            <!-- Dezenter Einstieg zu den optionalen Reputations-Checks -->
+            <div id="adv-checks-row" class="text-center mb-3">
+              <button type="button" id="adv-checks-btn"
+                      class="btn btn-link btn-sm text-secondary text-decoration-none p-0"
+                      data-bs-toggle="modal" data-bs-target="#mp-adv-checks-modal">
+                <i class="bi bi-sliders me-1"></i>Erweiterte Reputations-Checks
+                <span id="adv-checks-count" class="badge rounded-pill text-bg-primary ms-1 d-none">0</span>
               </button>
             </div>
 
@@ -266,6 +276,93 @@
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
           <button type="button" class="btn btn-danger" id="mp-delete-confirm-btn">
             <i class="bi bi-trash3 me-1"></i>Endgültig löschen
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Erweiterte Reputations-Checks (informierte Einwilligung) -->
+  <div class="modal fade" id="mp-adv-checks-modal" tabindex="-1" aria-labelledby="mp-adv-checks-label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="mp-adv-checks-label">
+            <i class="bi bi-sliders me-2 text-primary"></i>Erweiterte Reputations-Checks
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+        </div>
+        <div class="modal-body">
+
+          <p class="text-secondary small mb-3">
+            Diese Zusatzprüfungen liefern wertvolle Signale – fragen dafür aber
+            <strong>externe Dienste</strong> ab. Du entscheidest selbst, ob du sie nutzen möchtest.
+            Standardmäßig sind sie <strong>ausgeschaltet</strong>. Die Auswahl gilt für deine aktuelle Mailbox.
+          </p>
+
+          <div class="alert alert-light border d-flex gap-2 py-2 px-3 small mb-4" role="note">
+            <i class="bi bi-info-circle text-primary mt-1"></i>
+            <div>
+              <strong>Was bedeutet das?</strong> Bei aktivierten Checks wird die
+              <em>Absender-Domain</em> (und bei Link-Prüfung die Domains der enthaltenen Links)
+              an die jeweiligen Anbieter übermittelt. Der <em>Inhalt</em> deiner Mail verlässt
+              den Server dabei nie. Mehr dazu in der
+              <a href="/privacy" target="_blank" rel="noopener">Datenschutzerklärung</a>.
+            </div>
+          </div>
+
+          <!-- Domain-Alter -->
+          <div class="mp-adv-option border rounded-3 p-3 mb-3">
+            <div class="form-check form-switch d-flex align-items-start gap-2 m-0">
+              <input class="form-check-input flex-shrink-0 mt-1" type="checkbox" role="switch"
+                     id="adv-check-domain-age" style="cursor:pointer">
+              <label class="form-check-label" for="adv-check-domain-age" style="cursor:pointer">
+                <span class="fw-semibold d-block mb-1">
+                  Domain-Alter <span class="badge text-bg-success ms-1" style="font-size:.65rem">Empfohlen</span>
+                </span>
+                <span class="text-secondary small d-block mb-2">
+                  Wie lange ist die Absender-Domain schon registriert? Brandneue Domains
+                  (wenige Tage/Wochen alt) sind ein starkes Spam-Signal – etablierte Filter
+                  bewerten sie deutlich schlechter.
+                </span>
+                <span class="d-flex flex-wrap gap-x-3 gap-y-1 small text-secondary">
+                  <span><i class="bi bi-hdd-network me-1"></i>Anbieter: <strong>rdap.org</strong> (RDAP/WHOIS)</span>
+                  <span><i class="bi bi-arrow-up-right me-1"></i>Übermittelt: <strong>Absender-Domain</strong></span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Domain- & Link-Blocklisten -->
+          <div class="mp-adv-option border rounded-3 p-3 mb-2">
+            <div class="form-check form-switch d-flex align-items-start gap-2 m-0">
+              <input class="form-check-input flex-shrink-0 mt-1" type="checkbox" role="switch"
+                     id="adv-check-domain-blocklist" style="cursor:pointer">
+              <label class="form-check-label" for="adv-check-domain-blocklist" style="cursor:pointer">
+                <span class="fw-semibold d-block mb-1">Domain- &amp; Link-Blocklisten</span>
+                <span class="text-secondary small d-block mb-2">
+                  Steht die Absender-Domain oder eine in der Mail verlinkte Domain auf einer
+                  bekannten Spam-/Missbrauchs-Blockliste? Treffer hier führen bei vielen
+                  Providern direkt zu Ablehnung oder Spam-Ordner.
+                </span>
+                <span class="d-flex flex-wrap gap-x-3 gap-y-1 small text-secondary">
+                  <span><i class="bi bi-hdd-network me-1"></i>Anbieter: <strong>Spamhaus DBL, URIBL</strong> (DNS-Abfrage)</span>
+                  <span><i class="bi bi-arrow-up-right me-1"></i>Übermittelt: <strong>Absender- &amp; Link-Domains</strong></span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <p class="text-secondary mb-0" style="font-size:.78rem">
+            <i class="bi bi-shield-check me-1"></i>Es werden ausschließlich Domainnamen abgefragt –
+            keine E-Mail-Adressen, kein Mailinhalt, keine personenbezogenen Daten.
+          </p>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="mp-adv-checks-save">
+            <i class="bi bi-check2 me-1"></i>Auswahl übernehmen
           </button>
         </div>
       </div>

@@ -152,6 +152,93 @@ function withReportKey(reportPath) {
   return secret ? reportPath + '#' + secret : reportPath;
 }
 
+// ── Erweiterte Reputations-Checks (opt-in, Drittanbieter) ─────────────────────
+// Die Auswahl wird lokal als Nutzer-Präferenz gespeichert und pro Mailbox an den
+// Server übermittelt (POST /api/mailboxes/{token}/checks). Standard: alles aus.
+
+const ADV_CHECKS_KEY = 'sr:advchecks';
+
+function loadAdvChecks() {
+  try {
+    const o = JSON.parse(localStorage.getItem(ADV_CHECKS_KEY) || '{}');
+    return { domain_age: !!o.domain_age, domain_blocklist: !!o.domain_blocklist };
+  } catch (_) {
+    return { domain_age: false, domain_blocklist: false };
+  }
+}
+
+function saveAdvChecks(prefs) {
+  try { localStorage.setItem(ADV_CHECKS_KEY, JSON.stringify(prefs)); } catch (_) {}
+}
+
+function updateAdvChecksBadge() {
+  const badge = document.getElementById('adv-checks-count');
+  if (!badge) return;
+  const prefs = loadAdvChecks();
+  const n = (prefs.domain_age ? 1 : 0) + (prefs.domain_blocklist ? 1 : 0);
+  if (n > 0) { badge.textContent = String(n); badge.classList.remove('d-none'); }
+  else       { badge.classList.add('d-none'); }
+}
+
+async function syncAdvChecks(token) {
+  if (!token) return;
+  const prefs = loadAdvChecks();
+  try {
+    await fetch(`/api/mailboxes/${token}/checks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify({
+        check_domain_age: prefs.domain_age,
+        check_domain_blocklist: prefs.domain_blocklist,
+      }),
+    });
+  } catch (_) { /* best effort */ }
+}
+
+// Apply the user's stored preference to a freshly ready mailbox. Only contacts
+// the server when at least one check is enabled (new mailboxes default to off).
+function applyAdvChecksOnReady(token) {
+  updateAdvChecksBadge();
+  const prefs = loadAdvChecks();
+  if (prefs.domain_age || prefs.domain_blocklist) {
+    syncAdvChecks(token);
+  }
+}
+
+function setupAdvChecksModal() {
+  const modal = document.getElementById('mp-adv-checks-modal');
+  if (!modal) return;
+  const ageSw   = document.getElementById('adv-check-domain-age');
+  const blSw    = document.getElementById('adv-check-domain-blocklist');
+  const saveBtn = document.getElementById('mp-adv-checks-save');
+
+  // Reflect stored prefs each time the modal opens.
+  modal.addEventListener('show.bs.modal', () => {
+    const prefs = loadAdvChecks();
+    if (ageSw) ageSw.checked = prefs.domain_age;
+    if (blSw)  blSw.checked  = prefs.domain_blocklist;
+  });
+
+  saveBtn?.addEventListener('click', async () => {
+    const prefs = {
+      domain_age:       !!ageSw?.checked,
+      domain_blocklist: !!blSw?.checked,
+    };
+    saveAdvChecks(prefs);
+    updateAdvChecksBadge();
+    await syncAdvChecks(document.getElementById('check-panel')?.dataset?.token);
+    if (typeof bootstrap !== 'undefined') bootstrap.Modal.getInstance(modal)?.hide();
+    setTransientStatus(
+      (prefs.domain_age || prefs.domain_blocklist)
+        ? 'Erweiterte Checks für diese Mailbox aktiviert.'
+        : 'Erweiterte Checks deaktiviert.',
+      'ok');
+  });
+
+  updateAdvChecksBadge();
+}
+
 // ── Mailbox creation (E2E crypto path) ───────────────────────────────────────
 
 async function createMailboxWithCrypto() {
@@ -346,6 +433,9 @@ function updateMailboxIdentity(data) {
     document.getElementById('mp-e2e-badge')?.classList.remove('d-none');
     document.getElementById('mp-e2e-footer')?.classList.remove('d-none');
   }
+
+  // Apply the user's advanced-check preference to this mailbox.
+  applyAdvChecksOnReady(data.token);
 }
 
 async function createNewAddress() {
@@ -1281,6 +1371,7 @@ async function initHomeMailbox() {
 setupThemeToggle();
 setupCheckButton();
 setupNewAddressButton();
+setupAdvChecksModal();
 setupCopyButtons();
 localizeStaticTimes();
 setupCheckFilter();

@@ -48,6 +48,13 @@ type Options struct {
 type Input struct {
 	Message    model.Message
 	SMTPDomain string
+	// Per-request opt-in for third-party reputation checks (group C). These are
+	// chosen by the individual user on the home page and stored on the mailbox.
+	// They are OR-combined with the operator-level Options defaults, so an
+	// operator can force a check on globally while users can additionally enable
+	// it for their own mailbox.
+	EnableDomainAge       bool
+	EnableDomainBlocklist bool
 }
 
 type Engine struct {
@@ -288,10 +295,12 @@ func (e *Engine) Analyze(ctx context.Context, in Input) model.AnalysisReport {
 	}
 
 	// Group C — opt-in third-party reputation checks (off by default).
-	if e.opts.EnableDomainAge {
+	// Enabled either globally by the operator (e.opts) or per-mailbox by the
+	// user who created the mailbox (in.*). See Input docs.
+	if e.opts.EnableDomainAge || in.EnableDomainAge {
 		report.Checks = append(report.Checks, domainAgeCheck(ctx, primaryDomain))
 	}
-	if e.opts.EnableDomainBlocklist {
+	if e.opts.EnableDomainBlocklist || in.EnableDomainBlocklist {
 		report.Checks = append(report.Checks, domainBlocklistCheck(ctx, primaryDomain, e.opts.DomainBlocklistProviders))
 		report.Checks = append(report.Checks, linkBlocklistCheck(ctx, report.Links, e.opts.DomainBlocklistProviders))
 	}
