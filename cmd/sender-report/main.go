@@ -78,6 +78,9 @@ func main() {
 		EnableRspamd:         cfg.EnableRspamd,
 		RspamdURL:            cfg.RspamdURL,
 		RspamdPassword:       cfg.RspamdPassword,
+		EnableDomainAge:          cfg.EnableDomainAge,
+		EnableDomainBlocklist:    cfg.EnableDomainBlocklist,
+		DomainBlocklistProviders: cfg.DomainBlocklistProviders,
 	})
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

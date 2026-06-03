@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-02
+
+### Added
+- Opt-in third-party reputation checks (batch C — OFF by default; contact external services with the sender/link domain):
+  - **Domain age** (`domain_age`): registration age via RDAP (rdap.org). Domains < 30 days are flagged strongly, < 90 days mildly. Enable with `ENABLE_DOMAIN_AGE=true`.
+  - **Domain blocklist** (`domain_blocklist`): the sender's registrable domain checked against domain blocklists (Spamhaus DBL etc.).
+  - **Link-domain blocklist** (`link_blocklist`): registrable domains of all links checked against URI blocklists (URIBL/SURBL/DBL). Both enabled with `ENABLE_DOMAIN_BLOCKLIST=true`, providers via `DOMAIN_BLOCKLIST_PROVIDERS`.
+- New config: `ENABLE_DOMAIN_AGE`, `ENABLE_DOMAIN_BLOCKLIST`, `DOMAIN_BLOCKLIST_PROVIDERS` (documented in `.env.example` and env migration).
+- Privacy policy updated to disclose these optional third-party data flows (RDAP, domain/URI blocklists) in sections 2.2 and 5.
+- New dependency `golang.org/x/net/publicsuffix` for registrable-domain (eTLD+1) extraction.
+
 ## [1.2.0] - 2026-06-02
 
 ### Added

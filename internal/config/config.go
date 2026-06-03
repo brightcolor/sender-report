@@ -32,6 +32,11 @@ type Config struct {
 	SMTPBurstPerMin      int
 	EnableRBLChecks      bool
 	RBLProviders         []string
+	// Group C — opt-in third-party reputation checks (contact external services
+	// with the sender/link domain; off by default for privacy).
+	EnableDomainAge          bool
+	EnableDomainBlocklist    bool
+	DomainBlocklistProviders []string
 	EnableSpamAssassin   bool
 	SpamAssassinHostPort string
 	EnableRspamd         bool
@@ -73,6 +78,9 @@ func Load() (Config, error) {
 		SMTPBurstPerMin:      getEnvInt("SMTP_BURST_PER_MIN", 40),
 		EnableRBLChecks:      getEnvBool("ENABLE_RBL_CHECKS", false),
 		RBLProviders:         splitCSV(getEnv("RBL_PROVIDERS", "zen.spamhaus.org,bl.spamcop.net,b.barracudacentral.org,psbl.surriel.com,dnsbl.dronebl.org,bl.blocklist.de")),
+		EnableDomainAge:          getEnvBool("ENABLE_DOMAIN_AGE", false),
+		EnableDomainBlocklist:    getEnvBool("ENABLE_DOMAIN_BLOCKLIST", false),
+		DomainBlocklistProviders: splitCSV(getEnv("DOMAIN_BLOCKLIST_PROVIDERS", "dbl.spamhaus.org,multi.uribl.com")),
 		EnableSpamAssassin:   getEnvBool("ENABLE_SPAMASSASSIN", false),
 		SpamAssassinHostPort: getEnv("SPAMASSASSIN_HOSTPORT", "spamd:783"),
 		EnableRspamd:         getEnvBool("ENABLE_RSPAMD", false),

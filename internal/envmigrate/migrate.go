@@ -82,6 +82,9 @@ var All = []VarDef{
 	// ── Optional checks ───────────────────────────────────────────────────────
 	{Group: "Optional checks", Key: "ENABLE_RBL_CHECKS", Default: "false", Comment: "Enable DNSBL/RBL IP reputation checks"},
 	{Key: "RBL_PROVIDERS", Default: "zen.spamhaus.org,bl.spamcop.net,b.barracudacentral.org,psbl.surriel.com,dnsbl.dronebl.org,bl.blocklist.de", Comment: "Comma-separated list of RBL zones"},
+	{Key: "ENABLE_DOMAIN_AGE", Default: "false", Comment: "Opt-in: domain registration age via RDAP (third-party rdap.org)"},
+	{Key: "ENABLE_DOMAIN_BLOCKLIST", Default: "false", Comment: "Opt-in: sender/link domains against domain/URI blocklists (third-party)"},
+	{Key: "DOMAIN_BLOCKLIST_PROVIDERS", Default: "dbl.spamhaus.org,multi.uribl.com", Comment: "Comma-separated domain/URI blocklist zones"},
 	{Key: "ENABLE_RSPAMD", Default: "true", Comment: "Enable Rspamd integration (default: true — requires rspamd service)"},
 	{Key: "RSPAMD_URL", Default: "http://rspamd:11334/checkv2", Comment: "Rspamd checkv2 endpoint"},
 	{Key: "RSPAMD_PASSWORD", Default: "", Comment: "Rspamd controller password (leave empty when using secure_ip)"},

@@ -26,6 +26,7 @@ import (
 
 	"github.com/miekg/dns"
 	"golang.org/x/net/html"
+	"golang.org/x/net/publicsuffix"
 
 	"github.com/brightcolor/sender-report/internal/model"
 )
@@ -38,6 +39,10 @@ type Options struct {
 	EnableRspamd         bool
 	RspamdURL            string
 	RspamdPassword       string
+	// Group C — opt-in third-party reputation checks (off by default).
+	EnableDomainAge          bool
+	EnableDomainBlocklist    bool
+	DomainBlocklistProviders []string
 }
 
 type Input struct {
@@ -280,6 +285,15 @@ func (e *Engine) Analyze(ctx context.Context, in Input) model.AnalysisReport {
 	}
 	if e.opts.EnableRspamd && strings.TrimSpace(e.opts.RspamdURL) != "" {
 		report.Checks = append(report.Checks, rspamdHeuristic(ctx, e.opts.RspamdURL, e.opts.RspamdPassword, in.Message.RawSource))
+	}
+
+	// Group C — opt-in third-party reputation checks (off by default).
+	if e.opts.EnableDomainAge {
+		report.Checks = append(report.Checks, domainAgeCheck(ctx, primaryDomain))
+	}
+	if e.opts.EnableDomainBlocklist {
+		report.Checks = append(report.Checks, domainBlocklistCheck(ctx, primaryDomain, e.opts.DomainBlocklistProviders))
+		report.Checks = append(report.Checks, linkBlocklistCheck(ctx, report.Links, e.opts.DomainBlocklistProviders))
 	}
 
 	enrichCtx := checkContext{
@@ -799,6 +813,158 @@ func daneCheck(ctx context.Context, domain string) model.CheckResult {
 	return withDetails(info("dane_tlsa", "DANE/TLSA", 0.0, "Kein DANE/TLSA-Record auf dem MX gefunden (optional; erfordert DNSSEC).", "Optional: nach DNSSEC TLSA-Records für die MX-Hosts veröffentlichen."), det)
 }
 
+// ── Group C: opt-in third-party reputation checks (off by default) ──────────
+
+// registrableDomain returns the eTLD+1 (e.g. example.co.uk) for a hostname.
+func registrableDomain(domain string) string {
+	d := normDomain(domain)
+	if d == "" {
+		return ""
+	}
+	if e, err := publicsuffix.EffectiveTLDPlusOne(d); err == nil {
+		return e
+	}
+	return d
+}
+
+// rdapRegistrationDate fetches the domain registration date via RDAP (rdap.org
+// bootstrap → registry). This contacts a third-party service.
+func rdapRegistrationDate(ctx context.Context, domain string) (time.Time, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://rdap.org/domain/"+domain, nil)
+	if err != nil {
+		return time.Time{}, err
+	}
+	req.Header.Set("Accept", "application/rdap+json")
+	cl := &http.Client{Timeout: 6 * time.Second}
+	resp, err := cl.Do(req)
+	if err != nil {
+		return time.Time{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return time.Time{}, fmt.Errorf("rdap status %d", resp.StatusCode)
+	}
+	body, _ := readLimited(resp.Body, 1*1024*1024)
+	var data struct {
+		Events []struct {
+			Action string `json:"eventAction"`
+			Date   string `json:"eventDate"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(body, &data); err != nil {
+		return time.Time{}, err
+	}
+	for _, e := range data.Events {
+		if strings.EqualFold(e.Action, "registration") {
+			if t, perr := time.Parse(time.RFC3339, e.Date); perr == nil {
+				return t, nil
+			}
+		}
+	}
+	return time.Time{}, fmt.Errorf("no registration event")
+}
+
+func domainAgeCheck(ctx context.Context, domain string) model.CheckResult {
+	reg := registrableDomain(domain)
+	if reg == "" {
+		return info("domain_age", "Domain-Alter", 0.0, "Keine Domain für die Altersprüfung ermittelbar.", "")
+	}
+	det := map[string]string{"domain": reg}
+	created, err := rdapRegistrationDate(ctx, reg)
+	if err != nil || created.IsZero() {
+		if err != nil {
+			det["rdap_error"] = err.Error()
+		}
+		return withDetails(info("domain_age", "Domain-Alter", 0.0, fmt.Sprintf("Domain-Alter für %s nicht ermittelbar (RDAP lieferte kein Registrierungsdatum).", reg), "Bei Bedarf manuell per WHOIS/RDAP prüfen."), det)
+	}
+	ageDays := int(time.Since(created).Hours() / 24)
+	det["registered"] = created.Format("2006-01-02")
+	det["age_days"] = strconv.Itoa(ageDays)
+	switch {
+	case ageDays < 30:
+		return withDetails(warn("domain_age", "Domain-Alter", -0.8, fmt.Sprintf("Domain %s ist erst %d Tage alt (registriert %s) – sehr junge Domains sind ein starkes Spam-/Phishing-Signal.", reg, ageDays, created.Format("2006-01-02")), "Junge Domains langsam 'warmlaufen' (geringe Volumina, saubere Empfängerlisten) und SPF/DKIM/DMARC vollständig konfigurieren."), det)
+	case ageDays < 90:
+		return withDetails(warn("domain_age", "Domain-Alter", -0.3, fmt.Sprintf("Domain %s ist %d Tage alt (registriert %s) – noch jung; viele Filter sind bei Domains unter 90 Tagen vorsichtig.", reg, ageDays, created.Format("2006-01-02")), "Reputation weiter aufbauen und konstantes, sauberes Sendeverhalten beibehalten."), det)
+	default:
+		return withDetails(pass("domain_age", "Domain-Alter", 0.1, fmt.Sprintf("Domain %s ist %d Tage alt (registriert %s) – etabliertes Domain-Alter.", reg, ageDays, created.Format("2006-01-02")), ""), det)
+	}
+}
+
+// dnsblListed reports whether <name>.<provider> returns a 127.0.0.x listing
+// (real hit), ignoring 127.255.255.x error/blocked responses.
+func dnsblListed(ctx context.Context, name, provider string) bool {
+	ips, err := net.DefaultResolver.LookupHost(ctx, name+"."+provider)
+	if err != nil {
+		return false
+	}
+	for _, ip := range ips {
+		if strings.HasPrefix(ip, "127.0.") {
+			return true
+		}
+	}
+	return false
+}
+
+func domainBlocklistCheck(ctx context.Context, domain string, providers []string) model.CheckResult {
+	reg := registrableDomain(domain)
+	if reg == "" || len(providers) == 0 {
+		return info("domain_blocklist", "Domain-Blocklist", 0.0, "Keine Domain/Provider für die Domain-Blocklist-Prüfung.", "")
+	}
+	listed := []string{}
+	checked := []string{}
+	for _, p := range providers {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		checked = append(checked, p)
+		if dnsblListed(ctx, reg, p) {
+			listed = append(listed, p)
+		}
+	}
+	det := map[string]string{"domain": reg, "checked_providers": strings.Join(checked, "\n"), "listed_on": joinOrNone(listed)}
+	if len(listed) > 0 {
+		return withDetails(fail("domain_blocklist", "Domain-Blocklist", -1.5, fmt.Sprintf("Domain %s ist auf %d Domain-Blocklist(en) gelistet: %s.", reg, len(listed), strings.Join(listed, ", ")), "Delisting bei den jeweiligen Anbietern beantragen und die Ursache (kompromittierte Inhalte, Spam-Historie) beheben."), det)
+	}
+	return withDetails(pass("domain_blocklist", "Domain-Blocklist", 0.2, fmt.Sprintf("Domain %s steht auf keiner der geprüften Domain-Blocklists.", reg), ""), det)
+}
+
+func linkBlocklistCheck(ctx context.Context, links []string, providers []string) model.CheckResult {
+	if len(providers) == 0 {
+		return info("link_blocklist", "Link-Domain-Blocklist", 0.0, "Keine Provider für die Link-Blocklist-Prüfung.", "")
+	}
+	doms := map[string]struct{}{}
+	for _, l := range links {
+		if u, err := url.Parse(l); err == nil {
+			if rd := registrableDomain(u.Hostname()); rd != "" {
+				doms[rd] = struct{}{}
+			}
+		}
+	}
+	if len(doms) == 0 {
+		return info("link_blocklist", "Link-Domain-Blocklist", 0.0, "Keine Link-Domains zum Prüfen gefunden.", "")
+	}
+	listed := []string{}
+	n := 0
+	for d := range doms {
+		n++
+		if n > 20 { // safety cap on third-party lookups
+			break
+		}
+		for _, p := range providers {
+			p = strings.TrimSpace(p)
+			if p != "" && dnsblListed(ctx, d, p) {
+				listed = append(listed, d+" ("+p+")")
+			}
+		}
+	}
+	det := map[string]string{"link_domains_checked": strconv.Itoa(len(doms)), "listed": joinOrNone(listed)}
+	if len(listed) > 0 {
+		return withDetails(fail("link_blocklist", "Link-Domain-Blocklist", -1.2, fmt.Sprintf("%d verlinkte Domain(s) sind auf URI-Blocklists gelistet: %s.", len(listed), strings.Join(listed, ", ")), "Verlinkte Domains bereinigen oder ersetzen; gelistete Domains beim Anbieter delisten lassen."), det)
+	}
+	return withDetails(pass("link_blocklist", "Link-Domain-Blocklist", 0.1, fmt.Sprintf("Alle %d geprüften Link-Domain(s) sind sauber (keine URI-Blocklist-Treffer).", len(doms)), ""), det)
+}
+
 func withDetails(c model.CheckResult, details map[string]string) model.CheckResult {
 	c.TechnicalDetails = details
 	return c
@@ -1003,9 +1169,9 @@ func checkCategory(id string) string {
 		"dmarc_policy", "spf_strictness", "dkim_keylength", "display_name":
 		return "Authentifizierung"
 	case "ptr", "helo", "mx_records", "address_records", "tls_transport", "received_chain", "rbl",
-		"ptr_pattern", "envelope_mx", "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa":
+		"ptr_pattern", "envelope_mx", "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa", "domain_age":
 		return "DNS und Infrastruktur"
-	case "spamassassin", "rspamd":
+	case "spamassassin", "rspamd", "domain_blocklist", "link_blocklist":
 		return "Spamfilter"
 	case "mime_ct", "mime_boundary", "plain_text", "multipart_alt", "attachments", "image_text_ratio", "charset", "links", "shortener", "tracking_links", "html", "hidden_html", "html_validity", "subject", "subject_exclaim", "subject_caps", "unicode", "list_unsub", "preheader":
 		return "Format und Inhalt"
@@ -1051,6 +1217,12 @@ func defaultExplanation(id string) string {
 		return "DNSSEC signiert DNS-Antworten kryptografisch und schützt vor DNS-Manipulation (Cache-Poisoning, Spoofing). Eine signierte Absenderzone ist ein Reifesignal und Voraussetzung für DANE. Wichtigkeit: gering bis mittel für die reine Inbox-Platzierung, aber relevant für die Gesamtintegrität der Mail-Infrastruktur."
 	case "dane_tlsa":
 		return "DANE (TLSA-Records, RFC 7672) bindet das TLS-Zertifikat des Mailservers per DNSSEC an die Domain und erzwingt so authentifiziertes TLS beim SMTP-Transport – eine Alternative/Ergänzung zu MTA-STS. Voraussetzung ist DNSSEC. Wichtigkeit: gering für Inbox-Platzierung, aber ein hohes Sicherheits-/Reifesignal, v. a. im europäischen/Behörden-Umfeld."
+	case "domain_age":
+		return "Das Registrierungsalter der Absenderdomain ist ein starkes Reputationssignal. Frisch registrierte Domains werden von Gmail, Outlook und Spamhaus mit großem Misstrauen behandelt – Domains unter 30 Tagen sind ein klassisches Spam-/Phishing-Muster. Wichtigkeit: hoch für neue Domains – ältere, etablierte Domains genießen Vertrauensvorschuss. Hinweis: weiches Signal (alte Domains können gekapert, neue legitim sein); wird per RDAP bei einem Dritt-Dienst abgefragt und ist daher opt-in."
+	case "domain_blocklist":
+		return "Domain-Blocklists (z. B. Spamhaus DBL) listen Domains, die in Spam/Phishing auftauchen – unabhängig von der sendenden IP. Eine gelistete Absenderdomain führt bei vielen Providern direkt zu Ablehnung oder Spam-Einordnung. Wichtigkeit: sehr hoch, falls gelistet. Hinweis: DNS-Abfrage beim Blocklist-Anbieter (Dritt-Dienst), daher opt-in; öffentliche Resolver werden von Spamhaus geblockt – eigenen Resolver verwenden."
+	case "link_blocklist":
+		return "URI-/Domain-Blocklists (URIBL, SURBL, Spamhaus DBL) prüfen die in der Mail verlinkten Domains gegen bekannte Spam-/Malware-Domains. Da Spam fast immer einen Link enthält, ist das eines der wirksamsten Filtersignale überhaupt. Wichtigkeit: sehr hoch, falls eine verlinkte Domain gelistet ist. Hinweis: DNS-Abfrage beim Blocklist-Anbieter (Dritt-Dienst), daher opt-in."
 	case "from_alignment":
 		return "From-Alignment prüft, ob Envelope-From (SMTP MAIL FROM) und Header-From (sichtbare Absenderadresse) zur gleichen Domain gehören. Abweichungen sind technisch möglich (z. B. ESP-Bounce-Adressen), können aber DMARC-Alignment gefährden und Spamfiltern Muster für Spoofing-Versuche liefern. Wichtigkeit: mittel – viele Nutzer prüfen die sichtbare From-Adresse; Mismatch kann Vertrauen kosten und DMARC-SPF-Alignment brechen. Tipp: Bounce-Domains als Subdomain der From-Domain konfigurieren."
 	case "spf_alignment":
