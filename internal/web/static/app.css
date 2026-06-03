@@ -734,11 +734,11 @@ body,
 
 /* ── Score ring ─────────────────────────────────────────────────────────── */
 .mp-ring {
-  width: 136px;
-  height: 136px;
+  width: 138px;
+  height: 138px;
   border-radius: 50%;
   background: conic-gradient(var(--mp-score-color) var(--score), var(--bs-secondary-bg) 0);
-  padding: 10px;
+  padding: 15px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -1024,31 +1024,93 @@ body,
     rgba(var(--bs-primary-rgb), .04),
     rgba(var(--bs-primary-rgb), .08));
   border-bottom: 2px solid rgba(var(--bs-primary-rgb), .35);
-  padding: .85rem 1rem;
-}
-.mp-group-header .card-title,
-.mp-group-header h3 {
-  font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: .01em;
-  color: var(--bs-emphasis-color);
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-}
-.mp-group-header .card-title::before,
-.mp-group-header h3::before {
-  content: "";
-  width: .35rem;
-  height: 1.1rem;
-  border-radius: 3px;
-  background: var(--bs-primary);
-  flex-shrink: 0;
+  padding: 0;
 }
 [data-bs-theme="dark"] .mp-group-header {
   background: linear-gradient(0deg,
     rgba(var(--bs-primary-rgb), .08),
     rgba(var(--bs-primary-rgb), .14));
+}
+
+/* Coloured left accent on the whole group card by worst status */
+.mp-group-card { border-left: 3px solid var(--bs-border-color); }
+.mp-group-card.mp-grp-fail { border-left-color: var(--bs-danger); }
+.mp-group-card.mp-grp-warn { border-left-color: var(--bs-warning); }
+.mp-group-card.mp-grp-pass { border-left-color: var(--bs-success); }
+
+/* Clickable, collapsible group header */
+.mp-group-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: .8rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+  cursor: pointer;
+}
+.mp-group-toggle:focus-visible {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: -2px;
+}
+.mp-group-row {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  width: 100%;
+  flex-wrap: wrap;
+}
+.mp-group-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: .01em;
+  color: var(--bs-emphasis-color);
+}
+.mp-group-status {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .72rem;
+  font-weight: 700;
+  padding: .22rem .55rem;
+  border-radius: 99px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.mp-group-status i { font-size: .92rem; }
+.mp-group-status.pass { background: rgba(var(--bs-success-rgb), .14); color: var(--bs-success); }
+.mp-group-status.warn { background: rgba(var(--bs-warning-rgb), .18); color: var(--bs-warning); }
+.mp-group-status.fail { background: rgba(var(--bs-danger-rgb),  .14); color: var(--bs-danger); }
+.mp-group-badges {
+  display: inline-flex;
+  gap: .3rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.mp-group-chevron {
+  transition: transform .2s ease;
+  color: var(--bs-secondary-color);
+  flex-shrink: 0;
+}
+.mp-group-toggle:not(.collapsed) .mp-group-chevron { transform: rotate(180deg); }
+.mp-group-hint {
+  display: block;
+  width: 100%;
+  font-size: .82rem;
+  line-height: 1.5;
+  color: var(--bs-secondary-color);
+  margin: 0;
+}
+
+/* Mobile: tighten the group header, keep status + chevron readable */
+@media (max-width: 575.98px) {
+  .mp-group-toggle { padding: .7rem .8rem; }
+  .mp-group-title { font-size: .98rem; width: 100%; order: 3; }
+  .mp-group-status { order: 1; }
+  .mp-group-chevron { order: 2; margin-left: auto; }
+  .mp-group-badges { order: 4; margin-left: 0; }
 }
 
 .mp-grp-badge {

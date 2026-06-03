@@ -105,8 +105,8 @@
 
         <!-- ── Score hero card ────────────────────────────────────────── -->
         <div class="card mp-score-hero status-{{if ge .Report.Score 7.5}}pass{{else if ge .Report.Score 5.5}}warn{{else}}fail{{end}} mb-3">
-          <div class="card-body d-flex align-items-center gap-4 p-4 flex-wrap">
-            <div class="mp-ring" style="--score:{{scorePercent .Report.Score}}%">
+          <div class="card-body d-flex align-items-center gap-4 p-4 flex-wrap justify-content-center justify-content-sm-start text-center text-sm-start">
+            <div class="mp-ring mx-auto mx-sm-0" style="--score:{{scorePercent .Report.Score}}%">
               <div class="mp-ring-inner">
                 <span class="mp-ring-value">{{printf "%.1f" .Report.Score}}</span>
                 <span class="mp-ring-sub">/10</span>
@@ -119,7 +119,7 @@
               </p>
               <h1 class="h2 fw-bold mb-1">{{.HeroTitle}}</h1>
               <p class="text-secondary mb-3">{{.HeroSubtitle}}</p>
-              <div class="d-flex gap-2 flex-wrap">
+              <div class="d-flex gap-2 flex-wrap justify-content-center justify-content-sm-start">
                 <span class="mp-pill pass">{{statusIcon "pass"}} {{index .Statuses "pass"}} bestanden</span>
                 <span class="mp-pill warn">{{statusIcon "warn"}} {{index .Statuses "warn"}} Warnungen</span>
                 <span class="mp-pill fail">{{statusIcon "fail"}} {{index .Statuses "fail"}} Fehler</span>
@@ -276,20 +276,33 @@
           <div class="col-xl-8">
             {{range .CheckGroups}}
             {{$groupID := safeID .Name}}
-            <div class="card mb-3">
-              <div class="card-header mp-group-header d-flex align-items-start justify-content-between gap-2 flex-wrap">
-                <div>
-                  <h3 class="card-title mb-0">{{.Name}}</h3>
-                  {{if .Hint}}<p class="text-secondary small mt-1 mb-0">{{.Hint}}</p>{{end}}
-                </div>
-                <div class="d-flex gap-1 flex-shrink-0 align-items-center pt-1">
-                  {{if gt .PassCount 0}}<span class="badge mp-grp-badge pass">{{.PassCount}} ✓</span>{{end}}
-                  {{if gt .WarnCount 0}}<span class="badge mp-grp-badge warn">{{.WarnCount}} !</span>{{end}}
-                  {{if gt .FailCount 0}}<span class="badge mp-grp-badge fail">{{.FailCount}} ✗</span>{{end}}
-                  {{if gt .InfoCount 0}}<span class="badge mp-grp-badge info">{{.InfoCount}} i</span>{{end}}
-                </div>
+            <div class="card mb-3 mp-group-card mp-grp-{{if gt .FailCount 0}}fail{{else if gt .WarnCount 0}}warn{{else}}pass{{end}}">
+              <div class="card-header mp-group-header p-0">
+                <button class="mp-group-toggle collapsed" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#grp-{{$groupID}}"
+                        aria-expanded="false" aria-controls="grp-{{$groupID}}">
+                  <span class="mp-group-row">
+                    {{if gt .FailCount 0}}
+                    <span class="mp-group-status fail"><i class="bi bi-exclamation-octagon-fill"></i><span class="mp-group-status-text">Handlungsbedarf</span></span>
+                    {{else if gt .WarnCount 0}}
+                    <span class="mp-group-status warn"><i class="bi bi-exclamation-triangle-fill"></i><span class="mp-group-status-text">Prüfen empfohlen</span></span>
+                    {{else}}
+                    <span class="mp-group-status pass"><i class="bi bi-check-circle-fill"></i><span class="mp-group-status-text">Alles in Ordnung</span></span>
+                    {{end}}
+                    <span class="mp-group-title">{{.Name}}</span>
+                    <span class="mp-group-badges">
+                      {{if gt .PassCount 0}}<span class="badge mp-grp-badge pass">{{.PassCount}} ✓</span>{{end}}
+                      {{if gt .WarnCount 0}}<span class="badge mp-grp-badge warn">{{.WarnCount}} !</span>{{end}}
+                      {{if gt .FailCount 0}}<span class="badge mp-grp-badge fail">{{.FailCount}} ✗</span>{{end}}
+                      {{if gt .InfoCount 0}}<span class="badge mp-grp-badge info">{{.InfoCount}} i</span>{{end}}
+                    </span>
+                    <i class="bi bi-chevron-down mp-group-chevron"></i>
+                  </span>
+                  {{if .Hint}}<span class="mp-group-hint">{{.Hint}}</span>{{end}}
+                </button>
               </div>
-              <div class="card-body p-0">
+              <div id="grp-{{$groupID}}" class="collapse">
+                <div class="card-body p-0">
                 <div class="accordion accordion-flush mp-check-accordion" id="checks-{{$groupID}}">
                   {{range .Checks}}
                   <div class="accordion-item mp-check-item {{.Status}}" id="chk-{{safeID .ID}}" data-status="{{.Status}}">
@@ -674,6 +687,7 @@ Kind regards,
                   {{end}}
                 </div>
               </div>
+              </div>{{/* end .collapse group wrapper */}}
             </div>
             {{end}}
           </div>
@@ -1339,11 +1353,20 @@ function renderCheckGroup(name, checks, gi) {
              (w?'<span class="badge mp-grp-badge warn">'+w+' !</span>':'')+
              (f?'<span class="badge mp-grp-badge fail">'+f+' ✗</span>':'')+
              (inf?'<span class="badge mp-grp-badge info">'+inf+' i</span>':'');
-  var hint=GROUP_HINTS[name]?'<p class="text-secondary small mt-1 mb-0">'+esc(GROUP_HINTS[name])+'</p>':'';
-  var h='<div class="card mb-3"><div class="card-header mp-group-header d-flex align-items-start justify-content-between gap-2 flex-wrap">'+
-        '<div><h3 class="card-title mb-0">'+esc(name)+'</h3>'+hint+'</div>'+
-        '<div class="d-flex gap-1 flex-shrink-0 align-items-center pt-1">'+badges+'</div></div>'+
-        '<div class="card-body p-0"><div class="accordion accordion-flush" id="dec-grp-'+gi+'">';
+  var grpState = f>0 ? 'fail' : (w>0 ? 'warn' : 'pass');
+  var status = f>0
+    ? '<span class="mp-group-status fail"><i class="bi bi-exclamation-octagon-fill"></i><span class="mp-group-status-text">Handlungsbedarf</span></span>'
+    : (w>0
+      ? '<span class="mp-group-status warn"><i class="bi bi-exclamation-triangle-fill"></i><span class="mp-group-status-text">Prüfen empfohlen</span></span>'
+      : '<span class="mp-group-status pass"><i class="bi bi-check-circle-fill"></i><span class="mp-group-status-text">Alles in Ordnung</span></span>');
+  var hint=GROUP_HINTS[name]?'<span class="mp-group-hint">'+esc(GROUP_HINTS[name])+'</span>':'';
+  var gid='dgrp-'+gi;
+  var h='<div class="card mb-3 mp-group-card mp-grp-'+grpState+'"><div class="card-header mp-group-header p-0">'+
+        '<button class="mp-group-toggle collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#'+gid+'" aria-expanded="false" aria-controls="'+gid+'">'+
+        '<span class="mp-group-row">'+status+'<span class="mp-group-title">'+esc(name)+'</span>'+
+        '<span class="mp-group-badges">'+badges+'</span>'+
+        '<i class="bi bi-chevron-down mp-group-chevron"></i></span>'+hint+'</button></div>'+
+        '<div id="'+gid+'" class="collapse"><div class="card-body p-0"><div class="accordion accordion-flush" id="dec-grp-'+gi+'">';
   checks.forEach(function(c,ci){
     var uid='dec-'+gi+'-'+ci;
     var delta=c.score_delta?(c.score_delta>0?'+':'')+Number(c.score_delta).toFixed(1):'';
@@ -1392,7 +1415,7 @@ function renderCheckGroup(name, checks, gi) {
     }
     h+='</div></div></div>';
   });
-  return h+'</div></div></div>';
+  return h+'</div></div></div></div>';
 }
 
 function renderDecryptedReport(p) {

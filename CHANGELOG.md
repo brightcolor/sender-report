@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-06-03
+
+### Changed
+- **Report check-groups are now collapsible and collapsed by default.** Each group
+  header shows an at-a-glance status indicator — „Handlungsbedarf" (red),
+  „Prüfen empfohlen" (yellow) or „Alles in Ordnung" (green) — plus a coloured left
+  accent on the card, so the whole report can be scanned without opening anything.
+  The status filter (Alle / Bestanden / …) auto-expands the matching groups.
+- The group intro hint now always sits on its own line below the title.
+- Mobile polish: the score ring is centred (instead of left-aligned) when the hero
+  wraps, the summary pills centre with it, and the group header reflows cleanly on
+  narrow screens.
+- The score ring is a bit thicker on all screen sizes for better legibility.
+
+(Applies to both the server-rendered report and the client-side decrypted E2E view.)
+
 ## [1.4.0] - 2026-06-03
 
 ### Added

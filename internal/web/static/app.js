@@ -849,6 +849,23 @@ function startMailboxPollingFallback(token, onStatus) {
 
 // ── Report: check filter bar ──────────────────────────────────────────────────
 
+// setGroupExpanded opens/closes a collapsible check-group card, keeping the
+// toggle button's state (collapsed class + aria-expanded) in sync.
+function setGroupExpanded(card, expanded) {
+  const btn = card.querySelector('.mp-group-toggle');
+  if (!btn) return;
+  const sel = btn.getAttribute('data-bs-target');
+  const panel = sel ? card.querySelector(sel) : null;
+  if (!panel) return;
+  if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+    bootstrap.Collapse.getOrCreateInstance(panel, { toggle: false })[expanded ? 'show' : 'hide']();
+  } else {
+    panel.classList.toggle('show', expanded);
+  }
+  btn.classList.toggle('collapsed', !expanded);
+  btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+}
+
 function setupCheckFilter() {
   const bar = document.getElementById('check-filter-bar');
   if (!bar) return;
@@ -897,6 +914,14 @@ function setupCheckFilter() {
       if (items.length === 0) return;
       const visibleItems = card.querySelectorAll('.mp-check-item:not(.mp-filter-hidden)');
       card.classList.toggle('d-none', visibleItems.length === 0);
+    });
+
+    // Groups are collapsed by default. When a status filter is active, auto-expand
+    // the still-visible groups so the matching checks are actually shown; collapse
+    // everything again when returning to "Alle".
+    document.querySelectorAll('.mp-group-card').forEach((card) => {
+      if (card.classList.contains('d-none')) { setGroupExpanded(card, false); return; }
+      setGroupExpanded(card, !showAll);
     });
 
     // Keep "All" button in sync: active when nothing else is selected
