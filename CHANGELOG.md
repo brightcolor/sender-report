@@ -4,7 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.13.1] - 2026-06-04
+## [1.14.0] - 2026-06-04
+
+### Added
+- **Per-check "Neu prüfen" (live recheck).** Fixed a DNS record? You can now
+  re-run an individual external-dependent check straight from the report — no need
+  to send a new test mail. Each re-checkable check shows a small button with a
+  spinner; the value updates in place when the fresh result comes back.
+  - Covers the DNS/RDAP/blocklist checks: SPF & DMARC *record* presence,
+    MX, A/AAAA, DKIM key length, bounce-MX, MTA-STS, TLS-RPT, BIMI, DNSSEC,
+    DANE/TLSA, PTR + PTR pattern, domain age, domain/link blocklist.
+  - The core SPF/DKIM/DMARC *verdicts* (which cryptographically verify the actual
+    message) still require a real send, so DKIM offers its key-length recheck and
+    SPF/DMARC re-check their DNS record.
+  - New endpoint `POST /api/recheck/{token}/{msgref}`; the client supplies the
+    externally-observable inputs (domain/IP/…) from the already-decrypted report,
+    so nothing extra is stored. Rate-limited; analysis bounded by a 20s timeout
+    and panic-isolated.
 
 ### Changed
 - **A perfect 10 must now be earned.** The score is capped below 10 unless every

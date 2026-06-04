@@ -66,6 +66,135 @@ func New(opts Options) *Engine {
 	return &Engine{opts: opts}
 }
 
+// RecheckInput carries the minimal, externally-observable data a single check
+// needs to be re-run on demand (after the operator fixed a DNS record), without
+// re-sending a mail. It is supplied by the client from the decrypted report.
+type RecheckInput struct {
+	FromDomain     string
+	EnvelopeDomain string
+	ReturnDomain   string
+	RemoteIP       string
+	HELO           string
+	DKIMSignature  string
+	Links          []string
+}
+
+// Recheckable reports whether a check ID can be re-run live. These are the
+// DNS/RDAP/blocklist-based checks. The core SPF/DKIM/DMARC *verdicts* verify the
+// original message and can't be re-derived without it, so only their DNS-record
+// aspects (SPF/DMARC record presence) are offered for recheck; DKIM falls back to
+// its key-length check.
+func Recheckable(id string) bool {
+	switch id {
+	case "spf", "dmarc", "mx_records", "address_records", "dkim_keylength",
+		"envelope_mx", "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa",
+		"ptr", "ptr_pattern", "domain_age", "domain_blocklist", "link_blocklist":
+		return true
+	}
+	return false
+}
+
+// Recheck re-runs a single external-dependent check and returns the fresh,
+// enriched result. ok=false for unsupported IDs.
+func (e *Engine) Recheck(ctx context.Context, id string, in RecheckInput) (res model.CheckResult, ok bool) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	defer func() {
+		if r := recover(); r != nil {
+			res, ok = errorCheck(id, fmt.Sprintf("%v", r)), true
+		}
+	}()
+
+	primary := firstNonEmpty(in.FromDomain, in.EnvelopeDomain)
+	switch id {
+	case "spf":
+		res = spfRecordRecheck(ctx, firstNonEmpty(in.EnvelopeDomain, in.FromDomain))
+	case "dmarc":
+		res = dmarcRecordRecheck(ctx, in.FromDomain)
+	case "mx_records":
+		res = mxRecordCheck(ctx, primary)
+	case "address_records":
+		res = addressRecordCheck(ctx, primary)
+	case "dkim_keylength":
+		res = dkimKeyLengthCheck(ctx, in.DKIMSignature)
+	case "envelope_mx":
+		res = envelopeBounceMXCheck(ctx, firstNonEmpty(in.ReturnDomain, in.EnvelopeDomain))
+	case "mta_sts":
+		res = mtaStsCheck(ctx, primary)
+	case "tls_rpt":
+		res = tlsRptCheck(ctx, primary)
+	case "bimi":
+		res = bimiCheck(ctx, primary)
+	case "dnssec":
+		res = dnssecCheck(ctx, primary)
+	case "dane_tlsa":
+		res = daneCheck(ctx, primary)
+	case "ptr":
+		res = ptrPlausibility(ctx, in.RemoteIP, in.HELO)
+	case "ptr_pattern":
+		res = ptrPatternCheck(ctx, in.RemoteIP)
+	case "domain_age":
+		res = domainAgeCheck(ctx, primary)
+	case "domain_blocklist":
+		res = domainBlocklistCheck(ctx, primary, e.opts.DomainBlocklistProviders)
+	case "link_blocklist":
+		res = linkBlocklistCheck(ctx, in.Links, e.opts.DomainBlocklistProviders)
+	default:
+		return model.CheckResult{}, false
+	}
+	res = enrichCheckResult(res, checkContext{
+		FromDomain:     in.FromDomain,
+		EnvelopeDomain: in.EnvelopeDomain,
+		ReturnDomain:   in.ReturnDomain,
+		Links:          in.Links,
+		Message:        model.Message{RemoteIP: in.RemoteIP, HELO: in.HELO},
+	})
+	return res, true
+}
+
+// spfRecordRecheck re-looks up the SPF TXT record (used after a DNS fix). It
+// reports record presence/strictness; the actual SPF pass against the sending IP
+// is only verified when a real mail is received.
+func spfRecordRecheck(ctx context.Context, domain string) model.CheckResult {
+	domain = normDomain(domain)
+	if domain == "" {
+		return info("spf", "SPF", 0, "Keine Domain für den SPF-Recheck ermittelbar.", "")
+	}
+	recs, _ := net.DefaultResolver.LookupTXT(ctx, domain)
+	spf := ""
+	for _, r := range recs {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(r)), "v=spf1") {
+			spf = strings.TrimSpace(r)
+		}
+	}
+	if spf == "" {
+		return info("spf", "SPF", 0, fmt.Sprintf("Kein SPF-Record (v=spf1) für %s gefunden.", domain), "TXT-Record mit v=spf1 auf der Envelope-From-Domain veröffentlichen.")
+	}
+	return pass("spf", "SPF", 0, fmt.Sprintf("SPF-Record für %s vorhanden: %s. Der tatsächliche SPF-Pass wird beim nächsten echten Versand gegen die sendende IP geprüft.", domain, spf), "")
+}
+
+// dmarcRecordRecheck re-looks up the _dmarc TXT record (used after a DNS fix).
+func dmarcRecordRecheck(ctx context.Context, fromDomain string) model.CheckResult {
+	fromDomain = normDomain(fromDomain)
+	if fromDomain == "" {
+		return info("dmarc", "DMARC", 0, "Keine From-Domain für den DMARC-Recheck ermittelbar.", "")
+	}
+	recs, _ := net.DefaultResolver.LookupTXT(ctx, "_dmarc."+fromDomain)
+	policy := ""
+	found := false
+	for _, r := range recs {
+		lr := strings.ToLower(strings.TrimSpace(r))
+		if strings.HasPrefix(lr, "v=dmarc1") {
+			found = true
+			policy = extractTagValue(lr, "p")
+		}
+	}
+	if !found {
+		return fail("dmarc", "DMARC", 0, fmt.Sprintf("Kein DMARC-Record für %s gefunden.", fromDomain), "_dmarc."+fromDomain+" TXT mit v=DMARC1 veröffentlichen.")
+	}
+	return pass("dmarc", "DMARC", 0, fmt.Sprintf("DMARC-Record für %s gefunden (p=%s). Das vollständige Alignment wird beim nächsten echten Versand geprüft.", fromDomain, emptyFallback(policy, "none")), "")
+}
+
 func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisReport) {
 	report = model.AnalysisReport{
 		MessageID:  in.Message.ID,

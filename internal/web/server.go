@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/brightcolor/sender-report/internal/analyzer"
 	"github.com/brightcolor/sender-report/internal/config"
 	"github.com/brightcolor/sender-report/internal/model"
 	reportpdf "github.com/brightcolor/sender-report/internal/pdf"
@@ -50,6 +51,7 @@ type Server struct {
 	metrics        *telemetry.Counters
 	staticFS       http.Handler
 	trustedProxy   []*net.IPNet
+	engine         *analyzer.Engine // for live single-check rechecks
 }
 
 var errActiveMailboxLimit = errors.New("active mailbox limit reached for ip")
@@ -394,6 +396,19 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 	if err != nil {
 		return nil, err
 	}
+	// Engine used for live single-check rechecks (DNS/RDAP/blocklist).
+	engine := analyzer.New(analyzer.Options{
+		EnableRBLChecks:          cfg.EnableRBLChecks,
+		RBLProviders:             cfg.RBLProviders,
+		EnableSpamAssassin:       cfg.EnableSpamAssassin,
+		SpamAssassinHostPort:     cfg.SpamAssassinHostPort,
+		EnableRspamd:             cfg.EnableRspamd,
+		RspamdURL:                cfg.RspamdURL,
+		RspamdPassword:           cfg.RspamdPassword,
+		EnableDomainAge:          cfg.EnableDomainAge,
+		EnableDomainBlocklist:    cfg.EnableDomainBlocklist,
+		DomainBlocklistProviders: cfg.DomainBlocklistProviders,
+	})
 	return &Server{
 		cfg:            cfg,
 		store:          st,
@@ -405,6 +420,7 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		metrics:        metrics,
 		staticFS:       http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join("internal", "web", "static")))),
 		trustedProxy:   trustedProxy,
+		engine:         engine,
 	}, nil
 }
 
@@ -431,6 +447,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/reports/", s.reportAPI)
 	mux.HandleFunc("/api/pdf/", s.reportPDFHandler)
 	mux.HandleFunc("/api/payload/", s.payloadAPI)
+	mux.HandleFunc("/api/recheck/", s.recheckAPI)
 	mux.HandleFunc("/mailbox/", s.mailboxPage)
 	mux.HandleFunc("/report/", s.reportPage)
 	mux.HandleFunc("/raw/", s.rawPage)
@@ -1011,6 +1028,64 @@ func (s *Server) payloadAPI(w http.ResponseWriter, r *http.Request) {
 		"payload_enc": selected.Message.PayloadEnc,
 		"token":       token,
 	})
+}
+
+// recheckAPI re-runs a single external-dependent check live (after a DNS fix),
+// without requiring a new test mail. The client supplies the externally-observable
+// inputs (domain/IP/etc.) from the decrypted report; nothing is stored.
+// Route: POST /api/recheck/{token}/{msgref}
+func (s *Server) recheckAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonResp(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	ip := s.clientIP(r)
+	if s.payloadLimiter != nil && !s.payloadLimiter.Allow("recheck:"+ip) {
+		jsonResp(w, http.StatusTooManyRequests, map[string]string{"error": "rate limited"})
+		return
+	}
+	parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/api/recheck/"), "/", 2)
+	if len(parts) != 2 || parts[0] == "" {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "bad path"})
+		return
+	}
+	// Require a valid (existing) mailbox token so this can't be used anonymously.
+	if _, err := s.store.GetMailboxByToken(r.Context(), parts[0]); err != nil {
+		jsonResp(w, http.StatusNotFound, map[string]string{"error": "mailbox not found"})
+		return
+	}
+	var body struct {
+		CheckID        string   `json:"check_id"`
+		FromDomain     string   `json:"from_domain"`
+		EnvelopeDomain string   `json:"envelope_domain"`
+		ReturnDomain   string   `json:"return_domain"`
+		RemoteIP       string   `json:"remote_ip"`
+		HELO           string   `json:"helo"`
+		DKIMSignature  string   `json:"dkim_signature"`
+		Links          []string `json:"links"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&body); err != nil {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return
+	}
+	if !analyzer.Recheckable(body.CheckID) {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "check not re-checkable"})
+		return
+	}
+	res, ok := s.engine.Recheck(r.Context(), body.CheckID, analyzer.RecheckInput{
+		FromDomain:     body.FromDomain,
+		EnvelopeDomain: body.EnvelopeDomain,
+		ReturnDomain:   body.ReturnDomain,
+		RemoteIP:       body.RemoteIP,
+		HELO:           body.HELO,
+		DKIMSignature:  body.DKIMSignature,
+		Links:          body.Links,
+	})
+	if !ok {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "recheck failed"})
+		return
+	}
+	jsonResp(w, http.StatusOK, res)
 }
 
 // mailboxJSON returns the standard JSON payload for a newly created/found mailbox.

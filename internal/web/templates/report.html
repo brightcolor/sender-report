@@ -1124,15 +1124,48 @@ async function decryptWith(secretToken) {
   return { payload: JSON.parse(crypto._fromUtf8(pt)), info: info };
 }
 
+// Inputs a live recheck needs, derived from the decrypted payload + report.
+var RECHECK_INPUTS = {};
+function _detailFromChecks(checks, keys) {
+  for (var i=0;i<(checks||[]).length;i++) {
+    var td = checks[i].technical_details; if (!td) continue;
+    for (var k=0;k<keys.length;k++) {
+      var v = td[keys[k]];
+      if (v && v !== 'none' && v !== 'unknown') return v;
+    }
+  }
+  return '';
+}
+function _domainOf(addr) {
+  if (!addr) return '';
+  var s = String(addr).trim().replace(/[<>]/g,'');
+  var at = s.lastIndexOf('@');
+  return (at >= 0 ? s.slice(at+1) : s).toLowerCase().trim();
+}
+function buildRecheckInputs(payload) {
+  var r = payload.report || {}, checks = r.checks || [];
+  return {
+    from_domain:     _detailFromChecks(checks, ['from_domain','header_from_domain']),
+    envelope_domain: _domainOf(payload.smtp_from) || _detailFromChecks(checks, ['envelope_from_domain','smtp_mail_from']),
+    return_domain:   _detailFromChecks(checks, ['return_path_domain','bounce_domain']),
+    remote_ip:       payload.remote_ip || _detailFromChecks(checks, ['remote_ip']),
+    helo:            payload.helo || _detailFromChecks(checks, ['helo_ehlo','helo']),
+    dkim_signature:  _detailFromChecks(checks, ['dkim_signature']),
+    links:           Array.isArray(r.links) ? r.links : []
+  };
+}
+
 function showDecrypted(payload) {
   if (PANEL)   PANEL.classList.add('d-none');
   if (LOADING) LOADING.classList.add('d-none');
+  RECHECK_INPUTS = buildRecheckInputs(payload);
   if (CONTENT) {
     CONTENT.innerHTML = renderDecryptedReport(payload);
     if (typeof setupCopyButtons    === 'function') setupCopyButtons();
     if (typeof colorScoreDeltas    === 'function') colorScoreDeltas();
     if (typeof setupCheckFilter    === 'function') setupCheckFilter();
     if (typeof localizeStaticTimes === 'function') localizeStaticTimes();
+    setupRecheckButtons();
   }
 
   // Update all metadata info-boxes with decrypted values.
@@ -1392,55 +1425,115 @@ function renderCheckGroup(name, checks, gi) {
         '<span class="mp-group-badges">'+badges+'</span>'+
         '<i class="bi bi-chevron-down mp-group-chevron"></i></span>'+hint+'</button></div>'+
         '<div id="'+gid+'" class="collapse"><div class="card-body p-0"><div class="accordion accordion-flush" id="dec-grp-'+gi+'">';
-  checks.forEach(function(c,ci){
-    var uid='dec-'+gi+'-'+ci;
-    var delta=c.score_delta?(c.score_delta>0?'+':'')+Number(c.score_delta).toFixed(1):'';
-    var open=c.status==='fail'?'show':'', col=c.status!=='fail'?'collapsed':'';
-    h+='<div class="accordion-item mp-check-item '+esc(c.status)+'" data-status="'+esc(c.status)+'" id="chk-'+uid+'">'+
-       '<h2 class="accordion-header"><button class="accordion-button '+col+'" type="button" '+
-       'data-bs-toggle="collapse" data-bs-target="#cb-'+uid+'">'+
-       '<div class="mp-chk-inner"><span class="mp-status-dot '+esc(c.status)+'"></span>'+
-       '<span class="mp-chk-name"><strong>'+esc(c.name)+(c.importance?' <span class="mp-imp" data-imp="'+esc(c.importance)+'">'+esc(c.importance)+'</span>':'')+'</strong><small>'+esc(c.summary)+'</small></span>'+
-       '<span class="mp-pill '+esc(c.status)+'">'+statusLbl(c.status)+'</span>'+
-       '<strong class="mp-delta">'+esc(delta)+'</strong></div></button></h2>'+
-       '<div id="cb-'+uid+'" class="accordion-collapse collapse '+open+'"><div class="accordion-body">';
-    // Rspamd: structured symbol table with explanations (before everything else).
-    if(c.id==='rspamd'&&c.technical_details)
-      h+=renderRspamdSymbols(c.technical_details);
-    if(c.explanation)
-      h+='<div class="mb-3"><h6 class="text-uppercase small fw-bold text-secondary mb-1" style="letter-spacing:.06em">Erklärung</h6><p class="mb-0">'+esc(c.explanation)+'</p></div>';
-    if(c.recommendation&&(c.status==='warn'||c.status==='fail'))
-      h+='<div class="mp-fix-box mb-3"><div class="d-flex align-items-center justify-content-between mb-2">'+
-         '<h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>Wie wird’s gemacht?</h6>'+
-         '<button class="btn btn-sm btn-outline-secondary" type="button" data-copy="'+esc(c.recommendation)+'">'+
-         '<i class="bi bi-clipboard me-1"></i>Kopieren</button></div>'+
-         '<p class="mb-0" style="white-space:pre-line">'+esc(c.recommendation)+'</p></div>';
-    if(c.technical_details){
-      // Show non-symbol technical details as a raw dl (sym: rows already rendered above).
-      var tdKeys=Object.keys(c.technical_details).filter(function(k){return k.indexOf('sym:')!==0;});
-      if(tdKeys.length){
-        h+='<div class="mt-3"><button class="btn btn-link btn-sm text-secondary p-0" type="button" '+
-           'data-bs-toggle="collapse" data-bs-target="#raw-'+uid+'">'+
-           '<i class="bi bi-code me-1"></i>Rohdaten anzeigen</button>'+
-           '<div id="raw-'+uid+'" class="collapse mt-2"><dl class="mp-tech-dl">';
-        tdKeys.forEach(function(k){
-          h+='<div><dt>'+esc(techLabel(k))+'</dt><dd><code>'+esc(c.technical_details[k])+'</code></dd></div>';
-        });
-        h+='</dl></div></div>';
-      }
-    }
-    if(c.doc_links&&c.doc_links.length){
-      h+='<div class="mt-3"><h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">'+
-         '<i class="bi bi-link-45deg me-1"></i>Quellen &amp; Tools</h6><div class="d-flex flex-wrap gap-2">';
-      c.doc_links.forEach(function(l){
-        h+='<a href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary">'+
-           esc(l.title)+'<i class="bi bi-box-arrow-up-right ms-1" style="font-size:.65rem"></i></a>';
-      });
-      h+='</div></div>';
-    }
-    h+='</div></div></div>';
-  });
+  checks.forEach(function(c,ci){ h+=renderDecCheckItem(c, 'dec-'+gi+'-'+ci); });
   return h+'</div></div></div></div>';
+}
+
+// Check IDs that can be re-run live (DNS/RDAP/blocklist based) — mirrors
+// analyzer.Recheckable in Go.
+var RECHECKABLE = {spf:1, dmarc:1, mx_records:1, address_records:1, dkim_keylength:1,
+  envelope_mx:1, mta_sts:1, tls_rpt:1, bimi:1, dnssec:1, dane_tlsa:1, ptr:1, ptr_pattern:1,
+  domain_age:1, domain_blocklist:1, link_blocklist:1};
+
+// renderDecCheckItem renders a single decrypted check accordion item. Used by
+// renderCheckGroup and to re-render one item in place after a live recheck.
+function renderDecCheckItem(c, uid){
+  var delta=c.score_delta?(c.score_delta>0?'+':'')+Number(c.score_delta).toFixed(1):'';
+  var open=c.status==='fail'?'show':'', col=c.status!=='fail'?'collapsed':'';
+  var h='<div class="accordion-item mp-check-item '+esc(c.status)+'" data-status="'+esc(c.status)+'" id="chk-'+uid+'">'+
+     '<h2 class="accordion-header"><button class="accordion-button '+col+'" type="button" '+
+     'data-bs-toggle="collapse" data-bs-target="#cb-'+uid+'">'+
+     '<div class="mp-chk-inner"><span class="mp-status-dot '+esc(c.status)+'"></span>'+
+     '<span class="mp-chk-name"><strong>'+esc(c.name)+(c.importance?' <span class="mp-imp" data-imp="'+esc(c.importance)+'">'+esc(c.importance)+'</span>':'')+'</strong><small>'+esc(c.summary)+'</small></span>'+
+     '<span class="mp-pill '+esc(c.status)+'">'+statusLbl(c.status)+'</span>'+
+     '<strong class="mp-delta">'+esc(delta)+'</strong></div></button></h2>'+
+     '<div id="cb-'+uid+'" class="accordion-collapse collapse '+open+'"><div class="accordion-body">';
+  // Live recheck button (only for externally-dependent checks).
+  if(RECHECKABLE[c.id])
+    h+='<div class="mb-3 d-flex align-items-center gap-2">'+
+       '<button class="btn btn-sm btn-outline-primary mp-recheck-btn" type="button" data-recheck="'+esc(c.id)+'">'+
+       '<i class="bi bi-arrow-clockwise me-1"></i>Neu prüfen</button>'+
+       '<span class="mp-recheck-status small text-secondary"></span></div>';
+  if(c.id==='rspamd'&&c.technical_details)
+    h+=renderRspamdSymbols(c.technical_details);
+  if(c.explanation)
+    h+='<div class="mb-3"><h6 class="text-uppercase small fw-bold text-secondary mb-1" style="letter-spacing:.06em">Erklärung</h6><p class="mb-0">'+esc(c.explanation)+'</p></div>';
+  if(c.recommendation&&(c.status==='warn'||c.status==='fail'))
+    h+='<div class="mp-fix-box mb-3"><div class="d-flex align-items-center justify-content-between mb-2">'+
+       '<h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>Wie wird’s gemacht?</h6>'+
+       '<button class="btn btn-sm btn-outline-secondary" type="button" data-copy="'+esc(c.recommendation)+'">'+
+       '<i class="bi bi-clipboard me-1"></i>Kopieren</button></div>'+
+       '<p class="mb-0" style="white-space:pre-line">'+esc(c.recommendation)+'</p></div>';
+  if(c.technical_details){
+    var tdKeys=Object.keys(c.technical_details).filter(function(k){return k.indexOf('sym:')!==0;});
+    if(tdKeys.length){
+      h+='<div class="mt-3"><button class="btn btn-link btn-sm text-secondary p-0" type="button" '+
+         'data-bs-toggle="collapse" data-bs-target="#raw-'+uid+'">'+
+         '<i class="bi bi-code me-1"></i>Rohdaten anzeigen</button>'+
+         '<div id="raw-'+uid+'" class="collapse mt-2"><dl class="mp-tech-dl">';
+      tdKeys.forEach(function(k){
+        h+='<div><dt>'+esc(techLabel(k))+'</dt><dd><code>'+esc(c.technical_details[k])+'</code></dd></div>';
+      });
+      h+='</dl></div></div>';
+    }
+  }
+  if(c.doc_links&&c.doc_links.length){
+    h+='<div class="mt-3"><h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">'+
+       '<i class="bi bi-link-45deg me-1"></i>Quellen &amp; Tools</h6><div class="d-flex flex-wrap gap-2">';
+    c.doc_links.forEach(function(l){
+      h+='<a href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary">'+
+         esc(l.title)+'<i class="bi bi-box-arrow-up-right ms-1" style="font-size:.65rem"></i></a>';
+    });
+    h+='</div></div>';
+  }
+  h+='</div></div></div>';
+  return h;
+}
+
+// setupRecheckButtons wires the per-check "Neu prüfen" buttons. On click it
+// re-runs that single DNS/RDAP/blocklist check server-side (using the values from
+// the decrypted report) and replaces the item in place with the fresh result.
+function setupRecheckButtons() {
+  if (!CONTENT || CONTENT.dataset.recheckBound === '1') return;
+  CONTENT.dataset.recheckBound = '1';
+  CONTENT.addEventListener('click', async function(ev) {
+    var btn = ev.target.closest('.mp-recheck-btn');
+    if (!btn) return;
+    var id = btn.dataset.recheck;
+    var item = btn.closest('.mp-check-item');
+    if (!id || !item) return;
+    var uid = item.id.replace(/^chk-/, '');
+    var statusEl = item.querySelector('.mp-recheck-status');
+    var orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Prüfe …';
+    if (statusEl) statusEl.textContent = 'frische DNS-/Reputations-Abfrage läuft …';
+    try {
+      var body = Object.assign({ check_id: id }, RECHECK_INPUTS);
+      var res = await fetch('/api/recheck/' + TOKEN + '/' + MSGREF, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var fresh = await res.json();
+      // Replace the item in place with the freshly rendered result.
+      item.outerHTML = renderDecCheckItem(fresh, uid);
+      if (typeof setupCopyButtons === 'function') setupCopyButtons();
+      if (typeof colorScoreDeltas === 'function') colorScoreDeltas();
+      var newItem = document.getElementById('chk-' + uid);
+      var ns = newItem && newItem.querySelector('.mp-recheck-status');
+      if (ns) {
+        ns.textContent = 'aktualisiert ✓';
+        setTimeout(function(){ if (ns) ns.textContent = ''; }, 4000);
+      }
+    } catch (e) {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+      if (statusEl) statusEl.textContent = 'Recheck fehlgeschlagen – später erneut versuchen.';
+    }
+  });
 }
 
 function renderDecryptedReport(p) {
