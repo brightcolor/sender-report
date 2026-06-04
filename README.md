@@ -239,7 +239,6 @@ Important variables:
 - `ENABLE_RSPAMD`, `RSPAMD_URL`, `RSPAMD_PASSWORD`
 - `ENABLE_DOMAIN_AGE` (force domain-age/RDAP check on for everyone; default `false`)
 - `ENABLE_DOMAIN_BLOCKLIST`, `DOMAIN_BLOCKLIST_PROVIDERS` (force domain/link blocklist checks on for everyone; default `false` / `dbl.spamhaus.org,multi.uribl.com`)
-- `ENABLE_CHECK_ANIMATION` (home-page "scanner" animation while waiting for the report; default `true` — set `false` for a brief received/analysed status, then redirect)
 - `ALERT_WEBHOOK_URL` (optional outbound webhook for operational alerts)
 
 > The three opt-in checks above (domain age, domain/link blocklists) contact

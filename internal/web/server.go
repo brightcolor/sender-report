@@ -56,11 +56,10 @@ var errActiveMailboxLimit = errors.New("active mailbox limit reached for ip")
 var errGlobalActiveMailboxLimit = errors.New("active mailbox limit reached globally")
 
 type HomeData struct {
-	AppName        string
-	Domain         string
-	PublicURL      string
-	Stats          store.GlobalStats
-	CheckAnimation bool
+	AppName   string
+	Domain    string
+	PublicURL string
+	Stats     store.GlobalStats
 }
 
 type PrivacyData struct {
@@ -592,11 +591,10 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	// the X25519 key pair and calling POST /api/mailboxes with {identifier, public_key}.
 	stats, _ := s.store.GetGlobalStats(r.Context())
 	data := HomeData{
-		AppName:        s.cfg.AppName,
-		Domain:         domain,
-		PublicURL:      s.publicBaseURL(r),
-		Stats:          stats,
-		CheckAnimation: s.cfg.EnableCheckAnimation,
+		AppName:   s.cfg.AppName,
+		Domain:    domain,
+		PublicURL: s.publicBaseURL(r),
+		Stats:     stats,
 	}
 	s.render(w, "home", data)
 }

@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-06-04
+
+### Removed
+- **The home-page scan animation (terminal/score-ring/modal) is gone.** The flow
+  is now simply: send the test mail → the page waits for it → as soon as the report
+  is ready it briefly confirms "Mail empfangen — Report wird geöffnet" and opens
+  the report. No terminal, no animation, no "Zum Report" button.
+- Dropped the `ENABLE_CHECK_ANIMATION` setting (config, env migration, .env.example)
+  and all related JS/CSS/markup.
+
 ## [1.11.1] - 2026-06-04
 
 ### Changed
