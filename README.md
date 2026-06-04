@@ -1,425 +1,217 @@
-# Sender-Report v2
+<div align="center">
+
+# sender.report
+
+**Self-hosted E-Mail-Deliverability-Test — wie ein echter Mailserver, nur transparent.**
+
+Schick eine Testmail an eine Wegwerf-Adresse und bekomme in Sekunden einen Score (0–10)
+mit über 50 nachvollziehbaren Checks: SPF, DKIM, DMARC, Spam-Score, Blacklists, DNS und mehr.
 
 [![CI](https://github.com/brightcolor/sender-report/actions/workflows/ci.yml/badge.svg)](https://github.com/brightcolor/sender-report/actions/workflows/ci.yml)
-[![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](./CONTRIBUTING.md)
-
-Quickstart: `bash <(curl -fsSL https://raw.githubusercontent.com/brightcolor/sender-report/main/scripts/quickstart.sh)`
-
-Sender-Report is a self-hosted email deliverability test service.
-It accepts test emails on temporary addresses, stores the raw message, runs transparent checks, and shows a report with score + findings.
-
-## What's new in v2
-
-- **Score ring color adapts to result** — green/yellow/red based on score threshold (≥7.5 / ≥5.5 / below)
-- **Live status dot** — animated blue while waiting, orange when mail received, green when report is ready
-- **SSE-based live updates** — the mailbox page uses Server-Sent Events instead of polling; falls back to polling with exponential back-off when SSE is unavailable
-- **Auto-open first failed check** — the first failing or warning accordion item opens automatically on the report page
-- **Score coloring in message list** — scores in the mailbox inbox are green/yellow/red
-- **Score delta coloring** — positive deltas are shown in green, negative in red
-- **Left border on fail/warn checks** — visual indicator in check accordion for quick scanning
-- **`noreferrer` on all external links** — improved security for outbound link targets
-- **Dead CSS removed** — unused sidebar and logo styles eliminated (~60 lines)
-- **`mp-theme-text` class defined** — was referenced in HTML but missing from the stylesheet
-- **Unused `base.html` removed** — was parsed but never rendered
-
-## Why this design
-
-This project is intentionally built for small VPS setups (including ~1 GB RAM environments):
-
-- Single Go binary (HTTP + SMTP + analysis + cleanup)
-- SQLite (no external database service)
-- Server-rendered UI (no heavy frontend framework)
-- Docker Compose deployment (no Kubernetes)
-
-## Core workflow
-
-1. Open the web UI
-2. Generate a random temporary mailbox
-3. Send your campaign/test email to that address
-4. Sender-Report receives and stores the message
-5. Sender-Report analyzes the message and creates a report
-6. Open the report with score, checks, warnings, and suggestions
-
-## Features
-
-### Mailbox and intake
-
-- Random temporary mailbox addresses (`<token>@<request-host>` by default, or `<token>@SMTP_DOMAIN` when configured)
-- Score-first web UI with a guided send-and-check workflow
-- New test addresses can be generated in-place without a full page reload
-- Multiple active mailboxes in parallel
-- Multiple emails per mailbox
-- Mailbox TTL and automatic expiration
-- Raw source and raw headers view
-- JSON report endpoint for automation/integrations
-
-### Report UI
-
-- Vvveb Admin Template based shell and visual system (Apache-2.0 vendor assets are shipped locally)
-- Score-first dashboard with a large result hero, status counters, message metadata, and grouped diagnostics
-- Score ring and score number colored by result (green ≥7.5, yellow ≥5.5, red below 5.5)
-- Check groups for authentication, DNS/infrastructure, spam filters, content/format, and raw/header details
-- Check accordions show only values relevant to the current check; first failing item opens automatically
-- Collapsible technical sections for long diagnostics, headers, plaintext, HTML preview, HTML source, and full raw source
-- Copy-to-clipboard actions for DNS records, recommendations, headers, source, and technical values
-- Remediation blocks are shown only for warning/failing checks as `Wie wird's gemacht?`
-- Detected URLs are grouped by domain with total and per-domain counts
-- Live status dot on mailbox page (animated while waiting, state-aware color)
-- SSE-based real-time mailbox updates with polling fallback
-- Responsive layout for desktop and mobile
-- Light, dark, and auto theme mode with a UI toggle; `auto` follows `prefers-color-scheme`
-
-### Analysis and scoring
-
-- Score from `0.0` to `10.0`
-- Non-black-box scoring model (rule deltas are visible in report)
-- Report-first layout with status counters, prioritized checks, recommendations, raw views, and JSON export
-- Sandboxed rendered HTML preview plus raw HTML source for received messages
-- Check categories include:
-  - SPF (header result + DNS context)
-  - DKIM (signature/auth-result heuristics)
-  - DMARC (record + alignment heuristics)
-  - PTR/rDNS
-  - HELO/EHLO plausibility
-  - Envelope-From vs Header-From alignment
-  - Return-Path presence
-  - Received chain presence
-  - ARC presence info
-  - MIME structure and multipart sanity
-  - Plaintext/HTML presence and ratio heuristics
-  - Attachments detection
-  - Link extraction
-  - URL shortener and tracking marker heuristics
-  - Basic HTML sanity / hidden content heuristics
-  - Subject spam-style heuristics (caps / punctuation)
-  - Date header plausibility
-  - Message-ID presence
-  - Unicode obfuscation heuristics
-  - Newsletter hints: List-Unsubscribe / preheader heuristics
-- Optional RBL checks (disabled by default)
-- RBL findings include checked DNSBL zones, lookup responses, TXT evidence, impact text, pre-delisting checklist, and provider-specific delisting URLs where known
-- Optional SpamAssassin integration (disabled by default)
-- Optional Rspamd integration (disabled by default)
-- Rspamd findings include top rejecting symbols and actionable recommendations in report output
-
-Each check result is intentionally explainable. In addition to the legacy fields (`id`, `name`, `status`, `score_delta`, `summary`, `suggestion`), reports may include:
-
-- `category`: UI/report grouping, for example `Authentifizierung` or `DNS und Infrastruktur`
-- `severity`: `low`, `medium`, `high`, or `info`
-- `technical_details`: structured key/value data used for DNS records, IPs, HELO/EHLO, headers, body metrics, RBL providers, and external filter output
-- `explanation`: why this check matters for deliverability
-- `recommendation`: concrete remediation text with example DNS, MTA, or template changes where possible
-
-This is stored in the report JSON and visible in the web UI. Existing API consumers can keep reading the old fields; the new fields are additive.
-
-## Non-goals
-
-- Not a full production MTA
-- Not an outbound mail relay
-- Not a replacement for enterprise mailbox-provider proprietary filtering engines
-
-## Architecture
-
-- `cmd/sender-report/main.go`: bootstrap and service wiring
-- `internal/smtp`: lightweight SMTP receiver
-- `internal/analyzer`: parsing + checks + scoring
-- `internal/store`, `internal/db`: SQLite persistence layer
-- `internal/web`: SSR pages + API endpoints + SSE event stream
-- `internal/cleanup`: periodic TTL/retention cleanup
-
-Bundled UI vendor assets:
-
-- `internal/web/static/vendor/vvveb/admin.css`
-- `internal/web/static/vendor/vvveb/fonts/inter/*`
-- `internal/web/static/vendor/vvveb/LICENSE`
-
-The Vvveb Admin Template assets are Apache-2.0 licensed. Sender-Report keeps them local to avoid third-party CDN calls.
-
-Data path:
-
-1. Web creates mailbox in SQLite
-2. SMTP receives message and validates recipient
-3. Message is stored in SQLite
-4. Analyzer builds report
-5. Report is stored and shown in UI
-
-## Requirements
-
-- Docker + Docker Compose
-- Public IP VPS
-- Domain/subdomain you control
-- SMTP traffic routed to this host (`25 -> SMTP_PORT` or direct bind)
-
-## Quick start
-
-Fully automatic (installs Docker + Docker Compose if missing, no SSL/reverse-proxy setup):
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Made with Go](https://img.shields.io/badge/Go-1.25-00ADD8.svg?logo=go&logoColor=white)](https://go.dev)
+[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/brightcolor/sender-report/main/scripts/quickstart.sh)
 ```
 
-The installer asks whether optional `rspamd` and `redis` services should be enabled.
-Based on your choice it generates `docker-compose.override.yml` (instead of editing comments in-place), and updates `.env` flags.
+</div>
 
-Optional environment overrides for the script:
+---
+
+## Was es ist
+
+`sender.report` nimmt Testmails auf temporären Adressen an, analysiert sie **wie ein
+empfangender Mailserver** und zeigt einen verständlichen Report mit Score, Befunden und
+konkreten Handlungsempfehlungen. Kein Account, kein Tracking, kein CDN — ein einzelnes
+Go-Binary, das auf einem kleinen VPS läuft.
+
+> **Privacy by design.** Sobald eine Mail analysiert ist, wird ihr Inhalt **Ende-zu-Ende
+> verschlüsselt** gespeichert. Der Schlüssel steckt nur in deinem Link — nicht einmal der
+> Server kann den Report-Inhalt lesen.
+
+## Highlights
+
+- **Echte Authentifizierungs-Prüfung** — SPF, DKIM und DMARC werden **kryptografisch
+  verifiziert** (DKIM-Signatur via `go-msgauth`, SPF gegen die sendende IP, DMARC-Alignment),
+  nicht nur aus Headern geraten.
+- **Über 50 Checks in 5 Bereichen** — Authentifizierung · DNS & Infrastruktur (PTR, HELO, MX,
+  TLS, MTA-STS, TLS-RPT, BIMI, DNSSEC, DANE) · Spamfilter (SpamAssassin, Rspamd, DNSBL) ·
+  Format & Inhalt · Header & Rohdaten.
+- **Praxis-Scoring** — importance-gewichtet wie echte Filter: Authentifizierung & Reputation
+  dominieren, Kosmetik zählt wenig. Domain-Alter fließt dynamisch ein. Die volle 10 gibt es
+  nur, wenn die essenziellen Checks wirklich sauber sind.
+- **Ende-zu-Ende-Verschlüsselung** — X25519 + HKDF-SHA256 + AES-256-GCM; Klartext nur kurz im
+  RAM während der Analyse.
+- **Live-Recheck** — DNS gefixt? Einzelne Checks oder ganze Sektionen direkt im Report neu
+  prüfen, ohne neue Mail. Ergebnis wird neu verschlüsselt und gespeichert.
+- **Client-seitiger PDF-Export** — kundentauglicher Report, vollständig im Browser erzeugt
+  (funktioniert auch für verschlüsselte Reports).
+- **Opt-in Reputations-Checks** — Domain-Alter (RDAP) und Domain-/Link-Blocklists, pro Mailbox
+  vom Nutzer selbst und informiert aktivierbar.
+- **Live-Statistiken** auf der Startseite (per SSE), **Dark Mode**, mobil-optimiert.
+- **Klein & autark** — ein Go-Binary (HTTP + SMTP + Analyse + Cleanup), SQLite, Docker-Compose.
+
+## Wie es funktioniert
+
+```
+1. Web-UI öffnen          →  temporäre Mailbox wird erzeugt (Schlüssel bleibt im Browser)
+2. Testmail dorthin senden →  SMTP-Empfang + Analyse im Arbeitsspeicher
+3. Report öffnen          →  Score, Checks, Empfehlungen, Rohdaten, PDF/JSON-Export
+```
+
+Nach der Analyse wird der Inhalt verschlüsselt abgelegt; die Mailbox läuft automatisch ab.
+
+## Quick Start
+
+**Vollautomatisch** (installiert bei Bedarf Docker + Compose):
 
 ```bash
-INSTALL_DIR=/opt/sender-report \
-HTTP_PORT=8080 \
-SMTP_PORT=2525 \
-SMTP_DOMAIN= \
-PUBLIC_BASE_URL= \
-ENABLE_TLS=false \
-FORCE_HTTPS=false \
-ENABLE_RSPAMD=false \
-ENABLE_REDIS=false \
 bash <(curl -fsSL https://raw.githubusercontent.com/brightcolor/sender-report/main/scripts/quickstart.sh)
 ```
 
-Manual setup:
+Der Installer fragt nach optionalen Diensten (`rspamd`, `redis`) und schreibt eine passende
+`docker-compose.override.yml` + `.env`.
+
+**Manuell:**
 
 ```bash
-cp .env.example .env
-# edit: SENDER_REPORT_IMAGE, ports, optional TLS/proxy settings
-
+cp .env.example .env          # Image, Ports, optional TLS/Proxy anpassen
 docker compose pull
 docker compose up -d
 ```
 
-Open UI:
+UI: `http://<host>:9090` (oder deine Reverse-Proxy-URL).
 
-- `http://<host>:8080` (or your reverse-proxy URL)
+## Voraussetzungen
 
-## DNS and SMTP setup
+- Docker + Docker Compose
+- VPS mit öffentlicher IP und einer Domain/Subdomain
+- eingehender SMTP-Verkehr auf den Host (`25 → SMTP_PORT`)
 
-Example records:
+## DNS & SMTP
 
-- `A sender-report.example.org -> <server-ip>`
-- `MX mx-test.example.org 10 sender-report.example.org`
-
-Recommended runtime setup:
-
-- Keep web behind reverse proxy/TLS (`443 -> 8080`)
-- Route SMTP `25` to container SMTP port (`2525` by default)
-- If `SMTP_DOMAIN` is empty, open the UI through the same DNS name you want in generated test addresses.
-
-See examples:
-
-- `deploy/examples/nginx.conf`
-- `deploy/examples/Caddyfile`
-- `deploy/examples/docker-compose.rspamd.yml`
-- `deploy/examples/docker-compose.spamassassin.yml`
-
-## Configuration
-
-Copy `.env.example` and adjust.
-
-Important variables:
-
-- `SENDER_REPORT_IMAGE` (default: `ghcr.io/brightcolor/sender-report:latest`; pin a version tag for production)
-- `PUBLIC_BASE_URL` (optional override; leave empty to derive scheme + host from the request)
-- `SMTP_DOMAIN` (optional override; leave empty to use the request host for generated mailbox domains)
-- `ENABLE_TLS`, `TLS_CERT_FILE`, `TLS_KEY_FILE` (optional direct TLS for the built-in web server)
-- `FORCE_HTTPS` (redirect HTTP requests to HTTPS when the app receives plain HTTP traffic)
-- `HTTP_PORT`, `SMTP_PORT`
-- `HEALTHCHECK_URL`
-- `MAX_MESSAGE_BYTES`
-- `MAILBOX_TTL`
-- `DATA_RETENTION_TTL`
-- `CLEANUP_INTERVAL`
-- `MAX_ACTIVE_MAILBOXES_PER_IP`
-- `MAX_ACTIVE_MAILBOXES_GLOBAL`
-- `WEB_RATE_LIMIT_PER_MIN`
-- `WEB_BURST_PER_10_SEC`
-- `TRUSTED_PROXY_CIDRS` (only these proxy CIDRs may supply `X-Forwarded-For`)
-- `SMTP_RATE_LIMIT_PER_HOUR`
-- `SMTP_BURST_PER_MIN`
-- `ENABLE_RBL_CHECKS`, `RBL_PROVIDERS` (default: `zen.spamhaus.org,bl.spamcop.net,b.barracudacentral.org,psbl.surriel.com,dnsbl.dronebl.org,bl.blocklist.de`)
-- `ENABLE_SPAMASSASSIN`, `SPAMASSASSIN_HOSTPORT`
-- `ENABLE_RSPAMD`, `RSPAMD_URL`, `RSPAMD_PASSWORD`
-- `ENABLE_DOMAIN_AGE` (force domain-age/RDAP check on for everyone; default `false`)
-- `ENABLE_DOMAIN_BLOCKLIST`, `DOMAIN_BLOCKLIST_PROVIDERS` (force domain/link blocklist checks on for everyone; default `false` / `dbl.spamhaus.org,multi.uribl.com`)
-- `ALERT_WEBHOOK_URL` (optional outbound webhook for operational alerts)
-
-> The three opt-in checks above (domain age, domain/link blocklists) contact
-> external services with the sender/link **domain names** (never mail content).
-> They are OFF by default. Beyond these operator-level force-on switches, every
-> end user can enable them per mailbox on the home page ("Erweiterte
-> Reputations-Checks") after an informed-consent dialog — see `/about#checks-detail`
-> for the full check reference and `/privacy` for the data-flow disclosure.
-
-### URL and domain autodetection
-
-By default, Sender-Report no longer needs `PUBLIC_BASE_URL` or `SMTP_DOMAIN` in `.env`.
-The web server derives its public URL from the incoming request:
-
-- direct access: `Host` and whether the request is TLS
-- trusted proxy access: `X-Forwarded-Proto`, `X-Forwarded-Host`, or RFC `Forwarded` headers, but only when the direct proxy IP matches `TRUSTED_PROXY_CIDRS`
-
-Generated addresses use the detected request host, with the port removed.
-Example: opening `https://probe.example.org` generates addresses like `<token>@probe.example.org`.
-
-> **SEO tip:** the home and about pages emit canonical, Open Graph and JSON-LD
-> tags, and the app serves `/robots.txt` and `/sitemap.xml`. These use
-> `PUBLIC_BASE_URL` for absolute URLs (falling back to the request host). For a
-> public deployment behind a reverse proxy, set `PUBLIC_BASE_URL` (and
-> `TRUSTED_PROXY_CIDRS`) so search engines see stable, correct URLs.
-
-Set `SMTP_DOMAIN` when your SMTP receiving domain differs from the web host, for example:
-
-```env
-SMTP_DOMAIN=mx-test.example.org
+```
+A   sender.example.org        → <server-ip>
+MX  mx-test.example.org   10  → sender.example.org
 ```
 
-SMTP is still not an open relay: the receiver only accepts addresses that already exist as active temporary mailboxes.
+- Web hinter Reverse Proxy/TLS (`443 → 9090`), SMTP `25` auf den Container-Port (`2525`).
+- Setze `PUBLIC_BASE_URL` (und `TRUSTED_PROXY_CIDRS`) hinter einem Proxy, damit Links,
+  Canonical-/OG-Tags und `sitemap.xml` korrekt sind.
+- SMTP ist **kein** offenes Relay: akzeptiert werden nur existierende, aktive Test-Mailboxen.
 
-### Built-in TLS
+Beispiele: `deploy/examples/nginx.conf` · `Caddyfile` · `docker-compose.rspamd.yml` ·
+`docker-compose.spamassassin.yml`.
 
-The web server can terminate TLS directly when you do not want a reverse proxy:
+## Konfiguration
+
+Alles über `.env` (siehe `.env.example`). Die wichtigsten Variablen:
+
+| Variable | Zweck |
+|---|---|
+| `SENDER_REPORT_IMAGE` | Container-Image (für Produktion auf eine Version pinnen) |
+| `PUBLIC_BASE_URL` | öffentliche URL; leer = aus Request ableiten |
+| `SMTP_DOMAIN` | Domain der generierten Adressen; leer = Request-Host |
+| `HTTP_PORT` / `SMTP_PORT` | Host-Ports (Container: `:8080` / `:2525`) |
+| `ENABLE_TLS`, `TLS_CERT_FILE`, `TLS_KEY_FILE`, `FORCE_HTTPS` | eingebautes TLS / Redirect |
+| `TRUSTED_PROXY_CIDRS` | nur diese Proxy-CIDRs dürfen `X-Forwarded-*` setzen |
+| `MAILBOX_TTL`, `DATA_RETENTION_TTL`, `CLEANUP_INTERVAL` | Lebensdauer & Aufräumen |
+| `MAX_MESSAGE_BYTES`, `MAX_ACTIVE_MAILBOXES_PER_IP/_GLOBAL` | Limits |
+| `WEB_RATE_LIMIT_PER_MIN`, `SMTP_RATE_LIMIT_PER_HOUR`, … | Rate-Limits |
+| `ENABLE_RBL_CHECKS`, `RBL_PROVIDERS` | DNSBL/RBL (IP-Reputation), optional |
+| `ENABLE_SPAMASSASSIN`, `ENABLE_RSPAMD`, … | externe Spamfilter, optional |
+| `ENABLE_DOMAIN_AGE`, `ENABLE_DOMAIN_BLOCKLIST`, `DOMAIN_BLOCKLIST_PROVIDERS` | Dritt-Dienste global erzwingen (Default aus) |
+| `ALERT_WEBHOOK_URL` | Webhook bei Verarbeitungsfehlern |
+
+> Die Dritt-Dienst-Checks (Domain-Alter, Blocklists) kontaktieren externe Anbieter mit
+> **Domainnamen** (nie Mailinhalt) und sind standardmäßig **aus**. Jeder Nutzer kann sie pro
+> Mailbox unter „Erweiterte Reputations-Checks" informiert selbst einschalten — Details unter
+> `/about#checks-detail`, Datenflüsse unter `/privacy`.
+
+### Eingebautes TLS (ohne Reverse Proxy)
 
 ```env
 ENABLE_TLS=true
 TLS_CERT_FILE=/certs/fullchain.pem
 TLS_KEY_FILE=/certs/privkey.pem
-FORCE_HTTPS=false
 HEALTHCHECK_URL=https://127.0.0.1:8080/healthz
 ```
 
-Mount the certificate directory in `docker-compose.yml`, for example:
+Cert-Verzeichnis als Volume mounten (`./certs:/certs:ro`). Hinter einem Proxy stattdessen
+`ENABLE_TLS=false`, TLS am Proxy terminieren und `TRUSTED_PROXY_CIDRS` setzen.
 
-```yaml
-volumes:
-  - sender_report_data:/data
-  - ./certs:/certs:ro
+## Sicherheit & Privatsphäre
+
+- **Ende-zu-Ende-Verschlüsselung** der Mailinhalte (Schlüssel nur im Link/Browser).
+- Kein offenes Relay; SMTP-Empfänger werden gegen aktive Mailboxen validiert.
+- Rate-Limits (Web & SMTP), maximale Nachrichtengröße, Mailbox-Limits pro IP.
+- TTL-basierter Daten-Lebenszyklus (automatische Löschung).
+- Keine externen CDNs/Tracker — alle Assets werden lokal ausgeliefert.
+
+## API
+
+| Endpoint | Beschreibung |
+|---|---|
+| `GET /api/reports/<token>/<msgref>` | Mailbox-/Message-Metadaten + vollständiger Report (JSON) |
+| `GET /api/mailboxes/<token>/status` | aktueller Mailbox-Status + letzte Message |
+| `GET /api/mailboxes/<token>/events` | Server-Sent-Events-Stream für Live-Updates |
+| `GET /api/stats` · `GET /api/stats/events` | Plattform-Statistiken (live) |
+| `GET /healthz` · `GET /readyz` · `GET /metrics` | Health & Prometheus-Metriken |
+
+Jedes Check-Ergebnis ist erklärbar: zusätzlich zu `id/name/status/score_delta/summary`
+liefern Reports `category`, `severity`, `importance`, `technical_details`, `explanation`,
+`recommendation` und `doc_links`.
+
+## Architektur
+
+```
+cmd/sender-report   Bootstrap & Service-Wiring
+internal/smtp       schlanker SMTP-Empfänger
+internal/analyzer   Parsing · Checks · Scoring · Recheck
+internal/sealedbox  E2E-Krypto (X25519 + HKDF + AES-256-GCM)
+internal/store, db  SQLite-Persistenz (WAL)
+internal/web        SSR-Seiten · API · SSE
+internal/cleanup    TTL-/Retention-Aufräumer
 ```
 
-Notes:
+Design-Bausteine zum Wiederverwenden: `docs/design-system.md` + `docs/sender-report-theme.css`.
 
-- Certificate files are only required when `ENABLE_TLS=true`.
-- With `ENABLE_TLS=true`, the configured HTTP listener speaks HTTPS directly.
-- `FORCE_HTTPS=true` is mainly useful when Sender-Report receives plain HTTP behind a trusted reverse proxy or when running HTTP-only and redirecting users to the public HTTPS URL.
-- For reverse proxy deployments, keep `ENABLE_TLS=false`, terminate TLS at the proxy, and set `TRUSTED_PROXY_CIDRS` so forwarded scheme/host headers are trusted.
+## Container-Images
 
-## Security model
+`ghcr.io/brightcolor/sender-report:<tag>`
 
-Implemented safeguards:
+| Tag | Bedeutung |
+|---|---|
+| `latest` / `main` | neuestes Image vom `main`-Branch |
+| `sha-<shortsha>` | unveränderliches Image pro Commit |
+| `vX.Y.Z` | unveränderlicher Release-Tag |
+| `X.Y.Z`, `X.Y`, `X` | SemVer-Aliase |
 
-- No open relay behavior
-- SMTP recipient validation against active temporary mailboxes
-- Request and SMTP rate limits
-- Maximum accepted message size
-- Max active mailboxes per client IP
-- TTL-based data lifecycle
-
-Operational recommendations:
-
-- Restrict host firewall to required ports
-- Use reverse proxy with TLS for web access
-- Keep `.env` private and backed up securely
-- Run regular image updates
-
-## Persistence and backup
-
-Data is persisted in Docker volume `sender_report_data`:
-
-- SQLite database (`/data/sender-report.db` + WAL/SHM)
-
-Backup options:
-
-- Volume snapshot
-- Periodic DB copy/export during low activity windows
-
-## Health and operations
-
-Health endpoints:
-
-- `GET /healthz`
-- `GET /readyz`
-- `GET /metrics` (Prometheus text format)
-
-Report API:
-
-- `GET /api/reports/<mailbox-token>/<message-ref>` returns mailbox metadata, message metadata, and the full analysis report as JSON.
-
-Mailbox API:
-
-- `GET /api/mailboxes/<token>/status` — current mailbox state and latest message reference
-- `GET /api/mailboxes/<token>/events` — Server-Sent Events stream for live mailbox updates
-- `POST /api/mailboxes/<token>/delete` — delete a mailbox
-
-Useful commands:
+Für Produktion auf eine Version pinnen:
 
 ```bash
-docker compose ps
-docker compose logs -f sender-report
+SENDER_REPORT_IMAGE=ghcr.io/brightcolor/sender-report:v1.15.0
+docker compose pull && docker compose up -d
 ```
 
-## CI/CD and container publishing
+## Ressourcen
 
-GitHub Actions workflows are included:
+Läuft auf kleinen Servern (Compose-Defaults: `mem_limit: 512m`, `cpus: 0.50`). Optionale
+Checks (RBL, SpamAssassin, Rspamd, Dritt-Dienste) erhöhen Last und Latenz.
 
-- `.github/workflows/ci.yml`
-  - runs `go test ./...`
-  - builds multi-arch image (`linux/amd64`, `linux/arm64`)
-  - publishes to GHCR on `main` and tags (`v*`)
-- `.github/workflows/release.yml`
-  - optional manual tag creation
+## Nicht-Ziele
 
-Published image target:
-
-- `ghcr.io/brightcolor/sender-report:<tag>`
-
-Image tag strategy:
-
-- `latest`: newest image from `main`
-- `main`: newest image from `main`, same moving channel as `latest`
-- `sha-<shortsha>`: immutable image for every pushed commit
-- `vX.Y.Z`: immutable release tag, created by `.github/workflows/release.yml`
-- `X.Y.Z`, `X.Y`, `X`: SemVer aliases created from `vX.Y.Z` tags
-
-Recommended production pin:
-
-```bash
-SENDER_REPORT_IMAGE=ghcr.io/brightcolor/sender-report:v0.2.0
-docker compose pull
-docker compose up -d
-```
-
-Rollback to an older image:
-
-```bash
-SENDER_REPORT_IMAGE=ghcr.io/brightcolor/sender-report:v0.1.0
-docker compose pull
-docker compose up -d
-```
-
-Use a `sha-<shortsha>` tag when you need an exact commit build instead of a named release.
-
-## Resource profile (practical)
-
-For standard usage, this is intended to run on small servers.
-Current compose limits are conservative:
-
-- `mem_limit: 512m`
-- `cpus: 0.50`
-
-Optional checks (RBL, SpamAssassin, Rspamd) increase resource usage and latency.
-
-## Current limitations
-
-- DKIM verification is heuristic-oriented (not full cryptographic verifier depth)
-- SPF/DMARC outcomes rely on available headers + DNS lookups, not full receiver-grade policy pipeline
-- Single-node design (no built-in clustering/HA)
+Kein produktiver MTA, kein Outbound-Relay, kein Ersatz für proprietäre Provider-Filter.
 
 ## Roadmap
 
-- RBL/blacklist check as first-class UI widget
-- Webhook notification on mail received/analyzed
-- Score history chart across multiple test runs
-- API key auth for private self-hosted deployments
-- Stronger DKIM verification path
-- Report export formats (PDF/HTML)
+- RBL/Blacklist als eigenständiges UI-Widget
+- Score-Verlauf über mehrere Testläufe
+- API-Key-Auth für private Deployments
+- Internationalisierung (DE/EN)
 
-## License
+## Lizenz
 
-MIT (see `LICENSE`).
+MIT — siehe [`LICENSE`](./LICENSE).
