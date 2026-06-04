@@ -90,7 +90,7 @@ func Load() (Config, error) {
 		RspamdPassword:           getEnv("RSPAMD_PASSWORD", ""),
 		AlertWebhookURL:          getEnv("ALERT_WEBHOOK_URL", ""),
 		TrustedProxyCIDRs:        splitCSV(getEnv("TRUSTED_PROXY_CIDRS", "")),
-		EnableCheckAnimation:     getEnvBool("ENABLE_CHECK_ANIMATION", false),
+		EnableCheckAnimation:     getEnvBool("ENABLE_CHECK_ANIMATION", true),
 		MailboxMaxExtendDays:     getEnvInt("MAILBOX_MAX_EXTEND_DAYS", 7),
 		PrivacyOperatorName:      getEnv("PRIVACY_OPERATOR_NAME", ""),
 		PrivacyOperatorAddress:   getEnv("PRIVACY_OPERATOR_ADDRESS", ""),

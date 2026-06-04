@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-06-04
+
+### Changed
+- The home-page scanner animation is now **on by default (opt-out)**:
+  `ENABLE_CHECK_ANIMATION` defaults to `true`; set it to `false` to fall back to
+  the brief "received → analysed → redirect" status.
+
 ## [1.8.0] - 2026-06-04
 
 ### Added

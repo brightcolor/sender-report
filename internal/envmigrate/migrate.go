@@ -92,7 +92,7 @@ var All = []VarDef{
 	{Key: "SPAMASSASSIN_HOSTPORT", Default: "spamd:783", Comment: "SpamAssassin spamd address (only used when ENABLE_SPAMASSASSIN=true)"},
 
 	// ── UI ────────────────────────────────────────────────────────────────────
-	{Group: "UI", Key: "ENABLE_CHECK_ANIMATION", Default: "false", Comment: "Animated 'scanning' effect on the home page while waiting for the report (default: off → received → analysed → redirect)"},
+	{Group: "UI", Key: "ENABLE_CHECK_ANIMATION", Default: "true", Comment: "Animated 'scanning' effect on the home page while waiting for the report (default: on; set false → brief received/analysed status, then redirect)"},
 
 	// ── Alerting ──────────────────────────────────────────────────────────────
 	{Group: "Alerting", Key: "ALERT_WEBHOOK_URL", Default: "", Comment: "Webhook URL for error/warning notifications (JSON POST)"},
