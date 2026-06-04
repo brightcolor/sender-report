@@ -37,65 +37,65 @@ type Config struct {
 	EnableDomainAge          bool
 	EnableDomainBlocklist    bool
 	DomainBlocklistProviders []string
-	EnableSpamAssassin   bool
-	SpamAssassinHostPort string
-	EnableRspamd         bool
-	RspamdURL            string
-	RspamdPassword       string
-	AlertWebhookURL      string
-	TrustedProxyCIDRs    []string
+	EnableSpamAssassin       bool
+	SpamAssassinHostPort     string
+	EnableRspamd             bool
+	RspamdURL                string
+	RspamdPassword           string
+	AlertWebhookURL          string
+	TrustedProxyCIDRs        []string
 	// UI
 	EnableCheckAnimation bool
 	// Mailbox extension
 	MailboxMaxExtendDays int
 	// Privacy page operator info
-	PrivacyOperatorName    string
-	PrivacyOperatorAddress string
-	PrivacyOperatorEmail   string
+	PrivacyOperatorName     string
+	PrivacyOperatorAddress  string
+	PrivacyOperatorEmail    string
 	PrivacyHideTemplateNote bool
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		AppName:              getEnv("APP_NAME", "sender.report"),
-		HTTPListenAddr:       getEnv("HTTP_LISTEN_ADDR", ":8080"),
-		EnableTLS:            getEnvBool("ENABLE_TLS", false),
-		TLSCertFile:          getEnv("TLS_CERT_FILE", ""),
-		TLSKeyFile:           getEnv("TLS_KEY_FILE", ""),
-		ForceHTTPS:           getEnvBool("FORCE_HTTPS", false),
-		SMTPListenAddr:       getEnv("SMTP_LISTEN_ADDR", ":2525"),
-		PublicBaseURL:        strings.TrimRight(getEnv("PUBLIC_BASE_URL", ""), "/"),
-		SMTPDomain:           strings.ToLower(getEnv("SMTP_DOMAIN", "")),
-		DBPath:               getEnv("DB_PATH", "/data/sender-report.db"),
-		DataDir:              getEnv("DATA_DIR", "/data"),
-		MailboxTTL:           getEnvDuration("MAILBOX_TTL", 24*time.Hour),
-		RetentionTTL:         getEnvDuration("DATA_RETENTION_TTL", 7*24*time.Hour),
-		CleanupInterval:      getEnvDuration("CLEANUP_INTERVAL", 30*time.Minute),
-		MaxMessageBytes:      getEnvInt64("MAX_MESSAGE_BYTES", 2*1024*1024),
-		MaxActivePerIP:       getEnvInt("MAX_ACTIVE_MAILBOXES_PER_IP", 20),
-		MaxActiveGlobal:      getEnvInt("MAX_ACTIVE_MAILBOXES_GLOBAL", 2000),
-		WebRateLimitPerMin:   getEnvInt("WEB_RATE_LIMIT_PER_MIN", 60),
-		WebBurstPer10Sec:     getEnvInt("WEB_BURST_PER_10_SEC", 20),
-		SMTPRateLimitPerHour: getEnvInt("SMTP_RATE_LIMIT_PER_HOUR", 200),
-		SMTPBurstPerMin:      getEnvInt("SMTP_BURST_PER_MIN", 40),
-		EnableRBLChecks:      getEnvBool("ENABLE_RBL_CHECKS", false),
-		RBLProviders:         splitCSV(getEnv("RBL_PROVIDERS", "zen.spamhaus.org,bl.spamcop.net,b.barracudacentral.org,psbl.surriel.com,dnsbl.dronebl.org,bl.blocklist.de")),
+		AppName:                  getEnv("APP_NAME", "sender.report"),
+		HTTPListenAddr:           getEnv("HTTP_LISTEN_ADDR", ":8080"),
+		EnableTLS:                getEnvBool("ENABLE_TLS", false),
+		TLSCertFile:              getEnv("TLS_CERT_FILE", ""),
+		TLSKeyFile:               getEnv("TLS_KEY_FILE", ""),
+		ForceHTTPS:               getEnvBool("FORCE_HTTPS", false),
+		SMTPListenAddr:           getEnv("SMTP_LISTEN_ADDR", ":2525"),
+		PublicBaseURL:            strings.TrimRight(getEnv("PUBLIC_BASE_URL", ""), "/"),
+		SMTPDomain:               strings.ToLower(getEnv("SMTP_DOMAIN", "")),
+		DBPath:                   getEnv("DB_PATH", "/data/sender-report.db"),
+		DataDir:                  getEnv("DATA_DIR", "/data"),
+		MailboxTTL:               getEnvDuration("MAILBOX_TTL", 24*time.Hour),
+		RetentionTTL:             getEnvDuration("DATA_RETENTION_TTL", 7*24*time.Hour),
+		CleanupInterval:          getEnvDuration("CLEANUP_INTERVAL", 30*time.Minute),
+		MaxMessageBytes:          getEnvInt64("MAX_MESSAGE_BYTES", 2*1024*1024),
+		MaxActivePerIP:           getEnvInt("MAX_ACTIVE_MAILBOXES_PER_IP", 20),
+		MaxActiveGlobal:          getEnvInt("MAX_ACTIVE_MAILBOXES_GLOBAL", 2000),
+		WebRateLimitPerMin:       getEnvInt("WEB_RATE_LIMIT_PER_MIN", 60),
+		WebBurstPer10Sec:         getEnvInt("WEB_BURST_PER_10_SEC", 20),
+		SMTPRateLimitPerHour:     getEnvInt("SMTP_RATE_LIMIT_PER_HOUR", 200),
+		SMTPBurstPerMin:          getEnvInt("SMTP_BURST_PER_MIN", 40),
+		EnableRBLChecks:          getEnvBool("ENABLE_RBL_CHECKS", false),
+		RBLProviders:             splitCSV(getEnv("RBL_PROVIDERS", "zen.spamhaus.org,bl.spamcop.net,b.barracudacentral.org,psbl.surriel.com,dnsbl.dronebl.org,bl.blocklist.de")),
 		EnableDomainAge:          getEnvBool("ENABLE_DOMAIN_AGE", false),
 		EnableDomainBlocklist:    getEnvBool("ENABLE_DOMAIN_BLOCKLIST", false),
 		DomainBlocklistProviders: splitCSV(getEnv("DOMAIN_BLOCKLIST_PROVIDERS", "dbl.spamhaus.org,multi.uribl.com")),
-		EnableSpamAssassin:   getEnvBool("ENABLE_SPAMASSASSIN", false),
-		SpamAssassinHostPort: getEnv("SPAMASSASSIN_HOSTPORT", "spamd:783"),
-		EnableRspamd:         getEnvBool("ENABLE_RSPAMD", false),
-		RspamdURL:            getEnv("RSPAMD_URL", "http://rspamd:11334/checkv2"),
-		RspamdPassword:       getEnv("RSPAMD_PASSWORD", ""),
-		AlertWebhookURL:         getEnv("ALERT_WEBHOOK_URL", ""),
-		TrustedProxyCIDRs:       splitCSV(getEnv("TRUSTED_PROXY_CIDRS", "")),
-		EnableCheckAnimation:    getEnvBool("ENABLE_CHECK_ANIMATION", false),
-		MailboxMaxExtendDays:    getEnvInt("MAILBOX_MAX_EXTEND_DAYS", 7),
-		PrivacyOperatorName:     getEnv("PRIVACY_OPERATOR_NAME", ""),
-		PrivacyOperatorAddress:  getEnv("PRIVACY_OPERATOR_ADDRESS", ""),
-		PrivacyOperatorEmail:    getEnv("PRIVACY_OPERATOR_EMAIL", ""),
-		PrivacyHideTemplateNote: getEnvBool("PRIVACY_HIDE_TEMPLATE_NOTE", false),
+		EnableSpamAssassin:       getEnvBool("ENABLE_SPAMASSASSIN", false),
+		SpamAssassinHostPort:     getEnv("SPAMASSASSIN_HOSTPORT", "spamd:783"),
+		EnableRspamd:             getEnvBool("ENABLE_RSPAMD", false),
+		RspamdURL:                getEnv("RSPAMD_URL", "http://rspamd:11334/checkv2"),
+		RspamdPassword:           getEnv("RSPAMD_PASSWORD", ""),
+		AlertWebhookURL:          getEnv("ALERT_WEBHOOK_URL", ""),
+		TrustedProxyCIDRs:        splitCSV(getEnv("TRUSTED_PROXY_CIDRS", "")),
+		EnableCheckAnimation:     getEnvBool("ENABLE_CHECK_ANIMATION", false),
+		MailboxMaxExtendDays:     getEnvInt("MAILBOX_MAX_EXTEND_DAYS", 7),
+		PrivacyOperatorName:      getEnv("PRIVACY_OPERATOR_NAME", ""),
+		PrivacyOperatorAddress:   getEnv("PRIVACY_OPERATOR_ADDRESS", ""),
+		PrivacyOperatorEmail:     getEnv("PRIVACY_OPERATOR_EMAIL", ""),
+		PrivacyHideTemplateNote:  getEnvBool("PRIVACY_HIDE_TEMPLATE_NOTE", false),
 	}
 
 	if cfg.EnableTLS && (cfg.TLSCertFile == "" || cfg.TLSKeyFile == "") {
