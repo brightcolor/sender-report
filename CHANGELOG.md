@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.14.4] - 2026-06-04
+
+### Changed
+- The coloured status squares in the report's check list now contain an icon
+  matching the status: ✓ (pass), ! (warn), i (info), ✗ (fail). Applied to both the
+  server-rendered and the E2E client-rendered report.
+
 ## [1.14.3] - 2026-06-04
 
 ### Changed

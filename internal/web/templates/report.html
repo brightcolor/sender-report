@@ -315,7 +315,7 @@
                               aria-expanded="false"
                               aria-controls="chk-body-{{safeID .ID}}">
                         <div class="mp-chk-inner">
-                          <span class="mp-status-dot {{.Status}}">{{statusIcon .Status}}</span>
+                          <span class="mp-status-dot {{.Status}}">{{statusGlyph .Status}}</span>
                           <span class="mp-chk-name">
                             <strong>{{.Name}}{{if .Importance}} <span class="mp-imp" data-imp="{{.Importance}}">{{.Importance}}</span>{{end}}</strong>
                             <small>{{.Summary}}</small>
@@ -1341,6 +1341,16 @@ function statusLbl(s) {
   return {pass:'Bestanden',warn:'Warnung',fail:'Fehler',info:'Info'}[s] || s;
 }
 
+// statusGlyph returns the icon shown inside the coloured status square.
+function statusGlyph(s) {
+  return {
+    pass: '<i class="bi bi-check-lg"></i>',
+    warn: '<i class="bi bi-exclamation-lg"></i>',
+    fail: '<i class="bi bi-x-lg"></i>',
+    info: '<i class="bi bi-info-lg"></i>'
+  }[s] || '';
+}
+
 // techLabel mirrors server.go techLabel(): friendly German label for a raw-data
 // key, with a humanised fallback for unknown keys.
 function techLabel(key) {
@@ -1451,7 +1461,7 @@ function renderDecCheckItem(c, uid){
   var h='<div class="accordion-item mp-check-item '+esc(c.status)+'" data-status="'+esc(c.status)+'" id="chk-'+uid+'">'+
      '<h2 class="accordion-header mp-chk-head"><button class="accordion-button '+col+'" type="button" '+
      'data-bs-toggle="collapse" data-bs-target="#cb-'+uid+'">'+
-     '<div class="mp-chk-inner"><span class="mp-status-dot '+esc(c.status)+'"></span>'+
+     '<div class="mp-chk-inner"><span class="mp-status-dot '+esc(c.status)+'">'+statusGlyph(c.status)+'</span>'+
      '<span class="mp-chk-name"><strong>'+esc(c.name)+(c.importance?' <span class="mp-imp" data-imp="'+esc(c.importance)+'">'+esc(c.importance)+'</span>':'')+'</strong><small>'+esc(c.summary)+'</small></span>'+
      '<span class="mp-pill '+esc(c.status)+'">'+statusLbl(c.status)+'</span>'+
      '<strong class="mp-delta">'+esc(delta)+'</strong></div></button>'+recheckBtn+'</h2>'+

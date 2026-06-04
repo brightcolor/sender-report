@@ -367,6 +367,7 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 	t, err := template.New("").Funcs(template.FuncMap{
 		"msgref":             messageReference,
 		"statusIcon":         statusIcon,
+		"statusGlyph":        statusGlyph,
 		"statusLabel":        statusLabel,
 		"detailsText":        detailsText,
 		"safeID":             safeID,
@@ -1717,6 +1718,20 @@ func statusIcon(status string) string {
 		return "X"
 	default:
 		return "i"
+	}
+}
+
+// statusGlyph returns the Bootstrap icon shown inside the coloured status square.
+func statusGlyph(status string) template.HTML {
+	switch status {
+	case "pass":
+		return template.HTML(`<i class="bi bi-check-lg"></i>`)
+	case "warn":
+		return template.HTML(`<i class="bi bi-exclamation-lg"></i>`)
+	case "fail":
+		return template.HTML(`<i class="bi bi-x-lg"></i>`)
+	default:
+		return template.HTML(`<i class="bi bi-info-lg"></i>`)
 	}
 }
 

@@ -251,6 +251,7 @@ body,
 .mp-status-dot.warn { background-color: rgba(var(--bs-warning-rgb), .12); color: var(--bs-warning); }
 .mp-status-dot.fail { background-color: rgba(var(--bs-danger-rgb),  .12); color: var(--bs-danger); }
 .mp-status-dot.info { background-color: rgba(var(--bs-info-rgb),    .12); color: var(--bs-info); }
+.mp-status-dot i { font-size: .85rem; line-height: 1; }
 
 /* ── Inbox wait animation ────────────────────────────────────────────────── */
 /* Pure SVG spinner: full track ring + rotating arc, no Bootstrap required  */
