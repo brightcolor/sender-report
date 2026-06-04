@@ -701,10 +701,12 @@ function handleCheckStatusEvent(data) {
       runMinimalRedirect(_pendingHref);
       return;
     }
-    // Opt-in WOW scan: live terminal feed + score ring counting up.
-    _fetchReportChecks(data.latest_report_path).then(() => {
-      runWowScan(_reportChecks || [], isNaN(score) ? null : score, _pendingHref);
-    });
+    // Opt-in WOW scan: live terminal feed (with real, client-decrypted mail data)
+    // + score ring counting up, ending on a "Zum Report" button.
+    var m = String(data.latest_report_path).match(/\/report\/([^?/]+)\?msg=([^&]+)/);
+    var token = m ? m[1] : (document.getElementById('check-panel')?.dataset?.token || '');
+    var msgref = m ? m[2] : '';
+    startWowScan(token, msgref, isNaN(score) ? null : score, _pendingHref);
     return;
   }
   if (data.latest_message_id) {
@@ -737,10 +739,129 @@ function _scoreColorVar(v) {
   return 'var(--bs-danger)';
 }
 
-// runWowScan: opt-in "scanner" experience — a live monospace terminal tickering
-// through the checks while a central score ring fills and counts up to the final
-// score, then a pulse and redirect.
-function runWowScan(checks, score, href) {
+// startWowScan gathers the richest data it can — by decrypting the message
+// client-side with the locally-stored key (same trust model as the report page) —
+// then runs the terminal animation with real sender/IP/subject + full checks. If
+// decryption isn't possible it falls back to the stored (stripped) check list.
+async function startWowScan(token, msgref, score, href) {
+  let meta = null;
+  let checks = null;
+  try {
+    const secret = token ? loadSecret(token) : null;
+    if (secret && msgref && window.SenderReportCrypto) {
+      const info = await window.SenderReportCrypto.fromToken(secret);
+      const res = await fetch('/api/payload/' + token + '/' + msgref, { cache: 'no-store' });
+      if (res.ok) {
+        const j = await res.json();
+        const blob = window.SenderReportCrypto._fromBase64url(j.payload_enc);
+        const pt = await window.SenderReportCrypto.open(blob, info.secret);
+        const payload = JSON.parse(window.SenderReportCrypto._fromUtf8(pt));
+        if (payload && payload.report) {
+          checks = payload.report.checks || [];
+          if (typeof payload.report.score === 'number') score = payload.report.score;
+          meta = {
+            from:    payload.smtp_from || '',
+            ip:      payload.remote_ip || '',
+            helo:    payload.helo || '',
+            subject: payload.subject || '',
+            size:    (payload.raw_source || '').length,
+          };
+        }
+      }
+    }
+  } catch (_) { /* fall back below */ }
+
+  if (!checks) {
+    await _fetchReportChecks('/report/' + token + '?msg=' + msgref);
+    checks = _reportChecks || [];
+  }
+  runWowScan(checks, meta, score, href);
+}
+
+// _scanSortChecks orders checks by category, then most-actionable first.
+function _scanSortChecks(checks) {
+  if (!Array.isArray(checks)) return [];
+  const CAT = ['Authentifizierung', 'DNS und Infrastruktur', 'Spamfilter', 'Format und Inhalt', 'Header und Rohdaten'];
+  const SEV = { fail: 0, warn: 1, info: 2, pass: 3 };
+  const catIdx = (c) => { const i = CAT.indexOf(c || ''); return i < 0 ? CAT.length : i; };
+  return checks.slice().sort((a, b) => {
+    const ca = catIdx(a.category), cb = catIdx(b.category);
+    if (ca !== cb) return ca - cb;
+    const sa = SEV[a.status] != null ? SEV[a.status] : 9;
+    const sb = SEV[b.status] != null ? SEV[b.status] : 9;
+    if (sa !== sb) return sa - sb;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+}
+
+function _fmtBytes(n) {
+  n = Number(n) || 0;
+  if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+  if (n >= 1024) return (n / 1024).toFixed(1) + ' KB';
+  return n + ' B';
+}
+
+// _buildScanLines assembles the full terminal transcript: a prompt, the real mail
+// metadata, every check grouped by area, the score, and a credible (accurate)
+// encryption finale. Returns [{html, delay}] — html is pre-escaped.
+function _buildScanLines(checks, meta, finalScore) {
+  const lines = [];
+  const push = (html, delay) => lines.push({ html: html, delay: delay });
+  const tok = (t, cls) => '<span class="tok ' + cls + '">' + t + '</span>';
+  const metaRow = (k, v) => '<span class="mk">' + _escAttr(k) + '</span><span class="mv">' + _escAttr(v) + '</span>';
+  const addr = (document.getElementById('mail-address')?.textContent || '').trim();
+
+  push('<span class="pr">sender.report</span><span class="pr2">:~$</span> <span class="cmd">analyze --inbound ' + _escAttr(addr || 'mailbox') + '</span>', 480);
+  push('<span class="cmt"># Nachricht empfangen, verarbeite im Arbeitsspeicher …</span>', 360);
+
+  if (meta) {
+    if (meta.from)    push(metaRow('absender ', meta.from), 300);
+    if (meta.ip)      push(metaRow('quell-ip ', meta.ip), 300);
+    if (meta.helo)    push(metaRow('helo     ', meta.helo), 260);
+    if (meta.subject) push(metaRow('betreff  ', meta.subject), 280);
+    if (meta.size)    push(metaRow('größe    ', _fmtBytes(meta.size)), 240);
+    push('', 200);
+  }
+
+  const sorted = _scanSortChecks(checks);
+  const CAT = ['Authentifizierung', 'DNS und Infrastruktur', 'Spamfilter', 'Format und Inhalt', 'Header und Rohdaten'];
+  const byCat = {};
+  sorted.forEach((c) => { const cat = c.category || 'Weitere Prüfungen'; (byCat[cat] = byCat[cat] || []).push(c); });
+  const cats = Object.keys(byCat).sort((a, b) => {
+    const ia = CAT.indexOf(a), ib = CAT.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+
+  const resCls = (st) => (st === 'pass' ? 'ok' : st);
+  const resCode = (st) => ({ pass: 'OK', warn: 'WARN', fail: 'FAIL', info: 'INFO' }[st] || 'OK');
+
+  cats.forEach((cat) => {
+    push('<span class="hd">── ' + _escAttr(cat) + ' ──</span>', 320);
+    byCat[cat].forEach((c) => {
+      const st = c.status || 'info';
+      const delta = (typeof c.score_delta === 'number' && c.score_delta !== 0)
+        ? '<span class="dlt">' + (c.score_delta > 0 ? '+' : '') + c.score_delta.toFixed(1) + '</span>'
+        : '';
+      const html = tok('[' + resCode(st) + ']', resCls(st)) +
+        '<span class="lbl">' + _escAttr(c.name || c.id || 'Check') + '</span>' + delta;
+      push(html, 150);
+    });
+  });
+
+  push('', 200);
+  push('<span class="cmt"># Analyse abgeschlossen</span>', 320);
+  push(tok('[=]', 'sum') + '<span class="lbl">Gesamtscore</span><span class="dlt">' + finalScore.toFixed(1) + ' / 10</span>', 520);
+  push('', 220);
+  push(tok('[*]', 'info') + '<span class="lbl">Klartext wird aus dem Arbeitsspeicher entfernt …</span>', 520);
+  push(tok('[OK]', 'ok') + '<span class="lbl">Verschlüsselt · AES-256-GCM + X25519</span>', 620);
+  push('<span class="dim">       Schlüssel nur in deinem Link — niemand sonst kann mitlesen.</span>', 520);
+
+  return lines;
+}
+
+// runWowScan: live monospace terminal that tickers through the real mail data and
+// every check while the score ring counts up, ending on a "Zum Report" button.
+function runWowScan(checks, meta, score, href) {
   const scan    = document.getElementById('mp-scan');
   const term    = document.getElementById('mp-scan-term');
   const ring    = document.getElementById('mp-scan-ring');
@@ -750,21 +871,13 @@ function runWowScan(checks, score, href) {
   document.querySelector('.mp-inbox-anim')?.classList.add('d-none');
   document.getElementById('check-wait-msg')?.classList.add('d-none');
   document.getElementById('check-steps')?.classList.add('d-none');
-  // No DOM to animate into → just offer the report link directly.
-  if (!scan || !term || !ring || !scoreEl) {
-    if (href) window.location.href = href;
-    return;
-  }
+  if (!scan || !term || !ring || !scoreEl) { if (href) window.location.href = href; return; }
   scan.classList.remove('d-none');
   term.innerHTML = '';
 
   const finalScore = (typeof score === 'number' && !isNaN(score)) ? score : 10;
-  const resCode = (st) => ({ pass: 'PASS', warn: 'WARN', fail: 'FAIL', info: 'INFO' }[st] || 'OK');
 
-  // Reveal the "Zum Report" button instead of auto-redirecting.
-  const showCta = () => {
-    if (cta) { cta.href = href || '#'; cta.classList.remove('d-none'); }
-  };
+  const showCta = () => { if (cta) { cta.href = href || '#'; cta.classList.remove('d-none'); } };
   const setFinalRing = () => {
     ring.style.setProperty('--score', (finalScore * 10) + '%');
     ring.style.setProperty('--mp-score-color', _scoreColorVar(finalScore));
@@ -772,32 +885,20 @@ function runWowScan(checks, score, href) {
     ring.classList.add('is-done');
   };
 
-  const renderLine = (s, withCursor) => {
+  const appendLine = (html, withCursor) => {
     term.querySelector('.mp-scan-cursor')?.classList.remove('mp-scan-cursor');
     const line = document.createElement('div');
-    line.className = 'mp-scan-line ' + (s.status === 'pass' ? 'ok' : s.status) + (withCursor ? ' mp-scan-cursor' : '');
-    const delta = (typeof s.delta === 'number' && s.delta !== 0)
-      ? '<span class="dlt">' + (s.delta > 0 ? '+' : '') + s.delta.toFixed(1) + '</span>'
-      : '';
-    line.innerHTML = '<span class="arrow">&gt;</span><span class="lbl">' + _escAttr(s.label) + '</span>' +
-                     '<span class="res">' + resCode(s.status) + '</span>' + delta;
+    line.className = 'mp-scan-line' + (withCursor ? ' mp-scan-cursor' : '');
+    line.innerHTML = (html && html.length) ? html : '&nbsp;';
     term.appendChild(line);
-    while (term.children.length > 9) term.removeChild(term.firstChild);
+    while (term.children.length > 11) term.removeChild(term.firstChild);
   };
 
-  // One line per actual check (all of them), ordered like the report: by category,
-  // then most-actionable first (fail → warn → info → pass), then by name.
-  const steps = _scanStepsFromChecks(checks);
-  if (steps.length === 0) { setFinalRing(); showCta(); return; }
+  const lines = _buildScanLines(checks, meta, finalScore);
+  if (lines.length === 0) { setFinalRing(); showCta(); return; }
 
-  // Keep the whole scan within a fixed time budget regardless of how many checks
-  // there are, so ~50 lines don't drag on. Plays for everyone — the animation is
-  // the product, so we deliberately do not gate it behind prefers-reduced-motion.
-  const perLine = Math.max(45, Math.min(200, Math.round(4200 / steps.length)));
+  const totalMs = lines.reduce((sum, l) => sum + l.delay, 0);
   const startTs = (performance && performance.now) ? performance.now() : Date.now();
-  const totalMs = steps.length * perLine + 500;
-
-  // Continuous ring count-up across the whole scan.
   const rampRing = (now) => {
     const t = (now || Date.now());
     const p = Math.min(1, (t - startTs) / totalMs);
@@ -811,37 +912,19 @@ function runWowScan(checks, score, href) {
   requestAnimationFrame(rampRing);
 
   let i = 0;
-  const addLine = () => {
-    if (i >= steps.length) {
+  const step = () => {
+    if (i >= lines.length) {
       term.querySelector('.mp-scan-cursor')?.classList.remove('mp-scan-cursor');
-      setTimeout(() => { setFinalRing(); showCta(); }, 300);
+      setFinalRing();
+      setTimeout(showCta, 250);
       return;
     }
-    renderLine(steps[i], true);
+    appendLine(lines[i].html, true);
+    const d = lines[i].delay;
     i++;
-    setTimeout(addLine, perLine + Math.random() * 40);
+    setTimeout(step, d + Math.random() * 30);
   };
-  addLine();
-}
-
-// _scanStepsFromChecks turns the report's checks into ordered scan lines.
-function _scanStepsFromChecks(checks) {
-  if (!Array.isArray(checks)) return [];
-  const CAT_ORDER = ['Authentifizierung', 'DNS und Infrastruktur', 'Spamfilter', 'Format und Inhalt', 'Header und Rohdaten'];
-  const SEV = { fail: 0, warn: 1, info: 2, pass: 3 };
-  const catIdx = (c) => { const i = CAT_ORDER.indexOf(c || ''); return i < 0 ? CAT_ORDER.length : i; };
-  return checks.slice().sort((a, b) => {
-    const ca = catIdx(a.category), cb = catIdx(b.category);
-    if (ca !== cb) return ca - cb;
-    const sa = SEV[a.status] != null ? SEV[a.status] : 9;
-    const sb = SEV[b.status] != null ? SEV[b.status] : 9;
-    if (sa !== sb) return sa - sb;
-    return String(a.name || '').localeCompare(String(b.name || ''));
-  }).map((c) => ({
-    label: c.name || c.id || 'Check',
-    status: c.status || 'info',
-    delta: typeof c.score_delta === 'number' ? c.score_delta : 0,
-  }));
+  step();
 }
 
 // _escAttr escapes the few characters that matter for safe innerHTML insertion.

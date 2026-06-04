@@ -1700,35 +1700,48 @@ body,
 
 .mp-scan-term {
   width: 100%;
-  max-width: 460px;
-  max-height: 224px;
+  max-width: 480px;
+  height: 250px;
   overflow: hidden;
   background: #0b1220;
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 10px;
-  padding: .7rem .85rem;
+  padding: .7rem .9rem;
   text-align: left;
   font-family: 'Cascadia Code', ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: .8rem;
-  line-height: 1.6;
+  line-height: 1.65;
   color: #9fb3d1;
-  box-shadow: inset 0 0 30px rgba(0,0,0,.35);
+  box-shadow: inset 0 0 30px rgba(0,0,0,.4);
 }
 .mp-scan-line {
   display: flex;
   align-items: baseline;
-  gap: .5rem;
+  gap: .45rem;
   white-space: nowrap;
   animation: mp-line-in .26s ease both;
 }
 .mp-scan-line .lbl { color: #c4ccd6; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.mp-scan-line .res { flex: 0 0 auto; margin-left: .75rem; font-weight: 700; }
 .mp-scan-line .dlt { flex: 0 0 auto; margin-left: .5rem; color: #6c7a91; font-variant-numeric: tabular-nums; }
-.mp-scan-line.ok   .res { color: #4ade80; }
-.mp-scan-line.warn .res { color: #fbbf24; }
-.mp-scan-line.fail .res { color: #f87171; }
-.mp-scan-line.info .res { color: #38bdf8; }
-.mp-scan-line .arrow { color: #3b82f6; }
+
+/* Status tokens: [OK] [WARN] [FAIL] [INFO] [*] [=] — fixed width for alignment */
+.mp-scan-line .tok { flex: 0 0 auto; width: 3.6em; font-weight: 700; }
+.mp-scan-line .tok.ok   { color: #4ade80; }
+.mp-scan-line .tok.warn { color: #fbbf24; }
+.mp-scan-line .tok.fail { color: #f87171; }
+.mp-scan-line .tok.info { color: #38bdf8; }
+.mp-scan-line .tok.sum  { color: #e2e8f0; }
+
+/* Prompt line, comments, headers, metadata, dim notes */
+.mp-scan-line .pr   { color: #4ade80; font-weight: 700; }
+.mp-scan-line .pr2  { color: #6c7a91; }
+.mp-scan-line .cmd  { color: #e2e8f0; }
+.mp-scan-line .cmt  { color: #6c7a91; font-style: italic; }
+.mp-scan-line .hd   { color: #7dd3fc; opacity: .85; }
+.mp-scan-line .mk   { flex: 0 0 auto; width: 7em; color: #6c7a91; }
+.mp-scan-line .mv   { flex: 1 1 auto; min-width: 0; color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; }
+.mp-scan-line .dim  { color: #6c7a91; }
+
 .mp-scan-cursor::after {
   content: '▋';
   color: #4ade80;

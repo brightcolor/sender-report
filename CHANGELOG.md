@@ -4,7 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.9.2] - 2026-06-04
+## [1.10.0] - 2026-06-04
+
+### Changed
+- **The scanner animation now looks like a real terminal and uses real data.**
+  On the home page the message is decrypted client-side (the key is already local,
+  same trust model as the report page) so the terminal shows a shell prompt, the
+  actual **sender, source IP, HELO, subject and size**, then every check grouped
+  by area (`[OK]/[WARN]/[FAIL]/[INFO]` with score deltas), the total score, and a
+  credible, accurate encryption finale ("Klartext wird aus dem Arbeitsspeicher
+  entfernt …" → "Verschlüsselt · AES-256-GCM + X25519" → "Schlüssel nur in deinem
+  Link"). Pacing is a bit slower so it's readable; falls back to the stored check
+  list if decryption isn't available.
 
 ### Changed
 - The scanner animation now **plays for every visitor** — it is no longer gated
