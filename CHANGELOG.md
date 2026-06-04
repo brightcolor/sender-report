@@ -4,7 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.14.1] - 2026-06-04
+## [1.14.2] - 2026-06-04
+
+### Changed
+- Recheck UX: the recheck control is now a compact **refresh icon in the check's
+  header** (with a spinner while running, larger tap target on mobile) instead of
+  a button in the body. After a recheck the check **stays open** so the fresh
+  result is visible, and a small toast confirms "Aktualisiert / Gespeichert ✓".
 
 ### Added
 - **Rechecks are now persisted** (they survive a reload). Because reports are

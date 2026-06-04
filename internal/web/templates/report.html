@@ -1445,20 +1445,17 @@ var RECHECKABLE = {spf:1, dmarc:1, mx_records:1, address_records:1, dkim_keyleng
 function renderDecCheckItem(c, uid){
   var delta=c.score_delta?(c.score_delta>0?'+':'')+Number(c.score_delta).toFixed(1):'';
   var open=c.status==='fail'?'show':'', col=c.status!=='fail'?'collapsed':'';
+  var recheckBtn = RECHECKABLE[c.id]
+    ? '<button class="mp-chk-recheck" type="button" data-recheck="'+esc(c.id)+'" title="Neu prüfen (frische DNS-/Reputations-Abfrage)" aria-label="Neu prüfen"><i class="bi bi-arrow-clockwise"></i></button>'
+    : '';
   var h='<div class="accordion-item mp-check-item '+esc(c.status)+'" data-status="'+esc(c.status)+'" id="chk-'+uid+'">'+
-     '<h2 class="accordion-header"><button class="accordion-button '+col+'" type="button" '+
+     '<h2 class="accordion-header mp-chk-head"><button class="accordion-button '+col+'" type="button" '+
      'data-bs-toggle="collapse" data-bs-target="#cb-'+uid+'">'+
      '<div class="mp-chk-inner"><span class="mp-status-dot '+esc(c.status)+'"></span>'+
      '<span class="mp-chk-name"><strong>'+esc(c.name)+(c.importance?' <span class="mp-imp" data-imp="'+esc(c.importance)+'">'+esc(c.importance)+'</span>':'')+'</strong><small>'+esc(c.summary)+'</small></span>'+
      '<span class="mp-pill '+esc(c.status)+'">'+statusLbl(c.status)+'</span>'+
-     '<strong class="mp-delta">'+esc(delta)+'</strong></div></button></h2>'+
+     '<strong class="mp-delta">'+esc(delta)+'</strong></div></button>'+recheckBtn+'</h2>'+
      '<div id="cb-'+uid+'" class="accordion-collapse collapse '+open+'"><div class="accordion-body">';
-  // Live recheck button (only for externally-dependent checks).
-  if(RECHECKABLE[c.id])
-    h+='<div class="mb-3 d-flex align-items-center gap-2">'+
-       '<button class="btn btn-sm btn-outline-primary mp-recheck-btn" type="button" data-recheck="'+esc(c.id)+'">'+
-       '<i class="bi bi-arrow-clockwise me-1"></i>Neu prüfen</button>'+
-       '<span class="mp-recheck-status small text-secondary"></span></div>';
   if(c.id==='rspamd'&&c.technical_details)
     h+=renderRspamdSymbols(c.technical_details);
   if(c.explanation)
@@ -1502,17 +1499,18 @@ function setupRecheckButtons() {
   if (!CONTENT || CONTENT.dataset.recheckBound === '1') return;
   CONTENT.dataset.recheckBound = '1';
   CONTENT.addEventListener('click', async function(ev) {
-    var btn = ev.target.closest('.mp-recheck-btn');
+    var btn = ev.target.closest('.mp-chk-recheck');
     if (!btn) return;
+    ev.preventDefault();
+    ev.stopPropagation();
     var id = btn.dataset.recheck;
     var item = btn.closest('.mp-check-item');
     if (!id || !item) return;
     var uid = item.id.replace(/^chk-/, '');
-    var statusEl = item.querySelector('.mp-recheck-status');
     var orig = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Prüfe …';
-    if (statusEl) statusEl.textContent = 'frische DNS-/Reputations-Abfrage läuft …';
+    btn.classList.add('is-busy');
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
     try {
       var body = Object.assign({ check_id: id }, RECHECK_INPUTS);
       var res = await fetch('/api/recheck/' + TOKEN + '/' + MSGREF, {
@@ -1523,21 +1521,43 @@ function setupRecheckButtons() {
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var fresh = await res.json();
-      // Replace the item in place with the freshly rendered result.
+      // Replace the item in place, then keep it open so the result stays visible.
       item.outerHTML = renderDecCheckItem(fresh, uid);
+      var newItem = document.getElementById('chk-' + uid);
+      if (newItem) {
+        var ab = newItem.querySelector('.accordion-button');
+        var cb = newItem.querySelector('.accordion-collapse');
+        if (ab) { ab.classList.remove('collapsed'); ab.setAttribute('aria-expanded','true'); }
+        if (cb) cb.classList.add('show');
+        // brief ✓ flash on the refresh icon
+        var nr = newItem.querySelector('.mp-chk-recheck');
+        if (nr) {
+          var ni = nr.innerHTML;
+          nr.innerHTML = '<i class="bi bi-check2 text-success"></i>';
+          setTimeout(function(){ if (nr) nr.innerHTML = ni; }, 2500);
+        }
+      }
       if (typeof setupCopyButtons === 'function') setupCopyButtons();
       if (typeof colorScoreDeltas === 'function') colorScoreDeltas();
-      var newItem = document.getElementById('chk-' + uid);
-      var ns = newItem && newItem.querySelector('.mp-recheck-status');
-      if (ns) ns.textContent = 'aktualisiert ✓ — speichere …';
-      // Persist the new value (re-encrypt + store) so it survives a reload.
-      persistRecheck(fresh, ns);
+      recheckToast('Aktualisiert — speichere …');
+      persistRecheck(fresh); // re-encrypt + store so it survives a reload
     } catch (e) {
       btn.disabled = false;
+      btn.classList.remove('is-busy');
       btn.innerHTML = orig;
-      if (statusEl) statusEl.textContent = 'Recheck fehlgeschlagen – später erneut versuchen.';
+      recheckToast('Recheck fehlgeschlagen – später erneut versuchen.', true);
     }
   });
+}
+
+// recheckToast shows a small transient message at the bottom of the screen.
+function recheckToast(msg, isError) {
+  var t = document.createElement('div');
+  t.className = 'mp-recheck-toast' + (isError ? ' is-error' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function(){ t.classList.add('show'); }, 10);
+  setTimeout(function(){ t.classList.remove('show'); setTimeout(function(){ t.remove(); }, 300); }, 3000);
 }
 
 // jsComputeScore mirrors analyzer.ComputeScore (Go): start at 10, sum deltas,
@@ -1558,11 +1578,11 @@ function jsComputeScore(checks) {
 
 // persistRecheck re-encrypts the decrypted report with the rechecked value and
 // stores the new ciphertext + score server-side, so the change survives a reload.
-async function persistRecheck(fresh, statusEl) {
+async function persistRecheck(fresh) {
   try {
     var crypto = window.SenderReportCrypto;
     if (!DEC_PAYLOAD || !DEC_PAYLOAD.report || !DEC_SECRET || !crypto) {
-      if (statusEl) statusEl.textContent = 'aktualisiert ✓ (nur in dieser Ansicht)';
+      recheckToast('Aktualisiert (nur in dieser Ansicht)');
       return;
     }
     var checks = DEC_PAYLOAD.report.checks || (DEC_PAYLOAD.report.checks = []);
@@ -1586,12 +1606,9 @@ async function persistRecheck(fresh, statusEl) {
     var saved = await res.json();
     // Reflect the new authoritative score in the hero ring.
     updateHeroScore(saved.score, saved.score_label);
-    if (statusEl) {
-      statusEl.textContent = 'aktualisiert & gespeichert ✓';
-      setTimeout(function(){ if (statusEl) statusEl.textContent = ''; }, 4000);
-    }
+    recheckToast('Gespeichert ✓');
   } catch (e) {
-    if (statusEl) statusEl.textContent = 'aktualisiert ✓ (Speichern fehlgeschlagen)';
+    recheckToast('Aktualisiert ✓ (Speichern fehlgeschlagen)', true);
   }
 }
 
