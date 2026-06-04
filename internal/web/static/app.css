@@ -1740,8 +1740,5 @@ body,
 }
 @keyframes mp-cursor-blink { 50% { opacity: 0; } }
 
-@media (prefers-reduced-motion: reduce) {
-  .mp-scan-line { animation: none; }
-  .mp-scan-ring.is-done { animation: none; }
-  .mp-scan-cursor::after { animation: none; }
-}
+/* The scan is the product's signature moment, so it plays for everyone — we
+   intentionally do not suppress it under prefers-reduced-motion. */

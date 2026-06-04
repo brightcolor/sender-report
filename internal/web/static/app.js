@@ -677,6 +677,7 @@ function _stopStepAnimation() {
   if (ring) { ring.classList.remove('is-done'); ring.style.setProperty('--score', '0%'); }
   const term = document.getElementById('mp-scan-term');
   if (term) term.innerHTML = '';
+  document.getElementById('mp-scan-cta')?.classList.add('d-none');
   document.querySelector('.mp-inbox-anim')?.classList.remove('d-none');
 }
 
@@ -744,18 +745,26 @@ function runWowScan(checks, score, href) {
   const term    = document.getElementById('mp-scan-term');
   const ring    = document.getElementById('mp-scan-ring');
   const scoreEl = document.getElementById('mp-scan-score');
-  const go = () => { if (href) window.location.href = href; };
+  const cta     = document.getElementById('mp-scan-cta');
 
   document.querySelector('.mp-inbox-anim')?.classList.add('d-none');
   document.getElementById('check-wait-msg')?.classList.add('d-none');
   document.getElementById('check-steps')?.classList.add('d-none');
-  if (!scan || !term || !ring || !scoreEl) { go(); return; }
+  // No DOM to animate into → just offer the report link directly.
+  if (!scan || !term || !ring || !scoreEl) {
+    if (href) window.location.href = href;
+    return;
+  }
   scan.classList.remove('d-none');
   term.innerHTML = '';
 
   const finalScore = (typeof score === 'number' && !isNaN(score)) ? score : 10;
   const resCode = (st) => ({ pass: 'PASS', warn: 'WARN', fail: 'FAIL', info: 'INFO' }[st] || 'OK');
 
+  // Reveal the "Zum Report" button instead of auto-redirecting.
+  const showCta = () => {
+    if (cta) { cta.href = href || '#'; cta.classList.remove('d-none'); }
+  };
   const setFinalRing = () => {
     ring.style.setProperty('--score', (finalScore * 10) + '%');
     ring.style.setProperty('--mp-score-color', _scoreColorVar(finalScore));
@@ -779,19 +788,11 @@ function runWowScan(checks, score, href) {
   // One line per actual check (all of them), ordered like the report: by category,
   // then most-actionable first (fail → warn → info → pass), then by name.
   const steps = _scanStepsFromChecks(checks);
-  if (steps.length === 0) { setFinalRing(); setTimeout(go, 900); return; }
-
-  // Reduced motion: no transitions/ramp — render the full list at once, set the
-  // final ring, and hold briefly so it stays readable, then redirect.
-  if (_prefersReducedMotion()) {
-    steps.forEach((s) => renderLine(s, false));
-    setFinalRing();
-    setTimeout(go, 2200);
-    return;
-  }
+  if (steps.length === 0) { setFinalRing(); showCta(); return; }
 
   // Keep the whole scan within a fixed time budget regardless of how many checks
-  // there are, so ~50 lines don't drag on.
+  // there are, so ~50 lines don't drag on. Plays for everyone — the animation is
+  // the product, so we deliberately do not gate it behind prefers-reduced-motion.
   const perLine = Math.max(45, Math.min(200, Math.round(4200 / steps.length)));
   const startTs = (performance && performance.now) ? performance.now() : Date.now();
   const totalMs = steps.length * perLine + 500;
@@ -813,7 +814,7 @@ function runWowScan(checks, score, href) {
   const addLine = () => {
     if (i >= steps.length) {
       term.querySelector('.mp-scan-cursor')?.classList.remove('mp-scan-cursor');
-      setTimeout(() => { setFinalRing(); setTimeout(go, 950); }, 300);
+      setTimeout(() => { setFinalRing(); showCta(); }, 300);
       return;
     }
     renderLine(steps[i], true);

@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-06-04
+
+### Changed
+- The scanner animation now **plays for every visitor** — it is no longer gated
+  behind `prefers-reduced-motion` (which silently disabled it for many users
+  without them changing anything). The terminal feed and ring count-up always run.
+- **No more auto-redirect** at the end of the scan: the report opens via a clear
+  **"Zum Report"** button (with the decryption key in the link) instead of jumping
+  there automatically.
+
 ## [1.9.1] - 2026-06-04
 
 ### Fixed
