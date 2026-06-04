@@ -897,8 +897,9 @@ function runWowScan(checks, meta, score, href) {
     line.className = 'mp-scan-line' + (item.cls ? ' ' + item.cls : '') + (withCursor ? ' mp-scan-cursor' : '');
     line.innerHTML = (item.html && item.html.length) ? item.html : '&nbsp;';
     term.appendChild(line);
-    while (term.children.length > 11) term.removeChild(term.firstChild);
-    term.scrollTop = term.scrollHeight;
+    // Keep the full transcript (scrollable); only guard against unbounded growth.
+    if (term.children.length > 800) term.removeChild(term.firstChild);
+    term.scrollTop = term.scrollHeight; // auto-scroll to the newest line
   };
 
   const lines = _buildScanLines(checks, meta, finalScore);

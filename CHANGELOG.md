@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-06-04
+
+### Changed
+- The scan terminal is now **scrollable**: the full transcript is kept (auto-scroll
+  to the newest line during the run; scroll up afterwards to review every check),
+  with a slim custom scrollbar and a slightly refined dark look.
+
 ## [1.11.0] - 2026-06-04
 
 ### Changed
