@@ -214,4 +214,6 @@ Kein produktiver MTA, kein Outbound-Relay, kein Ersatz für proprietäre Provide
 
 ## Lizenz
 
-MIT — siehe [`LICENSE`](./LICENSE).
+MIT — siehe [`LICENSE`](./LICENSE). Lizenzen der eingebundenen Dritt-Komponenten
+(Go-Module + Frontend-Assets) stehen in [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)
+und werden mit dem Container-Image ausgeliefert.

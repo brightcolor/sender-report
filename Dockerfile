@@ -34,6 +34,8 @@ COPY --from=builder /out/sender-report        /app/sender-report
 COPY internal/web/templates                   /app/internal/web/templates
 COPY internal/web/static                      /app/internal/web/static
 COPY entrypoint.sh                            /app/entrypoint.sh
+# License + third-party notices ship with the image (MIT/BSD/Apache/OFL attribution).
+COPY LICENSE THIRD_PARTY_NOTICES.md           /app/
 RUN addgroup -S app && adduser -S -G app app \
     && mkdir -p /data && chown -R app:app /data /app \
     && chmod +x /app/entrypoint.sh
