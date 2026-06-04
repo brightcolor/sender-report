@@ -383,6 +383,13 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	}
 
 	report.Score = clampScore(report.Score)
+	// A perfect 10 must be earned: it requires every essential check to actually
+	// pass (a clean SPF, DKIM, DMARC and PTR), not merely "not fail". This closes
+	// the loophole where an unconfirmed/neutral essential (e.g. an ambiguous SPF
+	// result, score delta 0) could still leave the score at a full 10.
+	if report.Score > essentialPerfectCap && !essentialsAllPass(report.Checks) {
+		report.Score = essentialPerfectCap
+	}
 	report.Suggestions = dedupeSorted(report.Suggestions)
 	report.Warnings = dedupeSorted(report.Warnings)
 	report.SpamSignals = dedupeSorted(report.SpamSignals)
@@ -1337,6 +1344,23 @@ func checkImportance(id string) string {
 	default:
 		return "Empfohlen"
 	}
+}
+
+// essentialPerfectCap is the highest score a message can get when one of the
+// essential checks is not a clean pass.
+const essentialPerfectCap = 9.5
+
+// essentialsAllPass reports whether every essential, always-present check
+// (SPF, DKIM, DMARC, PTR) actually passed. Checks that aren't present in the
+// report (e.g. behind a disabled feature) are not required.
+func essentialsAllPass(checks []model.CheckResult) bool {
+	essential := map[string]bool{"spf": true, "dkim": true, "dmarc": true, "ptr": true}
+	for _, c := range checks {
+		if essential[c.ID] && c.Status != "pass" {
+			return false
+		}
+	}
+	return true
 }
 
 // scoreFor returns a check's contribution to the score from its importance tier

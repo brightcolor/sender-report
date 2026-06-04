@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-06-04
+
+### Changed
+- **A perfect 10 must now be earned.** The score is capped below 10 unless every
+  essential check is a clean *pass* — SPF, DKIM, DMARC and PTR. This closes the
+  loophole where an unconfirmed/neutral essential (e.g. an ambiguous SPF result
+  with a 0 score impact) could still leave a message at a full 10.
+
 ## [1.13.0] - 2026-06-04
 
 ### Changed

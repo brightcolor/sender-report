@@ -327,3 +327,23 @@ func TestScoreForWeighting(t *testing.T) {
 		t.Fatalf("one critical fail (%v) should outweigh 4 cosmetic warns (%v)", crit, cosmetic)
 	}
 }
+
+func TestEssentialsAllPassGate(t *testing.T) {
+	pass := []model.CheckResult{
+		{ID: "spf", Status: "pass"}, {ID: "dkim", Status: "pass"},
+		{ID: "dmarc", Status: "pass"}, {ID: "ptr", Status: "pass"},
+	}
+	if !essentialsAllPass(pass) {
+		t.Fatal("all essentials pass should return true")
+	}
+	// An unconfirmed/neutral essential (info) must block the perfect score.
+	infoSPF := append([]model.CheckResult{{ID: "spf", Status: "info"}}, pass[1:]...)
+	if essentialsAllPass(infoSPF) {
+		t.Fatal("an essential that is only 'info' must not count as all-pass")
+	}
+	failPTR := append([]model.CheckResult{}, pass...)
+	failPTR[3] = model.CheckResult{ID: "ptr", Status: "warn"}
+	if essentialsAllPass(failPTR) {
+		t.Fatal("a warning on an essential must not count as all-pass")
+	}
+}
