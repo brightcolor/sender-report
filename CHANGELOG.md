@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-06-04
+
+### Added
+- **Opt-in "scanner" animation on the home page** (`ENABLE_CHECK_ANIMATION`,
+  default `false`). When enabled, waiting for the report shows a live monospace
+  terminal tickering through the checks while a central score ring fills and counts
+  up to the final score, then pulses and redirects. Honors
+  `prefers-reduced-motion` (skips straight to the final state).
+  - Default (off): a brief, calm "Mail empfangen → Mail analysiert → Weiterleitung
+    zum Report" and then the redirect — no flashy animation.
+  - New env var documented in `.env.example` and the env migration.
+
 ## [1.7.0] - 2026-06-04
 
 ### Added

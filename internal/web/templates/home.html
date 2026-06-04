@@ -148,7 +148,8 @@
            id="check-panel"
            data-token=""
            data-domain="{{.Domain}}"
-           data-public-url="{{.PublicURL}}">
+           data-public-url="{{.PublicURL}}"
+           data-check-animation="{{if .CheckAnimation}}1{{else}}0{{end}}">
 
         <div class="card-header py-3 d-flex align-items-center gap-2">
           <i class="bi bi-envelope-at text-primary"></i>
@@ -213,6 +214,17 @@
               <p id="check-wait-msg" class="text-secondary small mb-0">Warte auf eingehende E-Mail &hellip;</p>
               <div id="check-steps" class="mp-check-steps d-none mt-3 mx-auto"></div>
               <p id="check-status" class="mb-0 text-secondary small mt-2 d-none"></p>
+            </div>
+
+            <!-- WOW-Scan (nur wenn ENABLE_CHECK_ANIMATION aktiv) -->
+            <div id="mp-scan" class="mp-scan d-none">
+              <div class="mp-scan-ring" id="mp-scan-ring" style="--score:0%">
+                <div class="mp-scan-ring-inner">
+                  <span class="mp-scan-score" id="mp-scan-score">0.0</span>
+                  <span class="mp-scan-sub">/10</span>
+                </div>
+              </div>
+              <div class="mp-scan-term" id="mp-scan-term" aria-hidden="true"></div>
             </div>
 
             <p id="check-status-idle" class="mb-0 text-center text-secondary small">

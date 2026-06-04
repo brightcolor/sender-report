@@ -670,19 +670,40 @@ function _stopStepAnimation() {
   _animStarted = false; _pendingHref = null; _reportChecks = null;
   const el = document.getElementById('check-steps');
   if (el) el.innerHTML = '';
+  // Reset the WOW-scan container + restore the waiting spinner for a re-run.
+  const scan = document.getElementById('mp-scan');
+  if (scan) scan.classList.add('d-none');
+  const ring = document.getElementById('mp-scan-ring');
+  if (ring) { ring.classList.remove('is-done'); ring.style.setProperty('--score', '0%'); }
+  const term = document.getElementById('mp-scan-term');
+  if (term) term.innerHTML = '';
+  document.querySelector('.mp-inbox-anim')?.classList.remove('d-none');
+}
+
+function _animationEnabled() {
+  return document.getElementById('check-panel')?.dataset?.checkAnimation === '1';
+}
+
+function _prefersReducedMotion() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 }
 
 function handleCheckStatusEvent(data) {
   if (data.latest_report_path) {
-    // Report ready — fetch real check data, then start animation (once)
-    if (!_animStarted) {
-      _pendingHref = withReportKey(data.latest_report_path);
-      _fetchReportChecks(data.latest_report_path).then(() => {
-        document.getElementById('check-wait-msg')?.classList.add('d-none');
-        document.getElementById('check-steps')?.classList.remove('d-none');
-        _startStepAnimation(_reportChecks || []);
-      });
+    if (_animStarted) return;
+    _animStarted = true;
+    _pendingHref = withReportKey(data.latest_report_path);
+    const score = (typeof data.latest_score === 'number') ? data.latest_score : parseFloat(data.latest_score);
+
+    if (!_animationEnabled()) {
+      // Default: brief "received → analysed → redirect", no flashy animation.
+      runMinimalRedirect(_pendingHref);
+      return;
     }
+    // Opt-in WOW scan: live terminal feed + score ring counting up.
+    _fetchReportChecks(data.latest_report_path).then(() => {
+      runWowScan(_reportChecks || [], isNaN(score) ? null : score, _pendingHref);
+    });
     return;
   }
   if (data.latest_message_id) {
@@ -693,6 +714,98 @@ function handleCheckStatusEvent(data) {
     }
     return;
   }
+}
+
+// runMinimalRedirect: default path (animation off) — a short, calm status
+// progression, then navigate to the report.
+function runMinimalRedirect(href) {
+  const go = () => { if (href) window.location.href = href; };
+  const msg = document.getElementById('check-wait-msg');
+  document.getElementById('check-steps')?.classList.add('d-none');
+  if (!msg || _prefersReducedMotion()) { go(); return; }
+  msg.classList.remove('d-none');
+  msg.innerHTML = '<i class="bi bi-check2-circle text-success me-1"></i>Mail empfangen';
+  setTimeout(() => { msg.innerHTML = '<i class="bi bi-search text-primary me-1"></i>Mail analysiert &hellip;'; }, 450);
+  setTimeout(() => { msg.innerHTML = '<i class="bi bi-box-arrow-up-right text-primary me-1"></i>Weiterleitung zum Report &hellip;'; }, 1000);
+  setTimeout(go, 1400);
+}
+
+function _scoreColorVar(v) {
+  if (v >= 7.5) return 'var(--bs-success)';
+  if (v >= 5.5) return 'var(--bs-warning)';
+  return 'var(--bs-danger)';
+}
+
+// runWowScan: opt-in "scanner" experience — a live monospace terminal tickering
+// through the checks while a central score ring fills and counts up to the final
+// score, then a pulse and redirect.
+function runWowScan(checks, score, href) {
+  const scan    = document.getElementById('mp-scan');
+  const term    = document.getElementById('mp-scan-term');
+  const ring    = document.getElementById('mp-scan-ring');
+  const scoreEl = document.getElementById('mp-scan-score');
+  const go = () => { if (href) window.location.href = href; };
+
+  document.querySelector('.mp-inbox-anim')?.classList.add('d-none');
+  document.getElementById('check-wait-msg')?.classList.add('d-none');
+  document.getElementById('check-steps')?.classList.add('d-none');
+  if (!scan || !term || !ring || !scoreEl) { go(); return; }
+  scan.classList.remove('d-none');
+  term.innerHTML = '';
+
+  const finalScore = (typeof score === 'number' && !isNaN(score)) ? score : 10;
+
+  const finish = () => {
+    ring.style.setProperty('--score', (finalScore * 10) + '%');
+    ring.style.setProperty('--mp-score-color', _scoreColorVar(finalScore));
+    scoreEl.textContent = finalScore.toFixed(1);
+    ring.classList.add('is-done');
+    setTimeout(go, 950);
+  };
+
+  if (_prefersReducedMotion()) { finish(); return; }
+
+  const steps = ANALYSIS_STEPS.map((s) => ({
+    label: s.label,
+    status: _worstStatus(checks, s.matchIds) || 'pass',
+  }));
+
+  const startTs = (performance && performance.now) ? performance.now() : Date.now();
+  const totalMs = steps.length * 300 + 500;
+
+  // Continuous ring count-up across the whole scan.
+  const rampRing = (now) => {
+    const t = (now || Date.now());
+    const p = Math.min(1, (t - startTs) / totalMs);
+    const eased = 1 - Math.pow(1 - p, 3);
+    const v = finalScore * eased;
+    ring.style.setProperty('--score', (v * 10) + '%');
+    ring.style.setProperty('--mp-score-color', _scoreColorVar(v));
+    scoreEl.textContent = v.toFixed(1);
+    if (p < 1) requestAnimationFrame(rampRing);
+  };
+  requestAnimationFrame(rampRing);
+
+  const resCode = (st) => ({ pass: 'PASS', warn: 'WARN', fail: 'FAIL', info: 'INFO' }[st] || 'OK');
+  let i = 0;
+  const addLine = () => {
+    if (i >= steps.length) {
+      term.querySelector('.mp-scan-cursor')?.classList.remove('mp-scan-cursor');
+      setTimeout(finish, 300);
+      return;
+    }
+    const s = steps[i];
+    term.querySelector('.mp-scan-cursor')?.classList.remove('mp-scan-cursor');
+    const line = document.createElement('div');
+    line.className = 'mp-scan-line ' + (s.status === 'pass' ? 'ok' : s.status) + ' mp-scan-cursor';
+    line.innerHTML = '<span class="arrow">&gt;</span><span class="lbl">' + s.label + '</span>' +
+                     '<span class="res">' + resCode(s.status) + '</span>';
+    term.appendChild(line);
+    while (term.children.length > 8) term.removeChild(term.firstChild);
+    i++;
+    setTimeout(addLine, 220 + Math.random() * 150);
+  };
+  addLine();
 }
 
 function startCheckLoop() {

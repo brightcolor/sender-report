@@ -91,6 +91,9 @@ var All = []VarDef{
 	{Key: "ENABLE_SPAMASSASSIN", Default: "false", Comment: "Enable SpamAssassin integration (optional, disabled by default)"},
 	{Key: "SPAMASSASSIN_HOSTPORT", Default: "spamd:783", Comment: "SpamAssassin spamd address (only used when ENABLE_SPAMASSASSIN=true)"},
 
+	// ── UI ────────────────────────────────────────────────────────────────────
+	{Group: "UI", Key: "ENABLE_CHECK_ANIMATION", Default: "false", Comment: "Animated 'scanning' effect on the home page while waiting for the report (default: off → received → analysed → redirect)"},
+
 	// ── Alerting ──────────────────────────────────────────────────────────────
 	{Group: "Alerting", Key: "ALERT_WEBHOOK_URL", Default: "", Comment: "Webhook URL for error/warning notifications (JSON POST)"},
 
