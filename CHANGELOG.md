@@ -4,7 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.12.0] - 2026-06-04
+## [1.13.0] - 2026-06-04
+
+### Changed
+- **Reworked the scoring to be importance-weighted and realistic.** The score now
+  starts at 10 and *only* goes down for problems — no more inflation from
+  "expected" passes. Each check's impact is derived consistently from its
+  importance × status (mirroring how real mail systems weight things):
+  - Authentication & reputation dominate: a **critical** failure (SPF/DKIM/DMARC,
+    PTR, RBL, domain/link blocklist) costs ~−2.6; **important** ~−1.3; **recommended**
+    ~−0.5; **optional** signals (DNSSEC, DANE, BIMI, MTA-STS, …) never penalise.
+    So one critical failure outweighs a handful of cosmetic content nits.
+  - **Domain age is now dynamic/continuous**: a brand-new domain is penalised
+    strongly and the penalty fades smoothly to zero as the domain matures (~1 year),
+    instead of the old fixed steps.
+  - Reputation checks recalibrated: RBL scales with the number of lists hit
+    (−1.3 → −3.0); SpamAssassin "spam" is a fail (−1.6); Rspamd reject −2.2 /
+    soft-reject −1.5 / add-header −0.8.
+  - Importance tiers updated accordingly (domain-/link-blocklist → Kritisch;
+    From-display-name and Received-chain → Wichtig); the /about reference reflects this.
 
 ### Removed
 - **The home-page scan animation (terminal/score-ring/modal) is gone.** The flow

@@ -983,14 +983,37 @@ func domainAgeCheck(ctx context.Context, domain string) model.CheckResult {
 	ageDays := int(time.Since(created).Hours() / 24)
 	det["registered"] = created.Format("2006-01-02")
 	det["age_days"] = strconv.Itoa(ageDays)
-	switch {
-	case ageDays < 30:
-		return withDetails(warn("domain_age", "Domain-Alter", -0.8, fmt.Sprintf("Domain %s ist erst %d Tage alt (registriert %s) – sehr junge Domains sind ein starkes Spam-/Phishing-Signal.", reg, ageDays, created.Format("2006-01-02")), "Junge Domains langsam 'warmlaufen' (geringe Volumina, saubere Empfängerlisten) und SPF/DKIM/DMARC vollständig konfigurieren."), det)
-	case ageDays < 90:
-		return withDetails(warn("domain_age", "Domain-Alter", -0.3, fmt.Sprintf("Domain %s ist %d Tage alt (registriert %s) – noch jung; viele Filter sind bei Domains unter 90 Tagen vorsichtig.", reg, ageDays, created.Format("2006-01-02")), "Reputation weiter aufbauen und konstantes, sauberes Sendeverhalten beibehalten."), det)
-	default:
-		return withDetails(pass("domain_age", "Domain-Alter", 0.1, fmt.Sprintf("Domain %s ist %d Tage alt (registriert %s) – etabliertes Domain-Alter.", reg, ageDays, created.Format("2006-01-02")), ""), det)
+
+	// Continuous penalty: a brand-new domain is a strong spam/phishing signal that
+	// fades smoothly to zero as the domain matures (≈ 1 year). Quadratic so very
+	// young domains are hit hard while the curve flattens out for older ones.
+	delta := 0.0
+	if ageDays < 365 {
+		f := 1 - float64(ageDays)/365.0 // 1.0 at 0 days → 0.0 at one year
+		delta = -2.0 * f * f
+		delta = float64(int(delta*100)) / 100 // 2 decimals, no math import
 	}
+	status := "pass"
+	switch {
+	case delta <= -1.0:
+		status = "fail"
+	case delta < 0:
+		status = "warn"
+	}
+	det["age_penalty"] = fmt.Sprintf("%.2f", delta)
+
+	var summary, sugg string
+	switch status {
+	case "fail":
+		summary = fmt.Sprintf("Domain %s ist erst %d Tage alt (registriert %s) – sehr junge Domains sind ein starkes Spam-/Phishing-Signal; der Einfluss sinkt, je älter die Domain wird.", reg, ageDays, created.Format("2006-01-02"))
+		sugg = "Junge Domains langsam 'warmlaufen' (geringe Volumina, saubere Empfängerlisten) und SPF/DKIM/DMARC vollständig konfigurieren."
+	case "warn":
+		summary = fmt.Sprintf("Domain %s ist %d Tage alt (registriert %s) – noch relativ jung; viele Filter sind im ersten Jahr vorsichtiger.", reg, ageDays, created.Format("2006-01-02"))
+		sugg = "Reputation weiter aufbauen und konstantes, sauberes Sendeverhalten beibehalten."
+	default:
+		summary = fmt.Sprintf("Domain %s ist %d Tage alt (registriert %s) – etabliertes Domain-Alter.", reg, ageDays, created.Format("2006-01-02"))
+	}
+	return withDetails(model.CheckResult{ID: "domain_age", Name: "Domain-Alter", Status: status, ScoreDelta: delta, Summary: summary, Suggestion: sugg}, det)
 }
 
 // dnsblListed reports whether <name>.<provider> returns a 127.0.0.x listing
@@ -1077,6 +1100,18 @@ func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult 
 	c.Category = checkCategory(c.ID)
 	c.Severity = checkSeverity(c.Status)
 	c.Importance = checkImportance(c.ID)
+
+	// Centralised, importance-weighted scoring. The score starts at 10 and only
+	// goes down for problems (no inflation from "expected" passes). Most checks
+	// derive their impact purely from (importance × status) so the weighting is
+	// consistent and realistic; a few checks compute their own continuous or
+	// reputation-based magnitude and keep it.
+	switch c.ID {
+	case "domain_age", "rbl", "spamassassin", "rspamd":
+		// keep the self-computed ScoreDelta
+	default:
+		c.ScoreDelta = scoreFor(c.Importance, c.Status)
+	}
 	if c.TechnicalDetails == nil {
 		c.TechnicalDetails = map[string]string{}
 	}
@@ -1288,18 +1323,52 @@ func checkCategory(id string) string {
 // the reference on the /about page: Kritisch | Wichtig | Empfohlen | Optional.
 func checkImportance(id string) string {
 	switch id {
-	case "spf", "dkim", "dmarc", "ptr", "rbl":
+	case "spf", "dkim", "dmarc", "ptr", "rbl", "domain_blocklist", "link_blocklist":
+		// Authentication + reputation: failing these is what really blocks mail.
 		return "Kritisch"
 	case "spf_strictness", "dkim_keylength", "dmarc_policy",
 		"spf_alignment", "dkim_alignment", "dmarc_alignment", "from_alignment",
 		"helo", "mx_records", "tls_transport",
-		"spamassassin", "rspamd", "domain_blocklist", "link_blocklist",
-		"list_unsub", "mime_parse", "mime_ct", "mime_boundary", "message_id":
+		"spamassassin", "rspamd", "display_name",
+		"list_unsub", "mime_parse", "mime_ct", "mime_boundary", "message_id", "received_chain":
 		return "Wichtig"
 	case "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa", "arc", "preheader":
 		return "Optional"
 	default:
 		return "Empfohlen"
+	}
+}
+
+// scoreFor returns a check's contribution to the score from its importance tier
+// and status. Deductions only — passes/infos are neutral (10 = clean baseline);
+// optional/advanced signals never penalise. Tuned to mirror how real mail systems
+// weight things: authentication and reputation dominate, content nits are minor.
+func scoreFor(importance, status string) float64 {
+	switch status {
+	case "fail":
+		switch importance {
+		case "Kritisch":
+			return -2.6
+		case "Wichtig":
+			return -1.3
+		case "Optional":
+			return 0
+		default: // Empfohlen
+			return -0.5
+		}
+	case "warn":
+		switch importance {
+		case "Kritisch":
+			return -1.3
+		case "Wichtig":
+			return -0.6
+		case "Optional":
+			return 0
+		default: // Empfohlen
+			return -0.25
+		}
+	default: // pass / info → no reward, no penalty
+		return 0
 	}
 }
 
@@ -2153,11 +2222,16 @@ func rblHeuristics(ctx context.Context, remoteIP string, providers []string) []m
 		"deliverability_impact": rblImpactText(listed),
 	}
 	if listed > 0 {
-		scoreDelta := -0.8
+		// Being on a blacklist is one of the strongest real-world deliverability
+		// killers; scale with the number of lists hit.
+		scoreDelta := -1.3
 		status := "warn"
 		if listed >= 2 {
-			scoreDelta = -1.4
+			scoreDelta = -2.2
 			status = "fail"
+		}
+		if listed >= 3 {
+			scoreDelta = -3.0
 		}
 		summary := fmt.Sprintf("Die Absender-IP %s ist auf %d der geprüften RBL(s) gelistet: %s.", remoteIP, listed, strings.Join(listedProviders, ", "))
 		rec := rblListedRecommendation(remoteIP, listedProviders)
@@ -2372,10 +2446,10 @@ func spamAssassinHeuristic(ctx context.Context, hostport, raw string) model.Chec
 	}
 	details["spam_line"] = emptyFallback(spamLine, "none")
 	if strings.Contains(lower, "spam: true") {
-		return withDetails(warn("spamassassin", "SpamAssassin", -1.0, emptyFallback(spamLine, "SpamAssassin stuft Nachricht als Spam ein."), "SpamAssassin-Regeln/Symbole prüfen und Mailinhalt überarbeiten."), details)
+		return withDetails(fail("spamassassin", "SpamAssassin", -1.6, emptyFallback(spamLine, "SpamAssassin stuft Nachricht als Spam ein."), "SpamAssassin-Regeln/Symbole prüfen und Mailinhalt überarbeiten."), details)
 	}
 	if spamLine != "" {
-		return withDetails(pass("spamassassin", "SpamAssassin", 0.2, spamLine, ""), details)
+		return withDetails(pass("spamassassin", "SpamAssassin", 0.0, spamLine, ""), details)
 	}
 	return withDetails(info("spamassassin", "SpamAssassin", 0.0, "SpamAssassin Antwort ohne klassisches Spam-Headerformat erhalten.", ""), details)
 }
@@ -2444,15 +2518,17 @@ func rspamdHeuristic(ctx context.Context, endpointURL, password, raw string) mod
 	}
 
 	switch action {
-	case "reject", "soft reject":
-		return withDetails(fail("rspamd", "Rspamd", -1.2, summary, suggestion), details)
+	case "reject":
+		return withDetails(fail("rspamd", "Rspamd", -2.2, summary, suggestion), details)
+	case "soft reject":
+		return withDetails(fail("rspamd", "Rspamd", -1.5, summary, suggestion), details)
 	case "add header", "rewrite subject", "greylist":
-		return withDetails(warn("rspamd", "Rspamd", -0.6, summary, suggestion), details)
+		return withDetails(warn("rspamd", "Rspamd", -0.8, summary, suggestion), details)
 	case "no action":
-		return withDetails(pass("rspamd", "Rspamd", 0.2, summary, ""), details)
+		return withDetails(pass("rspamd", "Rspamd", 0.0, summary, ""), details)
 	default:
 		if parsed.RequiredScore > 0 && parsed.Score >= parsed.RequiredScore {
-			return withDetails(warn("rspamd", "Rspamd", -0.6, summary, suggestion), details)
+			return withDetails(warn("rspamd", "Rspamd", -0.8, summary, suggestion), details)
 		}
 		return withDetails(info("rspamd", "Rspamd", 0.0, summary, ""), details)
 	}

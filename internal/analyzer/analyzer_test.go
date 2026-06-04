@@ -298,3 +298,32 @@ func TestAnalyzeNoPanicOnGarbageInput(t *testing.T) {
 		}
 	}
 }
+
+func TestScoreForWeighting(t *testing.T) {
+	// Passes/infos never change the score (no inflation).
+	for _, imp := range []string{"Kritisch", "Wichtig", "Empfohlen", "Optional"} {
+		if got := scoreFor(imp, "pass"); got != 0 {
+			t.Errorf("pass/%s should be 0, got %v", imp, got)
+		}
+		if got := scoreFor(imp, "info"); got != 0 {
+			t.Errorf("info/%s should be 0, got %v", imp, got)
+		}
+	}
+	// A critical failure must hurt far more than a recommended/cosmetic one.
+	if scoreFor("Kritisch", "fail") >= scoreFor("Wichtig", "fail") {
+		t.Fatal("critical fail should be more negative than important fail")
+	}
+	if scoreFor("Wichtig", "fail") >= scoreFor("Empfohlen", "fail") {
+		t.Fatal("important fail should be more negative than recommended fail")
+	}
+	// Optional checks never penalise.
+	if scoreFor("Optional", "fail") != 0 || scoreFor("Optional", "warn") != 0 {
+		t.Fatal("optional checks must never penalise the score")
+	}
+	// One critical failure should outweigh several cosmetic warnings.
+	crit := scoreFor("Kritisch", "fail")
+	cosmetic := 4 * scoreFor("Empfohlen", "warn")
+	if crit >= cosmetic {
+		t.Fatalf("one critical fail (%v) should outweigh 4 cosmetic warns (%v)", crit, cosmetic)
+	}
+}
