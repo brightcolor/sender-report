@@ -1415,6 +1415,22 @@ var GROUP_HINTS = {
   'Header und Rohdaten': 'Technische Basis-Header (Date, Message-ID, Received-Kette). Fehlende oder unplausible Pflichtfelder deuten auf einen fehlkonfigurierten Mailserver hin.'
 };
 
+// groupBadgesHTML / groupStatusHTML build the section-header counters and status
+// pill; shared by the initial render and the post-recheck header update.
+function groupBadgesHTML(p,w,f,inf){
+  return (p?'<span class="badge mp-grp-badge pass">'+p+' ✓</span>':'')+
+         (w?'<span class="badge mp-grp-badge warn">'+w+' !</span>':'')+
+         (f?'<span class="badge mp-grp-badge fail">'+f+' ✗</span>':'')+
+         (inf?'<span class="badge mp-grp-badge info">'+inf+' i</span>':'');
+}
+function groupStatusHTML(grpState){
+  return grpState==='fail'
+    ? '<span class="mp-group-status fail"><i class="bi bi-exclamation-octagon-fill"></i><span class="mp-group-status-text">Handlungsbedarf</span></span>'
+    : (grpState==='warn'
+      ? '<span class="mp-group-status warn"><i class="bi bi-exclamation-triangle-fill"></i><span class="mp-group-status-text">Prüfen empfohlen</span></span>'
+      : '<span class="mp-group-status pass"><i class="bi bi-check-circle-fill"></i><span class="mp-group-status-text">Alles in Ordnung</span></span>');
+}
+
 function renderCheckGroup(name, checks, gi) {
   checks = sortChecksBySeverity(checks);
   var p=0,w=0,f=0,inf=0;
@@ -1422,31 +1438,41 @@ function renderCheckGroup(name, checks, gi) {
     if(c.status==='pass')p++; else if(c.status==='warn')w++;
     else if(c.status==='fail')f++; else inf++;
   });
-  var badges=(p?'<span class="badge mp-grp-badge pass">'+p+' ✓</span>':'')+
-             (w?'<span class="badge mp-grp-badge warn">'+w+' !</span>':'')+
-             (f?'<span class="badge mp-grp-badge fail">'+f+' ✗</span>':'')+
-             (inf?'<span class="badge mp-grp-badge info">'+inf+' i</span>':'');
   var grpState = f>0 ? 'fail' : (w>0 ? 'warn' : 'pass');
-  var status = f>0
-    ? '<span class="mp-group-status fail"><i class="bi bi-exclamation-octagon-fill"></i><span class="mp-group-status-text">Handlungsbedarf</span></span>'
-    : (w>0
-      ? '<span class="mp-group-status warn"><i class="bi bi-exclamation-triangle-fill"></i><span class="mp-group-status-text">Prüfen empfohlen</span></span>'
-      : '<span class="mp-group-status pass"><i class="bi bi-check-circle-fill"></i><span class="mp-group-status-text">Alles in Ordnung</span></span>');
   var hint=GROUP_HINTS[name]?'<span class="mp-group-hint">'+esc(GROUP_HINTS[name])+'</span>':'';
   var gid='dgrp-'+gi;
+  // Section reload (only if the group has at least one re-checkable check).
+  var hasRecheckable = checks.some(function(c){ return RECHECKABLE[c.id]; });
+  var secBtn = hasRecheckable
+    ? '<button class="mp-group-recheck" type="button" title="Ganze Sektion neu prüfen" aria-label="Sektion neu prüfen"><i class="bi bi-arrow-clockwise"></i></button>'
+    : '';
   var h='<div class="card mb-3 mp-group-card mp-grp-'+grpState+'"><div class="card-header mp-group-header p-0">'+
         '<button class="mp-group-toggle collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#'+gid+'" aria-expanded="false" aria-controls="'+gid+'">'+
-        '<span class="mp-group-row">'+status+'<span class="mp-group-title">'+esc(name)+'</span>'+
-        '<span class="mp-group-badges">'+badges+'</span>'+
-        '<i class="bi bi-chevron-down mp-group-chevron"></i></span>'+hint+'</button></div>'+
+        '<span class="mp-group-row">'+groupStatusHTML(grpState)+'<span class="mp-group-title">'+esc(name)+'</span>'+
+        '<span class="mp-group-badges">'+groupBadgesHTML(p,w,f,inf)+'</span>'+
+        '<i class="bi bi-chevron-down mp-group-chevron"></i></span>'+hint+'</button>'+secBtn+'</div>'+
         '<div id="'+gid+'" class="collapse"><div class="card-body p-0"><div class="accordion accordion-flush" id="dec-grp-'+gi+'">';
   checks.forEach(function(c,ci){ h+=renderDecCheckItem(c, 'dec-'+gi+'-'+ci); });
   return h+'</div></div></div></div>';
 }
 
+// updateGroupHeader recomputes a section's counters + status pill + accent from
+// the current statuses of its check items (after one or more rechecks).
+function updateGroupHeader(card){
+  if(!card) return;
+  var items=card.querySelectorAll('.mp-check-item');
+  var p=0,w=0,f=0,inf=0;
+  items.forEach(function(it){ var s=it.dataset.status; if(s==='pass')p++; else if(s==='warn')w++; else if(s==='fail')f++; else inf++; });
+  var grpState = f>0?'fail':(w>0?'warn':'pass');
+  card.classList.remove('mp-grp-fail','mp-grp-warn','mp-grp-pass');
+  card.classList.add('mp-grp-'+grpState);
+  var b=card.querySelector('.mp-group-badges'); if(b) b.innerHTML=groupBadgesHTML(p,w,f,inf);
+  var st=card.querySelector('.mp-group-status'); if(st) st.outerHTML=groupStatusHTML(grpState);
+}
+
 // Check IDs that can be re-run live (DNS/RDAP/blocklist based) — mirrors
 // analyzer.Recheckable in Go.
-var RECHECKABLE = {spf:1, dmarc:1, mx_records:1, address_records:1, dkim_keylength:1,
+var RECHECKABLE = {spf:1, spf_strictness:1, dmarc:1, mx_records:1, address_records:1, dkim_keylength:1,
   envelope_mx:1, mta_sts:1, tls_rpt:1, bimi:1, dnssec:1, dane_tlsa:1, ptr:1, ptr_pattern:1,
   domain_age:1, domain_blocklist:1, link_blocklist:1};
 
@@ -1505,60 +1531,102 @@ function renderDecCheckItem(c, uid){
 // setupRecheckButtons wires the per-check "Neu prüfen" buttons. On click it
 // re-runs that single DNS/RDAP/blocklist check server-side (using the values from
 // the decrypted report) and replaces the item in place with the fresh result.
+// fetchRecheck runs one check server-side and returns the fresh result.
+async function fetchRecheck(id) {
+  var body = Object.assign({ check_id: id }, RECHECK_INPUTS);
+  var res = await fetch('/api/recheck/' + TOKEN + '/' + MSGREF, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store', body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+// replaceItemInPlace swaps a check item for its fresh render, preserving the
+// exact open/collapsed state, and flashes a ✓ on the refresh icon.
+function replaceItemInPlace(item, fresh) {
+  var uid = item.id.replace(/^chk-/, '');
+  var coll = item.querySelector('.accordion-collapse');
+  var wasOpen = !!(coll && coll.classList.contains('show'));
+  item.outerHTML = renderDecCheckItem(fresh, uid);
+  var newItem = document.getElementById('chk-' + uid);
+  if (newItem) {
+    var ab = newItem.querySelector('.accordion-button');
+    var cb = newItem.querySelector('.accordion-collapse');
+    if (ab) { ab.classList.toggle('collapsed', !wasOpen); ab.setAttribute('aria-expanded', wasOpen ? 'true' : 'false'); }
+    if (cb) cb.classList.toggle('show', wasOpen);
+    var nr = newItem.querySelector('.mp-chk-recheck');
+    if (nr) { var ni = nr.innerHTML; nr.innerHTML = '<i class="bi bi-check2 text-success"></i>'; setTimeout(function(){ if (nr) nr.innerHTML = ni; }, 2500); }
+  }
+  return newItem;
+}
+
+// applyToPayload updates the in-memory decrypted report with a fresh check (no save).
+function applyToPayload(fresh) {
+  if (!DEC_PAYLOAD || !DEC_PAYLOAD.report) return;
+  var checks = DEC_PAYLOAD.report.checks || (DEC_PAYLOAD.report.checks = []);
+  var idx = checks.findIndex(function(c){ return c.id === fresh.id; });
+  if (idx >= 0) checks[idx] = fresh; else checks.push(fresh);
+}
+
 function setupRecheckButtons() {
   if (!CONTENT || CONTENT.dataset.recheckBound === '1') return;
   CONTENT.dataset.recheckBound = '1';
   CONTENT.addEventListener('click', async function(ev) {
-    var btn = ev.target.closest('.mp-chk-recheck');
-    if (!btn) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    var id = btn.dataset.recheck;
-    var item = btn.closest('.mp-check-item');
-    if (!id || !item) return;
-    var uid = item.id.replace(/^chk-/, '');
-    // Remember the current open/collapsed state so the recheck leaves it untouched.
-    var wasOpen = !!(item.querySelector('.accordion-collapse') || {}).classList &&
-                  item.querySelector('.accordion-collapse').classList.contains('show');
-    var orig = btn.innerHTML;
-    btn.disabled = true;
-    btn.classList.add('is-busy');
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
-    try {
-      var body = Object.assign({ check_id: id }, RECHECK_INPUTS);
-      var res = await fetch('/api/recheck/' + TOKEN + '/' + MSGREF, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-        body: JSON.stringify(body)
+    // ── Section reload: re-run every re-checkable check in the group ──────────
+    var sbtn = ev.target.closest('.mp-group-recheck');
+    if (sbtn) {
+      ev.preventDefault(); ev.stopPropagation();
+      var card = sbtn.closest('.mp-group-card');
+      if (!card) return;
+      var targets = [];
+      card.querySelectorAll('.mp-check-item').forEach(function(it){
+        var rb = it.querySelector('.mp-chk-recheck');
+        if (rb) targets.push({ id: rb.dataset.recheck, itemId: it.id });
       });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      var fresh = await res.json();
-      // Replace the item in place, preserving its prior open/collapsed state
-      // exactly (the recheck must not open or close it).
-      item.outerHTML = renderDecCheckItem(fresh, uid);
-      var newItem = document.getElementById('chk-' + uid);
-      if (newItem) {
-        var ab = newItem.querySelector('.accordion-button');
-        var cb = newItem.querySelector('.accordion-collapse');
-        if (ab) { ab.classList.toggle('collapsed', !wasOpen); ab.setAttribute('aria-expanded', wasOpen ? 'true' : 'false'); }
-        if (cb) cb.classList.toggle('show', wasOpen);
-        // brief ✓ flash on the refresh icon
-        var nr = newItem.querySelector('.mp-chk-recheck');
-        if (nr) {
-          var ni = nr.innerHTML;
-          nr.innerHTML = '<i class="bi bi-check2 text-success"></i>';
-          setTimeout(function(){ if (nr) nr.innerHTML = ni; }, 2500);
-        }
+      if (!targets.length) return;
+      var so = sbtn.innerHTML; sbtn.disabled = true; sbtn.classList.add('is-busy');
+      sbtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+      recheckToast('Sektion wird neu geprüft …');
+      var failed = 0;
+      for (var i = 0; i < targets.length; i++) {
+        try {
+          var fr = await fetchRecheck(targets[i].id);
+          applyToPayload(fr);
+          var it = document.getElementById(targets[i].itemId);
+          if (it) replaceItemInPlace(it, fr);
+        } catch (e) { failed++; }
       }
       if (typeof setupCopyButtons === 'function') setupCopyButtons();
       if (typeof colorScoreDeltas === 'function') colorScoreDeltas();
+      updateGroupHeader(card);
+      sbtn.disabled = false; sbtn.classList.remove('is-busy'); sbtn.innerHTML = so;
+      await persistCurrent(failed ? 'Sektion teilweise aktualisiert' : 'Sektion aktualisiert');
+      return;
+    }
+
+    // ── Single check recheck ─────────────────────────────────────────────────
+    var btn = ev.target.closest('.mp-chk-recheck');
+    if (!btn) return;
+    ev.preventDefault(); ev.stopPropagation();
+    var id = btn.dataset.recheck;
+    var item = btn.closest('.mp-check-item');
+    if (!id || !item) return;
+    var grpCard = item.closest('.mp-group-card');
+    var orig = btn.innerHTML;
+    btn.disabled = true; btn.classList.add('is-busy');
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+    try {
+      var fresh = await fetchRecheck(id);
+      applyToPayload(fresh);
+      replaceItemInPlace(item, fresh);
+      if (typeof setupCopyButtons === 'function') setupCopyButtons();
+      if (typeof colorScoreDeltas === 'function') colorScoreDeltas();
+      updateGroupHeader(grpCard);
       recheckToast('Aktualisiert — speichere …');
-      persistRecheck(fresh); // re-encrypt + store so it survives a reload
+      await persistCurrent();
     } catch (e) {
-      btn.disabled = false;
-      btn.classList.remove('is-busy');
-      btn.innerHTML = orig;
+      btn.disabled = false; btn.classList.remove('is-busy'); btn.innerHTML = orig;
       recheckToast('Recheck fehlgeschlagen – später erneut versuchen.', true);
     }
   });
@@ -1590,9 +1658,9 @@ function jsComputeScore(checks) {
   return { score: s, label: label };
 }
 
-// persistRecheck re-encrypts the decrypted report with the rechecked value and
-// stores the new ciphertext + score server-side, so the change survives a reload.
-async function persistRecheck(fresh) {
+// persistCurrent re-encrypts the (already-updated) decrypted report and stores the
+// new ciphertext + recomputed score server-side, so rechecks survive a reload.
+async function persistCurrent(okMsg) {
   try {
     var crypto = window.SenderReportCrypto;
     if (!DEC_PAYLOAD || !DEC_PAYLOAD.report || !DEC_SECRET || !crypto) {
@@ -1600,8 +1668,6 @@ async function persistRecheck(fresh) {
       return;
     }
     var checks = DEC_PAYLOAD.report.checks || (DEC_PAYLOAD.report.checks = []);
-    var idx = checks.findIndex(function(c){ return c.id === fresh.id; });
-    if (idx >= 0) checks[idx] = fresh; else checks.push(fresh);
     var sc = jsComputeScore(checks);
     DEC_PAYLOAD.report.score = sc.score;
     DEC_PAYLOAD.report.score_label = sc.label;
@@ -1620,7 +1686,7 @@ async function persistRecheck(fresh) {
     var saved = await res.json();
     // Reflect the new authoritative score in the hero ring.
     updateHeroScore(saved.score, saved.score_label);
-    recheckToast('Gespeichert ✓');
+    recheckToast((okMsg || 'Gespeichert') + ' ✓');
   } catch (e) {
     recheckToast('Aktualisiert ✓ (Speichern fehlgeschlagen)', true);
   }

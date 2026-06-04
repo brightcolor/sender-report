@@ -86,7 +86,7 @@ type RecheckInput struct {
 // its key-length check.
 func Recheckable(id string) bool {
 	switch id {
-	case "spf", "dmarc", "mx_records", "address_records", "dkim_keylength",
+	case "spf", "spf_strictness", "dmarc", "mx_records", "address_records", "dkim_keylength",
 		"envelope_mx", "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa",
 		"ptr", "ptr_pattern", "domain_age", "domain_blocklist", "link_blocklist":
 		return true
@@ -109,6 +109,8 @@ func (e *Engine) Recheck(ctx context.Context, id string, in RecheckInput) (res m
 	switch id {
 	case "spf":
 		res = spfRecordRecheck(ctx, firstNonEmpty(in.EnvelopeDomain, in.FromDomain))
+	case "spf_strictness":
+		res = spfStrictnessRecheck(ctx, firstNonEmpty(in.EnvelopeDomain, in.FromDomain))
 	case "dmarc":
 		res = dmarcRecordRecheck(ctx, in.FromDomain)
 	case "mx_records":
@@ -171,6 +173,23 @@ func spfRecordRecheck(ctx context.Context, domain string) model.CheckResult {
 		return info("spf", "SPF", 0, fmt.Sprintf("Kein SPF-Record (v=spf1) für %s gefunden.", domain), "TXT-Record mit v=spf1 auf der Envelope-From-Domain veröffentlichen.")
 	}
 	return pass("spf", "SPF", 0, fmt.Sprintf("SPF-Record für %s vorhanden: %s. Der tatsächliche SPF-Pass wird beim nächsten echten Versand gegen die sendende IP geprüft.", domain, spf), "")
+}
+
+// spfStrictnessRecheck re-fetches the SPF TXT record and re-evaluates its
+// strictness (the trailing `all` qualifier + lookup count) after a DNS fix.
+func spfStrictnessRecheck(ctx context.Context, domain string) model.CheckResult {
+	domain = normDomain(domain)
+	if domain == "" {
+		return info("spf_strictness", "SPF-Strenge", 0, "Keine Domain für den SPF-Strenge-Recheck ermittelbar.", "")
+	}
+	recs, _ := net.DefaultResolver.LookupTXT(ctx, domain)
+	spf := make([]string, 0, 1)
+	for _, r := range recs {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(r)), "v=spf1") {
+			spf = append(spf, strings.TrimSpace(r))
+		}
+	}
+	return spfStrictnessCheck(spf)
 }
 
 // dmarcRecordRecheck re-looks up the _dmarc TXT record (used after a DNS fix).

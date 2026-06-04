@@ -4,7 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.14.5] - 2026-06-04
+## [1.15.0] - 2026-06-04
+
+### Added
+- **SPF strictness is now re-checkable** (refresh icon, fresh SPF-record lookup +
+  strictness re-evaluation).
+- **Section reload**: each section header has a refresh icon that re-runs *all*
+  re-checkable checks in that group at once, updates each item in place
+  (preserving open/collapsed state), refreshes the section's counters/status pill,
+  and saves once at the end.
 
 ### Changed
 - The theme toggle now always flips the currently *visible* theme on the first
