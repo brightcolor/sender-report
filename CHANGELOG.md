@@ -4,7 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.10.0] - 2026-06-04
+## [1.11.0] - 2026-06-04
+
+### Changed
+- The scanner now opens in a **larger terminal-window modal** (traffic-light title
+  bar, monospace, `✕` to close) that is **fullscreen on mobile** — much roomier
+  than the cramped inline box. The encryption finale shows the **full scheme**
+  (`X25519 + HKDF-SHA256 + AES-256-GCM`) and wraps instead of truncating. Closing
+  the modal restores the idle widget; the "Zum Report" button still ends the flow.
 
 ### Changed
 - **The scanner animation now looks like a real terminal and uses real data.**

@@ -806,7 +806,7 @@ function _fmtBytes(n) {
 // encryption finale. Returns [{html, delay}] — html is pre-escaped.
 function _buildScanLines(checks, meta, finalScore) {
   const lines = [];
-  const push = (html, delay) => lines.push({ html: html, delay: delay });
+  const push = (html, delay, cls) => lines.push({ html: html, delay: delay, cls: cls || '' });
   const tok = (t, cls) => '<span class="tok ' + cls + '">' + t + '</span>';
   const metaRow = (k, v) => '<span class="mk">' + _escAttr(k) + '</span><span class="mv">' + _escAttr(v) + '</span>';
   const addr = (document.getElementById('mail-address')?.textContent || '').trim();
@@ -852,9 +852,9 @@ function _buildScanLines(checks, meta, finalScore) {
   push('<span class="cmt"># Analyse abgeschlossen</span>', 320);
   push(tok('[=]', 'sum') + '<span class="lbl">Gesamtscore</span><span class="dlt">' + finalScore.toFixed(1) + ' / 10</span>', 520);
   push('', 220);
-  push(tok('[*]', 'info') + '<span class="lbl">Klartext wird aus dem Arbeitsspeicher entfernt …</span>', 520);
-  push(tok('[OK]', 'ok') + '<span class="lbl">Verschlüsselt · AES-256-GCM + X25519</span>', 620);
-  push('<span class="dim">       Schlüssel nur in deinem Link — niemand sonst kann mitlesen.</span>', 520);
+  push(tok('[*]', 'info') + '<span class="lbl">Klartext wird aus dem Arbeitsspeicher entfernt …</span>', 520, 'wrap');
+  push(tok('[OK]', 'ok') + '<span class="lbl">Inhalt verschlüsselt · X25519 + HKDF-SHA256 + AES-256-GCM</span>', 640, 'wrap');
+  push('<span class="dim">Schlüssel verbleibt nur in deinem Link — niemand sonst kann mitlesen.</span>', 540, 'wrap');
 
   return lines;
 }
@@ -875,6 +875,12 @@ function runWowScan(checks, meta, score, href) {
   scan.classList.remove('d-none');
   term.innerHTML = '';
 
+  // Open the terminal modal (larger, real-terminal look, fullscreen on mobile).
+  const modalEl = document.getElementById('mp-scan-modal');
+  if (modalEl && typeof bootstrap !== 'undefined') {
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  }
+
   const finalScore = (typeof score === 'number' && !isNaN(score)) ? score : 10;
 
   const showCta = () => { if (cta) { cta.href = href || '#'; cta.classList.remove('d-none'); } };
@@ -885,13 +891,14 @@ function runWowScan(checks, meta, score, href) {
     ring.classList.add('is-done');
   };
 
-  const appendLine = (html, withCursor) => {
+  const appendLine = (item, withCursor) => {
     term.querySelector('.mp-scan-cursor')?.classList.remove('mp-scan-cursor');
     const line = document.createElement('div');
-    line.className = 'mp-scan-line' + (withCursor ? ' mp-scan-cursor' : '');
-    line.innerHTML = (html && html.length) ? html : '&nbsp;';
+    line.className = 'mp-scan-line' + (item.cls ? ' ' + item.cls : '') + (withCursor ? ' mp-scan-cursor' : '');
+    line.innerHTML = (item.html && item.html.length) ? item.html : '&nbsp;';
     term.appendChild(line);
     while (term.children.length > 11) term.removeChild(term.firstChild);
+    term.scrollTop = term.scrollHeight;
   };
 
   const lines = _buildScanLines(checks, meta, finalScore);
@@ -919,7 +926,7 @@ function runWowScan(checks, meta, score, href) {
       setTimeout(showCta, 250);
       return;
     }
-    appendLine(lines[i].html, true);
+    appendLine(lines[i], true);
     const d = lines[i].delay;
     i++;
     setTimeout(step, d + Math.random() * 30);
@@ -1738,6 +1745,12 @@ function setupStatsPolling() {
   // Start after the count-up animation (~1s) so the initial ramp isn't cut short.
   setTimeout(start, 1300);
 }
+
+// Closing the scan terminal modal → reset its state and restore the idle widget.
+document.getElementById('mp-scan-modal')?.addEventListener('hidden.bs.modal', function() {
+  _stopStepAnimation();
+  setCheckUIState(false, '', 'ok');
+});
 
 // Lösch-Bestätigung im Modal
 document.getElementById('mp-delete-confirm-btn')?.addEventListener('click', confirmDeleteMailbox);

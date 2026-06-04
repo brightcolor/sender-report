@@ -1698,21 +1698,76 @@ body,
   100% { filter: drop-shadow(0 0 6px transparent); transform: scale(1); }
 }
 
-.mp-scan-term {
-  width: 100%;
-  max-width: 480px;
-  height: 250px;
-  overflow: hidden;
+/* ── Terminal window (scan modal) ─────────────────────────────────────────── */
+.mp-term-window {
   background: #0b1220;
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 10px;
-  padding: .7rem .9rem;
-  text-align: left;
+  color: #cbd5e1;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: .7rem;
+  overflow: hidden;
+}
+.mp-term-bar {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .55rem .85rem;
+  background: #0a0f1a;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.mp-term-dots { display: inline-flex; gap: .4rem; flex: 0 0 auto; }
+.mp-term-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.mp-term-dot.r { background: #ff5f56; }
+.mp-term-dot.y { background: #ffbd2e; }
+.mp-term-dot.g { background: #27c93f; }
+.mp-term-title {
+  flex: 1 1 auto;
+  text-align: center;
   font-family: 'Cascadia Code', ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: .8rem;
-  line-height: 1.65;
+  color: #6c7a91;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mp-term-close {
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  color: #6c7a91;
+  font-size: 1rem;
+  line-height: 1;
+  padding: .15rem .35rem;
+  cursor: pointer;
+}
+.mp-term-close:hover { color: #e2e8f0; }
+.mp-term-body {
+  background: #0b1220;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+  overflow-y: auto;
+}
+.mp-term-body .mp-scan { width: 100%; gap: 1.1rem; margin-top: 0; }
+.mp-term-body .mp-scan-ring-inner { background: #0b1220; }
+.mp-term-body .mp-scan-sub { color: #6c7a91; }
+
+.mp-scan-term {
+  width: 100%;
+  max-width: none;
+  height: clamp(260px, 48vh, 460px);
+  overflow: hidden;
+  background: #0a0f1a;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px;
+  padding: .85rem 1rem;
+  text-align: left;
+  font-family: 'Cascadia Code', ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: .85rem;
+  line-height: 1.7;
   color: #9fb3d1;
-  box-shadow: inset 0 0 30px rgba(0,0,0,.4);
+  box-shadow: inset 0 0 40px rgba(0,0,0,.45);
 }
 .mp-scan-line {
   display: flex;
@@ -1741,6 +1796,10 @@ body,
 .mp-scan-line .mk   { flex: 0 0 auto; width: 7em; color: #6c7a91; }
 .mp-scan-line .mv   { flex: 1 1 auto; min-width: 0; color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; }
 .mp-scan-line .dim  { color: #6c7a91; }
+
+/* Lines that may be long (the encryption finale) wrap instead of truncating. */
+.mp-scan-line.wrap { white-space: normal; align-items: flex-start; }
+.mp-scan-line.wrap .lbl { white-space: normal; overflow: visible; text-overflow: clip; }
 
 .mp-scan-cursor::after {
   content: '▋';
