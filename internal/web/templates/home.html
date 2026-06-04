@@ -115,7 +115,7 @@
       </div>
 
       <!-- ══ Stats-Leiste ════════════════════════════════════════════════ -->
-      <div class="mp-stats-bar mb-3" id="mp-stats-bar">
+      <div class="mp-stats-bar mb-3{{if and (eq .Stats.TotalMessages 0) (eq .Stats.TotalMailboxes 0) (eq .Stats.TotalReports 0)}} d-none{{end}}" id="mp-stats-bar">
         <div class="mp-stat-item">
           <span class="mp-stat-icon"><i class="bi bi-envelope-check"></i></span>
           <span class="mp-stat-value" id="stat-messages">{{.Stats.TotalMessages}}</span>

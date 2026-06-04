@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-06-04
+
+### Added
+- **Per-check importance badge** (Kritisch / Wichtig / Empfohlen / Optional) shown
+  directly on each check row in the report (server-rendered and E2E views), so
+  priorities are visible at a glance — not only in the /about reference.
+- **Friendly German labels for raw data.** The "Rohdaten" key/value tables now use
+  human-readable labels (e.g. `dkim_domain` → "DKIM-Domain (d=)") from a single
+  Go map shared with the client, with a humanised fallback for unknown keys.
+- **Animated count-up** for the home-page statistics on first load; the stats bar
+  is hidden on a fresh instance (all-zero) and revealed automatically once there
+  is real activity.
+- More unit tests: concurrent check runner (ordering + panic isolation),
+  importance classification, registrable-domain extraction, and an
+  Analyze-doesn't-panic-on-garbage-input guard.
+
+### Changed
+- **Network-bound checks now run concurrently** (DNS, RBL, RDAP,
+  SpamAssassin/Rspamd, MTA-STS/DNSSEC/DANE, …) with bounded parallelism instead of
+  sequentially, so reports are produced noticeably faster.
+
+### Fixed / Hardened
+- **Crash & hang protection.** Every check is panic-isolated and the whole
+  analysis is wrapped in a recover, so a single malformed mail can no longer take
+  down the process or drop the message; the SMTP connection handler also recovers
+  from panics as a last resort.
+- **Timeouts.** Inbound processing is bounded (45 s) and the analysis itself has a
+  30 s deadline, so a slow or unreachable DNS / third-party service can never hang
+  an SMTP worker indefinitely.
+
 ## [1.6.2] - 2026-06-03
 
 ### Changed

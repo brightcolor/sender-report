@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -65,13 +66,33 @@ func New(opts Options) *Engine {
 	return &Engine{opts: opts}
 }
 
-func (e *Engine) Analyze(ctx context.Context, in Input) model.AnalysisReport {
-	report := model.AnalysisReport{
+func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisReport) {
+	report = model.AnalysisReport{
 		MessageID:  in.Message.ID,
 		CreatedAt:  time.Now().UTC(),
 		Score:      10.0,
 		RawHeaders: map[string][]string{},
 	}
+
+	// Bound the whole analysis so a slow or unreachable DNS / third-party service
+	// can never hang the SMTP worker indefinitely.
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// Safety net: a panic in any single check (e.g. an unexpected parse edge case)
+	// must never crash the process or drop the message. Recover, record an error
+	// check, and finalise a valid (partial) report.
+	defer func() {
+		if r := recover(); r != nil {
+			report.Checks = append(report.Checks, errorCheck("analyze", fmt.Sprintf("%v", r)))
+			report.Score = 10.0
+			for _, c := range report.Checks {
+				report.Score += c.ScoreDelta
+			}
+			report.Score = clampScore(report.Score)
+			assignLabel(&report)
+		}
+	}()
 
 	parsed, parseErr := mail.ReadMessage(strings.NewReader(in.Message.RawSource))
 	if parseErr != nil {
@@ -181,30 +202,18 @@ func (e *Engine) Analyze(ctx context.Context, in Input) model.AnalysisReport {
 	}
 
 	primaryDomain := firstNonEmpty(fromDomain, envelopeDomain)
-	report.Checks = append(report.Checks, mxRecordCheck(ctx, primaryDomain))
-	report.Checks = append(report.Checks, addressRecordCheck(ctx, primaryDomain))
 	report.Checks = append(report.Checks, spfAlignmentCheck(fromDomain, envelopeDomain, spfResult, alignedSPF))
 	report.Checks = append(report.Checks, dkimAlignmentCheck(fromDomain, dkimDomain, dkimResult, alignedDKIM))
 	report.Checks = append(report.Checks, dmarcAlignmentCheck(fromDomain, spfResult, dkimResult, alignedSPF, alignedDKIM))
 
-	// Auth depth (Group A): policy strength, SPF strictness, DKIM key length.
+	// Auth depth (Group A) — local, header-derived checks.
 	report.Checks = append(report.Checks, dmarcPolicyCheck(dmarcRecords, dmarcPolicy))
 	report.Checks = append(report.Checks, spfStrictnessCheck(spfRecords))
-	report.Checks = append(report.Checks, dkimKeyLengthCheck(ctx, headers.Get("DKIM-Signature")))
 	report.Checks = append(report.Checks, displayNameCheck(headers.Get("From"), fromDomain))
-	report.Checks = append(report.Checks, envelopeBounceMXCheck(ctx, firstNonEmpty(returnPathDomain, envelopeDomain)))
 
-	// DNS maturity signals (Group B): transport security + brand indicators.
-	report.Checks = append(report.Checks, mtaStsCheck(ctx, primaryDomain))
-	report.Checks = append(report.Checks, tlsRptCheck(ctx, primaryDomain))
-	report.Checks = append(report.Checks, bimiCheck(ctx, primaryDomain))
-	report.Checks = append(report.Checks, dnssecCheck(ctx, primaryDomain))
-	report.Checks = append(report.Checks, daneCheck(ctx, primaryDomain))
-
-	// PTR
-	ptrCheck := ptrPlausibility(ctx, in.Message.RemoteIP, in.Message.HELO)
-	report.Checks = append(report.Checks, ptrCheck)
-	report.Checks = append(report.Checks, ptrPatternCheck(ctx, in.Message.RemoteIP))
+	// NOTE: all network-bound checks (DNS, RBL, RDAP, SpamAssassin/Rspamd) are
+	// collected and executed concurrently further below, so the report is not
+	// gated on dozens of sequential lookups.
 
 	// HELO/EHLO
 	helo := strings.TrimSpace(in.Message.HELO)
@@ -283,27 +292,58 @@ func (e *Engine) Analyze(ctx context.Context, in Input) model.AnalysisReport {
 	newsletterChecks := newsletterHeuristics(headers, parsedBody)
 	report.Checks = append(report.Checks, newsletterChecks...)
 
+	// ── Network-bound checks: executed concurrently ────────────────────────────
+	// Each does DNS / HTTP / TCP lookups and is independent of the others. Running
+	// them in parallel (each panic-isolated) keeps the report fast, and a single
+	// failing lookup can never abort the whole analysis.
+	netTasks := []checkTask{
+		{"mx_records", func(c context.Context) []model.CheckResult { return one(mxRecordCheck(c, primaryDomain)) }},
+		{"address_records", func(c context.Context) []model.CheckResult { return one(addressRecordCheck(c, primaryDomain)) }},
+		{"dkim_keylength", func(c context.Context) []model.CheckResult {
+			return one(dkimKeyLengthCheck(c, headers.Get("DKIM-Signature")))
+		}},
+		{"envelope_mx", func(c context.Context) []model.CheckResult {
+			return one(envelopeBounceMXCheck(c, firstNonEmpty(returnPathDomain, envelopeDomain)))
+		}},
+		{"mta_sts", func(c context.Context) []model.CheckResult { return one(mtaStsCheck(c, primaryDomain)) }},
+		{"tls_rpt", func(c context.Context) []model.CheckResult { return one(tlsRptCheck(c, primaryDomain)) }},
+		{"bimi", func(c context.Context) []model.CheckResult { return one(bimiCheck(c, primaryDomain)) }},
+		{"dnssec", func(c context.Context) []model.CheckResult { return one(dnssecCheck(c, primaryDomain)) }},
+		{"dane_tlsa", func(c context.Context) []model.CheckResult { return one(daneCheck(c, primaryDomain)) }},
+		{"ptr", func(c context.Context) []model.CheckResult {
+			return one(ptrPlausibility(c, in.Message.RemoteIP, in.Message.HELO))
+		}},
+		{"ptr_pattern", func(c context.Context) []model.CheckResult { return one(ptrPatternCheck(c, in.Message.RemoteIP)) }},
+	}
 	if e.opts.EnableRBLChecks {
-		rblChecks := rblHeuristics(ctx, in.Message.RemoteIP, e.opts.RBLProviders)
-		report.Checks = append(report.Checks, rblChecks...)
+		netTasks = append(netTasks, checkTask{"rbl", func(c context.Context) []model.CheckResult {
+			return rblHeuristics(c, in.Message.RemoteIP, e.opts.RBLProviders)
+		}})
 	}
 	if e.opts.EnableSpamAssassin && strings.TrimSpace(e.opts.SpamAssassinHostPort) != "" {
-		report.Checks = append(report.Checks, spamAssassinHeuristic(ctx, e.opts.SpamAssassinHostPort, in.Message.RawSource))
+		netTasks = append(netTasks, checkTask{"spamassassin", func(c context.Context) []model.CheckResult {
+			return one(spamAssassinHeuristic(c, e.opts.SpamAssassinHostPort, in.Message.RawSource))
+		}})
 	}
 	if e.opts.EnableRspamd && strings.TrimSpace(e.opts.RspamdURL) != "" {
-		report.Checks = append(report.Checks, rspamdHeuristic(ctx, e.opts.RspamdURL, e.opts.RspamdPassword, in.Message.RawSource))
+		netTasks = append(netTasks, checkTask{"rspamd", func(c context.Context) []model.CheckResult {
+			return one(rspamdHeuristic(c, e.opts.RspamdURL, e.opts.RspamdPassword, in.Message.RawSource))
+		}})
 	}
-
-	// Group C — opt-in third-party reputation checks (off by default).
-	// Enabled either globally by the operator (e.opts) or per-mailbox by the
-	// user who created the mailbox (in.*). See Input docs.
+	// Group C — opt-in third-party reputation checks (off by default). Enabled
+	// either globally by the operator (e.opts) or per-mailbox by the user (in.*).
 	if e.opts.EnableDomainAge || in.EnableDomainAge {
-		report.Checks = append(report.Checks, domainAgeCheck(ctx, primaryDomain))
+		netTasks = append(netTasks, checkTask{"domain_age", func(c context.Context) []model.CheckResult { return one(domainAgeCheck(c, primaryDomain)) }})
 	}
 	if e.opts.EnableDomainBlocklist || in.EnableDomainBlocklist {
-		report.Checks = append(report.Checks, domainBlocklistCheck(ctx, primaryDomain, e.opts.DomainBlocklistProviders))
-		report.Checks = append(report.Checks, linkBlocklistCheck(ctx, report.Links, e.opts.DomainBlocklistProviders))
+		netTasks = append(netTasks, checkTask{"domain_blocklist", func(c context.Context) []model.CheckResult {
+			return one(domainBlocklistCheck(c, primaryDomain, e.opts.DomainBlocklistProviders))
+		}})
+		netTasks = append(netTasks, checkTask{"link_blocklist", func(c context.Context) []model.CheckResult {
+			return one(linkBlocklistCheck(c, report.Links, e.opts.DomainBlocklistProviders))
+		}})
 	}
+	report.Checks = append(report.Checks, runChecksConcurrently(ctx, netTasks, 8)...)
 
 	enrichCtx := checkContext{
 		Message:        in.Message,
@@ -361,6 +401,60 @@ func fail(id, name string, delta float64, summary, suggestion string) model.Chec
 }
 func info(id, name string, delta float64, summary, suggestion string) model.CheckResult {
 	return model.CheckResult{ID: id, Name: name, Status: "info", ScoreDelta: delta, Summary: summary, Suggestion: suggestion}
+}
+
+// errorCheck represents a check that could not be completed internally (panic or
+// unexpected error). It is informational and never penalises the score.
+func errorCheck(id, msg string) model.CheckResult {
+	return model.CheckResult{
+		ID:               id,
+		Name:             "Prüfung nicht abgeschlossen",
+		Status:           "info",
+		ScoreDelta:       0,
+		Summary:          "Diese Prüfung konnte intern nicht abgeschlossen werden und wurde übersprungen.",
+		TechnicalDetails: map[string]string{"error": msg},
+		Category:         "Header und Rohdaten",
+	}
+}
+
+// one wraps a single CheckResult into a slice for the concurrent task runner.
+func one(c model.CheckResult) []model.CheckResult { return []model.CheckResult{c} }
+
+// checkTask is a named, network-bound check executed by runChecksConcurrently.
+type checkTask struct {
+	name string
+	fn   func(context.Context) []model.CheckResult
+}
+
+// runChecksConcurrently runs tasks in parallel (bounded by limit), isolating each
+// from panics, and returns their results in deterministic task order.
+func runChecksConcurrently(ctx context.Context, tasks []checkTask, limit int) []model.CheckResult {
+	if limit <= 0 {
+		limit = 8
+	}
+	results := make([][]model.CheckResult, len(tasks))
+	sem := make(chan struct{}, limit)
+	var wg sync.WaitGroup
+	for i, t := range tasks {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, t checkTask) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			defer func() {
+				if r := recover(); r != nil {
+					results[i] = []model.CheckResult{errorCheck(t.name, fmt.Sprintf("%v", r))}
+				}
+			}()
+			results[i] = t.fn(ctx)
+		}(i, t)
+	}
+	wg.Wait()
+	out := make([]model.CheckResult, 0, len(tasks))
+	for _, r := range results {
+		out = append(out, r...)
+	}
+	return out
 }
 
 type checkContext struct {
@@ -982,6 +1076,7 @@ func withDetails(c model.CheckResult, details map[string]string) model.CheckResu
 func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult {
 	c.Category = checkCategory(c.ID)
 	c.Severity = checkSeverity(c.Status)
+	c.Importance = checkImportance(c.ID)
 	if c.TechnicalDetails == nil {
 		c.TechnicalDetails = map[string]string{}
 	}
@@ -1186,6 +1281,25 @@ func checkCategory(id string) string {
 		return "Format und Inhalt"
 	default:
 		return "Header und Rohdaten"
+	}
+}
+
+// checkImportance classifies how much a check matters for deliverability, mirroring
+// the reference on the /about page: Kritisch | Wichtig | Empfohlen | Optional.
+func checkImportance(id string) string {
+	switch id {
+	case "spf", "dkim", "dmarc", "ptr", "rbl":
+		return "Kritisch"
+	case "spf_strictness", "dkim_keylength", "dmarc_policy",
+		"spf_alignment", "dkim_alignment", "dmarc_alignment", "from_alignment",
+		"helo", "mx_records", "tls_transport",
+		"spamassassin", "rspamd", "domain_blocklist", "link_blocklist",
+		"list_unsub", "mime_parse", "mime_ct", "mime_boundary", "message_id":
+		return "Wichtig"
+	case "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa", "arc", "preheader":
+		return "Optional"
+	default:
+		return "Empfohlen"
 	}
 }
 

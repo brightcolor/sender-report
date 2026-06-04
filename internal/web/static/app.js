@@ -1404,16 +1404,49 @@ setupCookieConsent();
 colorScoreDeltas();
 colorScoreMinis();
 
-// ── Stats-Leiste: Live-Update ──────────────────────────────────────────────────
+// ── Stats-Leiste: Count-up + Live-Update ───────────────────────────────────────
+
+function fmtStatNum(n) {
+  if (typeof Intl !== 'undefined') return new Intl.NumberFormat('de-DE').format(n);
+  return String(n);
+}
+
+// animateCount ramps an element's number from 0 to `to` with an ease-out curve.
+function animateCount(el, to, decimals) {
+  if (!el) return;
+  decimals = decimals || 0;
+  if (to <= 0) { el.textContent = decimals ? (0).toFixed(decimals) : '0'; return; }
+  var dur = 900, t0 = (performance && performance.now) ? performance.now() : Date.now();
+  function tick(now) {
+    var p = Math.min(1, (now - t0) / dur);
+    var eased = 1 - Math.pow(1 - p, 3);
+    var val = to * eased;
+    el.textContent = decimals ? val.toFixed(decimals) : fmtStatNum(Math.round(val));
+    if (p < 1) requestAnimationFrame(tick);
+    else el.textContent = decimals ? to.toFixed(decimals) : fmtStatNum(Math.round(to));
+  }
+  requestAnimationFrame(tick);
+}
+
+// initStatCountUp animates the server-rendered values up from zero once on load.
+function initStatCountUp() {
+  var bar = document.getElementById('mp-stats-bar');
+  if (!bar || bar.classList.contains('d-none')) return;
+  ['stat-messages', 'stat-mailboxes', 'stat-active'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var to = parseInt(String(el.textContent).replace(/[^0-9]/g, ''), 10) || 0;
+    el.textContent = '0';
+    animateCount(el, to, 0);
+  });
+  var sc = document.getElementById('stat-score');
+  if (sc) { var to = parseFloat(sc.textContent) || 0; sc.textContent = '0.0'; animateCount(sc, to, 1); }
+}
+
 function setupStatsPolling() {
   if (!document.getElementById('mp-stats-bar')) return;
 
-  function fmtNum(n) {
-    if (typeof Intl !== 'undefined') {
-      return new Intl.NumberFormat('de-DE').format(n);
-    }
-    return String(n);
-  }
+  function fmtNum(n) { return fmtStatNum(n); }
 
   function updateStat(id, val) {
     var el = document.getElementById(id);
@@ -1430,6 +1463,12 @@ function setupStatsPolling() {
       .then(function(r) { return r.ok ? r.json() : null; })
       .then(function(d) {
         if (!d) return;
+        // Reveal the bar the moment a fresh instance gets its first activity.
+        var bar = document.getElementById('mp-stats-bar');
+        if (bar && bar.classList.contains('d-none') &&
+            (d.total_messages > 0 || d.total_mailboxes > 0 || d.total_reports > 0)) {
+          bar.classList.remove('d-none');
+        }
         updateStat('stat-messages',  d.total_messages);
         updateStat('stat-mailboxes', d.total_mailboxes);
         updateStat('stat-active',    d.active_mailboxes);
@@ -1454,6 +1493,7 @@ setupExtendModal();
 // Home page: async mailbox init (after DOM ready, crypto libs loaded).
 if (document.getElementById('check-panel')) {
   initHomeMailbox();
+  initStatCountUp();
   setupStatsPolling();
 } else {
   setupMailboxPolling();

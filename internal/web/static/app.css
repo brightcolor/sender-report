@@ -830,6 +830,23 @@ body,
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
+/* Importance badge next to a check name (Kritisch / Wichtig / Empfohlen / Optional) */
+.mp-imp {
+  display: inline-block;
+  vertical-align: middle;
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  padding: .12rem .4rem;
+  border-radius: 99px;
+  margin-left: .15rem;
+  white-space: nowrap;
+}
+.mp-imp[data-imp="Kritisch"]  { background: rgba(var(--bs-danger-rgb), .14);  color: var(--bs-danger); }
+.mp-imp[data-imp="Wichtig"]   { background: rgba(var(--bs-warning-rgb), .18); color: var(--bs-warning); }
+.mp-imp[data-imp="Empfohlen"] { background: rgba(var(--bs-primary-rgb), .14); color: var(--bs-primary); }
+.mp-imp[data-imp="Optional"]  { background: rgba(var(--bs-secondary-rgb), .16); color: var(--bs-secondary-color); }
 
 .mp-delta {
   font-size: .875rem;
@@ -878,10 +895,8 @@ body,
   border-radius: var(--bs-border-radius-sm);
 }
 .mp-tech-dl dt {
-  font-size: .7rem;
-  font-weight: 800;
-  letter-spacing: .05em;
-  text-transform: uppercase;
+  font-size: .78rem;
+  font-weight: 700;
   color: var(--bs-secondary-color);
   padding-top: .05rem;
 }

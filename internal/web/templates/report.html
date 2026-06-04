@@ -317,7 +317,7 @@
                         <div class="mp-chk-inner">
                           <span class="mp-status-dot {{.Status}}">{{statusIcon .Status}}</span>
                           <span class="mp-chk-name">
-                            <strong>{{.Name}}</strong>
+                            <strong>{{.Name}}{{if .Importance}} <span class="mp-imp" data-imp="{{.Importance}}">{{.Importance}}</span>{{end}}</strong>
                             <small>{{.Summary}}</small>
                           </span>
                           <span class="mp-pill {{.Status}}">{{statusLabel .Status}}</span>
@@ -657,7 +657,7 @@ Kind regards,
                             </div>
                             <dl class="mp-tech-dl">
                               {{range $k, $v := .TechnicalDetails}}
-                              <div><dt>{{$k}}</dt><dd><code>{{$v}}</code></dd></div>
+                              <div><dt>{{techLabel $k}}</dt><dd><code>{{$v}}</code></dd></div>
                               {{end}}
                             </dl>
                           </div>
@@ -1094,6 +1094,8 @@ window.__mpReport = {
   },
   groups: {{jsonEncode .CheckGroups}}
 };
+// Friendly German labels for raw-data keys, shared from the server (one source).
+window.__mpTechLabels = {{techLabelsJSON}};
 </script>
 <script src="/static/vendor/jspdf.umd.min.js"></script>
 <script src="/static/pdf-report.js?v={{appVersion}}"></script>
@@ -1301,6 +1303,15 @@ function statusLbl(s) {
   return {pass:'Bestanden',warn:'Warnung',fail:'Fehler',info:'Info'}[s] || s;
 }
 
+// techLabel mirrors server.go techLabel(): friendly German label for a raw-data
+// key, with a humanised fallback for unknown keys.
+function techLabel(key) {
+  var map = window.__mpTechLabels || {};
+  if (map[key]) return map[key];
+  var s = String(key || '').replace(/_/g, ' ').trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : key;
+}
+
 // Sort checks so the most actionable bubble to the top within a section:
 // errors → warnings → infos → passed. Mirrors sortChecks() in server.go.
 var CHECK_RANK = { fail: 0, warn: 1, info: 2, pass: 3 };
@@ -1389,7 +1400,7 @@ function renderCheckGroup(name, checks, gi) {
        '<h2 class="accordion-header"><button class="accordion-button '+col+'" type="button" '+
        'data-bs-toggle="collapse" data-bs-target="#cb-'+uid+'">'+
        '<div class="mp-chk-inner"><span class="mp-status-dot '+esc(c.status)+'"></span>'+
-       '<span class="mp-chk-name"><strong>'+esc(c.name)+'</strong><small>'+esc(c.summary)+'</small></span>'+
+       '<span class="mp-chk-name"><strong>'+esc(c.name)+(c.importance?' <span class="mp-imp" data-imp="'+esc(c.importance)+'">'+esc(c.importance)+'</span>':'')+'</strong><small>'+esc(c.summary)+'</small></span>'+
        '<span class="mp-pill '+esc(c.status)+'">'+statusLbl(c.status)+'</span>'+
        '<strong class="mp-delta">'+esc(delta)+'</strong></div></button></h2>'+
        '<div id="cb-'+uid+'" class="accordion-collapse collapse '+open+'"><div class="accordion-body">';
@@ -1413,7 +1424,7 @@ function renderCheckGroup(name, checks, gi) {
            '<i class="bi bi-code me-1"></i>Rohdaten anzeigen</button>'+
            '<div id="raw-'+uid+'" class="collapse mt-2"><dl class="mp-tech-dl">';
         tdKeys.forEach(function(k){
-          h+='<div><dt>'+esc(k)+'</dt><dd><code>'+esc(c.technical_details[k])+'</code></dd></div>';
+          h+='<div><dt>'+esc(techLabel(k))+'</dt><dd><code>'+esc(c.technical_details[k])+'</code></dd></div>';
         });
         h+='</dl></div></div>';
       }

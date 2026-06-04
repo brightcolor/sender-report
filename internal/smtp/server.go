@@ -77,6 +77,13 @@ func (s *Server) Start(ctx context.Context) error {
 		s.wg.Add(1)
 		go func(c net.Conn) {
 			defer s.wg.Done()
+			// Last-resort safety net: an unrecovered panic in a connection handler
+			// would otherwise crash the entire process. Contain it per connection.
+			defer func() {
+				if r := recover(); r != nil && s.Logger != nil {
+					s.Logger.Printf("smtp: panic recovered in connection handler: %v", r)
+				}
+			}()
 			s.handleConn(ctx, c)
 		}(conn)
 	}

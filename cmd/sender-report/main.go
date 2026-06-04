@@ -180,6 +180,11 @@ func main() {
 }
 
 func processInbound(ctx context.Context, st *store.Store, engine *analyzer.Engine, cfg config.Config, logger *log.Logger, metrics *telemetry.Counters, alerter *telemetry.Alerter, rm smtp.ReceivedMail) error {
+	// Bound inbound processing (auth-header verification + analysis + storage) so a
+	// slow/unreachable DNS or third-party service can never block an SMTP worker.
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+
 	rcpt := strings.ToLower(strings.TrimSpace(rm.RcptTo))
 	if !matchesConfiguredDomain(cfg, rcpt) {
 		return nil

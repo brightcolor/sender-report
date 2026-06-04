@@ -185,6 +185,72 @@ func rblHitsFn(details map[string]string) []RBLHit {
 	return hits
 }
 
+// techLabels maps raw TechnicalDetails keys to friendly German labels. Shared
+// with the client (via techLabelsJSON) so the server-rendered and the E2E
+// client-rendered raw-data tables read identically. Unknown keys fall back to a
+// humanised form (underscores → spaces, capitalised).
+//
+//nolint:gochecknoglobals
+var techLabels = map[string]string{
+	"remote_ip": "Sendende IP", "helo": "HELO/EHLO", "helo_ehlo": "HELO/EHLO",
+	"ptr_hostname": "PTR-Hostname", "ptr_pattern": "PTR-Muster",
+	"dkim_result": "DKIM-Ergebnis", "dkim_domain": "DKIM-Domain (d=)", "dkim_signature": "DKIM-Signatur",
+	"dkim_aligned": "DKIM aligned", "key_type": "Schlüsseltyp", "key_bits": "Schlüssellänge (Bit)",
+	"dns_name":   "DNS-Name",
+	"spf_result": "SPF-Ergebnis", "spf_records": "SPF-Record(s)", "spf_aligned": "SPF aligned",
+	"all_mechanism": "SPF all-Mechanismus", "lookup_mechanisms_toplevel": "SPF DNS-Lookups (Top-Level)",
+	"dmarc_result": "DMARC-Ergebnis", "dmarc_records": "DMARC-Record(s)", "dmarc_policy": "DMARC-Policy (p=)", "policy": "Policy",
+	"from_domain": "From-Domain", "header_from": "Header-From", "header_from_domain": "Header-From-Domain",
+	"envelope_from_domain": "Envelope-From-Domain", "smtp_mail_from": "Envelope-From (MAIL FROM)",
+	"return_path": "Return-Path", "return_path_domain": "Return-Path-Domain", "bounce_domain": "Bounce-Domain",
+	"mx_host": "MX-Host", "mx_records": "MX-Records", "a_aaaa_records": "A/AAAA-Records",
+	"domain": "Domain", "registered": "Registriert am", "age_days": "Domain-Alter (Tage)", "rdap_error": "RDAP-Fehler",
+	"dnskey_records": "DNSKEY-Records", "tlsa_records": "TLSA-Records", "tlsa_name": "TLSA-Name", "mx_domain": "MX-Domain",
+	"checked_providers": "Geprüfte Listen", "listed_on": "Gelistet auf", "listed": "Gelistet",
+	"listed_providers": "Gelistet auf", "listing_responses": "Listing-Antworten", "lookup_errors": "Abfragefehler",
+	"deliverability_impact": "Auswirkung auf Zustellung", "rbl_query_prefix": "RBL-Abfrage", "query_names": "Abfrage-Namen",
+	"link_count": "Anzahl Links", "links": "Links", "link_domains_checked": "Geprüfte Link-Domains",
+	"display_name": "Anzeigename", "impersonated_brand": "Imitierte Marke", "embedded_domain": "Eingebettete Domain",
+	"subject": "Betreff", "subject_chars": "Betreff-Länge (Zeichen)", "exclamation_count": "Ausrufezeichen",
+	"message_id": "Message-ID", "date": "Datum", "date_header": "Datum-Header", "date_skew": "Zeitabweichung",
+	"received_count": "Anzahl Received-Header", "received_headers": "Received-Header",
+	"content_type": "Content-Type", "content_transfer_encoding": "Transfer-Encoding", "charset": "Zeichensatz",
+	"has_html_part": "HTML-Teil vorhanden", "has_text_part": "Text-Teil vorhanden",
+	"html_chars": "HTML-Zeichen", "text_chars": "Text-Zeichen", "image_count": "Bilder",
+	"image_text_ratio": "Bild/Text-Verhältnis", "attachment_count": "Anhänge", "part_count": "MIME-Teile",
+	"list_unsubscribe": "List-Unsubscribe", "list_id": "List-Id", "precedence": "Precedence",
+	"arc_seal": "ARC-Seal", "arc_message_signature": "ARC-Message-Signature",
+	"error": "Fehler", "parse_error": "Parse-Fehler", "raw_bytes": "Rohgröße (Bytes)",
+	"action": "Aktion", "required_score": "Schwellwert", "expected": "Erwartet", "spam_line": "Spam-Zeile",
+	"preheader": "Preheader", "multipart_alt": "multipart/alternative",
+}
+
+// humanizeKey turns "some_raw_key" into "Some raw key" as a fallback label.
+func humanizeKey(key string) string {
+	s := strings.ReplaceAll(strings.TrimSpace(key), "_", " ")
+	if s == "" {
+		return key
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func techLabel(key string) string {
+	if v, ok := techLabels[key]; ok {
+		return v
+	}
+	return humanizeKey(key)
+}
+
+// techLabelsJSON exposes the label map to the client so the E2E renderer uses the
+// same labels.
+func techLabelsJSON() (template.JS, error) {
+	b, err := json.Marshal(techLabels)
+	if err != nil {
+		return "", err
+	}
+	return template.JS(b), nil
+}
+
 // splitLinesFn splits a newline-separated string into a slice, skipping blank
 // lines and the sentinel value "none".
 func splitLinesFn(s string) []string {
@@ -311,6 +377,8 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"rblHits":            rblHitsFn,
 		"rblProviders":       rblProvidersFn,
 		"splitLines":         splitLinesFn,
+		"techLabel":          techLabel,
+		"techLabelsJSON":     techLabelsJSON,
 		"appVersion":         func() string { return version.Version },
 		"jsonEncode": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)

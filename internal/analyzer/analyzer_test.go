@@ -229,3 +229,72 @@ func mailDate(t *testing.T, value string) time.Time {
 	}
 	return parsed
 }
+
+func TestRunChecksConcurrentlyOrderAndPanicIsolation(t *testing.T) {
+	tasks := []checkTask{
+		{"a", func(context.Context) []model.CheckResult { return one(pass("a", "A", 0, "ok", "")) }},
+		{"boom", func(context.Context) []model.CheckResult { panic("kaboom") }},
+		{"b", func(context.Context) []model.CheckResult { return one(pass("b", "B", 0, "ok", "")) }},
+	}
+	got := runChecksConcurrently(context.Background(), tasks, 4)
+	if len(got) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(got))
+	}
+	// Deterministic task order preserved despite concurrency.
+	if got[0].ID != "a" || got[1].ID != "boom" || got[2].ID != "b" {
+		t.Fatalf("unexpected order: %s, %s, %s", got[0].ID, got[1].ID, got[2].ID)
+	}
+	// The panicking task degrades to a non-penalising info check.
+	if got[1].Status != "info" || got[1].ScoreDelta != 0 {
+		t.Fatalf("panicked task should be info/0, got %s/%v", got[1].Status, got[1].ScoreDelta)
+	}
+}
+
+func TestCheckImportanceLevels(t *testing.T) {
+	cases := map[string]string{
+		"spf":            "Kritisch",
+		"dkim":           "Kritisch",
+		"rbl":            "Kritisch",
+		"dkim_keylength": "Wichtig",
+		"mx_records":     "Wichtig",
+		"dnssec":         "Optional",
+		"bimi":           "Optional",
+		"date_skew":      "Empfohlen", // falls through to default
+	}
+	for id, want := range cases {
+		if got := checkImportance(id); got != want {
+			t.Errorf("checkImportance(%q) = %q, want %q", id, got, want)
+		}
+	}
+}
+
+func TestRegistrableDomain(t *testing.T) {
+	cases := map[string]string{
+		"mail.example.com":  "example.com",
+		"a.b.example.co.uk": "example.co.uk",
+		"example.org":       "example.org",
+		"":                  "",
+	}
+	for in, want := range cases {
+		if got := registrableDomain(in); got != want {
+			t.Errorf("registrableDomain(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestAnalyzeNoPanicOnGarbageInput(t *testing.T) {
+	engine := New(Options{}) // no network checks enabled
+	// Already-cancelled context → the internal timeout context is immediately done,
+	// so DNS-dependent checks return fast and the test stays quick + deterministic.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	for _, raw := range []string{"", "not a real email", "From: \x00\x01 broken", "Subject: x\r\n\r\nbody"} {
+		report := engine.Analyze(ctx, Input{Message: model.Message{RawSource: raw}})
+		if len(report.Checks) == 0 {
+			t.Fatalf("expected some checks even for garbage input %q", raw)
+		}
+		if report.Score < 0 || report.Score > 10 {
+			t.Fatalf("score out of range for %q: %v", raw, report.Score)
+		}
+	}
+}

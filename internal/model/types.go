@@ -54,6 +54,7 @@ type CheckResult struct {
 	DocLinks         []DocLink         `json:"doc_links,omitempty"`
 	Severity         string            `json:"severity,omitempty"`
 	Category         string            `json:"category,omitempty"`
+	Importance       string            `json:"importance,omitempty"` // Kritisch | Wichtig | Empfohlen | Optional
 }
 
 type AnalysisReport struct {
