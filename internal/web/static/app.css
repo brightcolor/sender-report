@@ -1721,9 +1721,9 @@ body,
   white-space: nowrap;
   animation: mp-line-in .26s ease both;
 }
-.mp-scan-line .lbl { color: #c4ccd6; overflow: hidden; text-overflow: ellipsis; }
-.mp-scan-line .res { margin-left: auto; font-weight: 700; }
-.mp-scan-line .dlt { color: #6c7a91; font-variant-numeric: tabular-nums; }
+.mp-scan-line .lbl { color: #c4ccd6; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mp-scan-line .res { flex: 0 0 auto; margin-left: .75rem; font-weight: 700; }
+.mp-scan-line .dlt { flex: 0 0 auto; margin-left: .5rem; color: #6c7a91; font-variant-numeric: tabular-nums; }
 .mp-scan-line.ok   .res { color: #4ade80; }
 .mp-scan-line.warn .res { color: #fbbf24; }
 .mp-scan-line.fail .res { color: #f87171; }

@@ -765,13 +765,17 @@ function runWowScan(checks, score, href) {
 
   if (_prefersReducedMotion()) { finish(); return; }
 
-  const steps = ANALYSIS_STEPS.map((s) => ({
-    label: s.label,
-    status: _worstStatus(checks, s.matchIds) || 'pass',
-  }));
+  // One line per actual check (all of them), ordered like the report: by category,
+  // then most-actionable first (fail → warn → info → pass), then by name.
+  const steps = _scanStepsFromChecks(checks);
+  if (steps.length === 0) { finish(); return; }
 
+  // Keep the whole scan within a fixed time budget regardless of how many checks
+  // there are, so ~50 lines don't drag on.
+  const budgetMs = 4200;
+  const perLine = Math.max(45, Math.min(200, Math.round(budgetMs / steps.length)));
   const startTs = (performance && performance.now) ? performance.now() : Date.now();
-  const totalMs = steps.length * 300 + 500;
+  const totalMs = steps.length * perLine + 500;
 
   // Continuous ring count-up across the whole scan.
   const rampRing = (now) => {
@@ -798,14 +802,43 @@ function runWowScan(checks, score, href) {
     term.querySelector('.mp-scan-cursor')?.classList.remove('mp-scan-cursor');
     const line = document.createElement('div');
     line.className = 'mp-scan-line ' + (s.status === 'pass' ? 'ok' : s.status) + ' mp-scan-cursor';
-    line.innerHTML = '<span class="arrow">&gt;</span><span class="lbl">' + s.label + '</span>' +
-                     '<span class="res">' + resCode(s.status) + '</span>';
+    const delta = (typeof s.delta === 'number' && s.delta !== 0)
+      ? '<span class="dlt">' + (s.delta > 0 ? '+' : '') + s.delta.toFixed(1) + '</span>'
+      : '';
+    line.innerHTML = '<span class="arrow">&gt;</span><span class="lbl">' + _escAttr(s.label) + '</span>' +
+                     '<span class="res">' + resCode(s.status) + '</span>' + delta;
     term.appendChild(line);
-    while (term.children.length > 8) term.removeChild(term.firstChild);
+    while (term.children.length > 9) term.removeChild(term.firstChild);
     i++;
-    setTimeout(addLine, 220 + Math.random() * 150);
+    setTimeout(addLine, perLine + Math.random() * 40);
   };
   addLine();
+}
+
+// _scanStepsFromChecks turns the report's checks into ordered scan lines.
+function _scanStepsFromChecks(checks) {
+  if (!Array.isArray(checks)) return [];
+  const CAT_ORDER = ['Authentifizierung', 'DNS und Infrastruktur', 'Spamfilter', 'Format und Inhalt', 'Header und Rohdaten'];
+  const SEV = { fail: 0, warn: 1, info: 2, pass: 3 };
+  const catIdx = (c) => { const i = CAT_ORDER.indexOf(c || ''); return i < 0 ? CAT_ORDER.length : i; };
+  return checks.slice().sort((a, b) => {
+    const ca = catIdx(a.category), cb = catIdx(b.category);
+    if (ca !== cb) return ca - cb;
+    const sa = SEV[a.status] != null ? SEV[a.status] : 9;
+    const sb = SEV[b.status] != null ? SEV[b.status] : 9;
+    if (sa !== sb) return sa - sb;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  }).map((c) => ({
+    label: c.name || c.id || 'Check',
+    status: c.status || 'info',
+    delta: typeof c.score_delta === 'number' ? c.score_delta : 0,
+  }));
+}
+
+// _escAttr escapes the few characters that matter for safe innerHTML insertion.
+function _escAttr(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function startCheckLoop() {

@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.8.2] - 2026-06-04
+
+### Changed
+- The home-page scanner animation now lists **every check** from the report (one
+  line each, with result and score delta), ordered by category then severity —
+  instead of ~12 grouped phases. The total run time stays bounded (the per-line
+  speed adapts to the number of checks), and the score ring still counts up to the
+  final score.
+
 ## [1.8.1] - 2026-06-04
 
 ### Changed
