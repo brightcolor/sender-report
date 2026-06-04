@@ -1507,6 +1507,9 @@ function setupRecheckButtons() {
     var item = btn.closest('.mp-check-item');
     if (!id || !item) return;
     var uid = item.id.replace(/^chk-/, '');
+    // Remember the current open/collapsed state so the recheck leaves it untouched.
+    var wasOpen = !!(item.querySelector('.accordion-collapse') || {}).classList &&
+                  item.querySelector('.accordion-collapse').classList.contains('show');
     var orig = btn.innerHTML;
     btn.disabled = true;
     btn.classList.add('is-busy');
@@ -1521,14 +1524,15 @@ function setupRecheckButtons() {
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var fresh = await res.json();
-      // Replace the item in place, then keep it open so the result stays visible.
+      // Replace the item in place, preserving its prior open/collapsed state
+      // exactly (the recheck must not open or close it).
       item.outerHTML = renderDecCheckItem(fresh, uid);
       var newItem = document.getElementById('chk-' + uid);
       if (newItem) {
         var ab = newItem.querySelector('.accordion-button');
         var cb = newItem.querySelector('.accordion-collapse');
-        if (ab) { ab.classList.remove('collapsed'); ab.setAttribute('aria-expanded','true'); }
-        if (cb) cb.classList.add('show');
+        if (ab) { ab.classList.toggle('collapsed', !wasOpen); ab.setAttribute('aria-expanded', wasOpen ? 'true' : 'false'); }
+        if (cb) cb.classList.toggle('show', wasOpen);
         // brief ✓ flash on the refresh icon
         var nr = newItem.querySelector('.mp-chk-recheck');
         if (nr) {

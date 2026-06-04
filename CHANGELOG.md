@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.14.3] - 2026-06-04
+
+### Changed
+- A recheck now leaves the check's open/collapsed state exactly as it was — it no
+  longer force-opens (or closes) the item.
+
 ## [1.14.2] - 2026-06-04
 
 ### Changed
