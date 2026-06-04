@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-06-04
+
+### Fixed
+- The home-page scanner animation appeared to "not run" (the score ring flashed
+  and it jumped straight to the report) whenever the OS/browser had **reduce
+  motion** enabled — the code skipped the whole effect. Now reduced motion still
+  shows the full check list and the final score ring, held briefly for reading,
+  before redirecting; full motion (terminal feed + ring count-up) plays when the
+  user hasn't requested reduced motion.
+
 ## [1.9.0] - 2026-06-04
 
 ### Changed

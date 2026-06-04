@@ -754,26 +754,45 @@ function runWowScan(checks, score, href) {
   term.innerHTML = '';
 
   const finalScore = (typeof score === 'number' && !isNaN(score)) ? score : 10;
+  const resCode = (st) => ({ pass: 'PASS', warn: 'WARN', fail: 'FAIL', info: 'INFO' }[st] || 'OK');
 
-  const finish = () => {
+  const setFinalRing = () => {
     ring.style.setProperty('--score', (finalScore * 10) + '%');
     ring.style.setProperty('--mp-score-color', _scoreColorVar(finalScore));
     scoreEl.textContent = finalScore.toFixed(1);
     ring.classList.add('is-done');
-    setTimeout(go, 950);
   };
 
-  if (_prefersReducedMotion()) { finish(); return; }
+  const renderLine = (s, withCursor) => {
+    term.querySelector('.mp-scan-cursor')?.classList.remove('mp-scan-cursor');
+    const line = document.createElement('div');
+    line.className = 'mp-scan-line ' + (s.status === 'pass' ? 'ok' : s.status) + (withCursor ? ' mp-scan-cursor' : '');
+    const delta = (typeof s.delta === 'number' && s.delta !== 0)
+      ? '<span class="dlt">' + (s.delta > 0 ? '+' : '') + s.delta.toFixed(1) + '</span>'
+      : '';
+    line.innerHTML = '<span class="arrow">&gt;</span><span class="lbl">' + _escAttr(s.label) + '</span>' +
+                     '<span class="res">' + resCode(s.status) + '</span>' + delta;
+    term.appendChild(line);
+    while (term.children.length > 9) term.removeChild(term.firstChild);
+  };
 
   // One line per actual check (all of them), ordered like the report: by category,
   // then most-actionable first (fail → warn → info → pass), then by name.
   const steps = _scanStepsFromChecks(checks);
-  if (steps.length === 0) { finish(); return; }
+  if (steps.length === 0) { setFinalRing(); setTimeout(go, 900); return; }
+
+  // Reduced motion: no transitions/ramp — render the full list at once, set the
+  // final ring, and hold briefly so it stays readable, then redirect.
+  if (_prefersReducedMotion()) {
+    steps.forEach((s) => renderLine(s, false));
+    setFinalRing();
+    setTimeout(go, 2200);
+    return;
+  }
 
   // Keep the whole scan within a fixed time budget regardless of how many checks
   // there are, so ~50 lines don't drag on.
-  const budgetMs = 4200;
-  const perLine = Math.max(45, Math.min(200, Math.round(budgetMs / steps.length)));
+  const perLine = Math.max(45, Math.min(200, Math.round(4200 / steps.length)));
   const startTs = (performance && performance.now) ? performance.now() : Date.now();
   const totalMs = steps.length * perLine + 500;
 
@@ -790,25 +809,14 @@ function runWowScan(checks, score, href) {
   };
   requestAnimationFrame(rampRing);
 
-  const resCode = (st) => ({ pass: 'PASS', warn: 'WARN', fail: 'FAIL', info: 'INFO' }[st] || 'OK');
   let i = 0;
   const addLine = () => {
     if (i >= steps.length) {
       term.querySelector('.mp-scan-cursor')?.classList.remove('mp-scan-cursor');
-      setTimeout(finish, 300);
+      setTimeout(() => { setFinalRing(); setTimeout(go, 950); }, 300);
       return;
     }
-    const s = steps[i];
-    term.querySelector('.mp-scan-cursor')?.classList.remove('mp-scan-cursor');
-    const line = document.createElement('div');
-    line.className = 'mp-scan-line ' + (s.status === 'pass' ? 'ok' : s.status) + ' mp-scan-cursor';
-    const delta = (typeof s.delta === 'number' && s.delta !== 0)
-      ? '<span class="dlt">' + (s.delta > 0 ? '+' : '') + s.delta.toFixed(1) + '</span>'
-      : '';
-    line.innerHTML = '<span class="arrow">&gt;</span><span class="lbl">' + _escAttr(s.label) + '</span>' +
-                     '<span class="res">' + resCode(s.status) + '</span>' + delta;
-    term.appendChild(line);
-    while (term.children.length > 9) term.removeChild(term.firstChild);
+    renderLine(steps[i], true);
     i++;
     setTimeout(addLine, perLine + Math.random() * 40);
   };
