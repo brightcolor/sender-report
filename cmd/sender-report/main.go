@@ -25,7 +25,6 @@ import (
 	"github.com/brightcolor/sender-report/internal/ratelimit"
 	"github.com/brightcolor/sender-report/internal/sealedbox"
 	"github.com/brightcolor/sender-report/internal/smtp"
-	"github.com/brightcolor/sender-report/internal/statsfiles"
 	"github.com/brightcolor/sender-report/internal/store"
 	"github.com/brightcolor/sender-report/internal/telemetry"
 	"github.com/brightcolor/sender-report/internal/tlscert"
@@ -87,7 +86,6 @@ func main() {
 	defer cancel()
 
 	cleanup.Start(ctx, logger, st, cfg.CleanupInterval, cfg.RetentionTTL)
-	statsfiles.StartWriter(ctx, logger, st, cfg.DataDir)
 
 	webServer, err := web.New(cfg, st, logger, metrics)
 	if err != nil {

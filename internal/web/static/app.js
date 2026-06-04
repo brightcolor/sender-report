@@ -1592,42 +1592,59 @@ function initStatCountUp() {
 function setupStatsPolling() {
   if (!document.getElementById('mp-stats-bar')) return;
 
-  function fmtNum(n) { return fmtStatNum(n); }
-
   function updateStat(id, val) {
     var el = document.getElementById(id);
     if (!el) return;
-    var newVal = (id === 'stat-score') ? parseFloat(val).toFixed(1) : fmtNum(val);
+    var newVal = (id === 'stat-score') ? parseFloat(val).toFixed(1) : fmtStatNum(val);
     if (el.textContent === newVal) return;
     el.textContent = newVal;
     el.classList.add('mp-stat-updated');
     setTimeout(function() { el.classList.remove('mp-stat-updated'); }, 800);
   }
 
-  function fetchStats() {
-    fetch('/api/stats')
+  function applyStats(d) {
+    if (!d) return;
+    // Reveal the bar the moment a fresh instance gets its first activity.
+    var bar = document.getElementById('mp-stats-bar');
+    if (bar && bar.classList.contains('d-none') &&
+        (d.total_messages > 0 || d.total_mailboxes > 0 || d.total_reports > 0)) {
+      bar.classList.remove('d-none');
+    }
+    updateStat('stat-messages',  d.total_messages);
+    updateStat('stat-mailboxes', d.total_mailboxes);
+    updateStat('stat-active',    d.active_mailboxes);
+    if (d.total_reports > 0) updateStat('stat-score', d.avg_score);
+  }
+
+  function poll() {
+    fetch('/api/stats', { cache: 'no-store' })
       .then(function(r) { return r.ok ? r.json() : null; })
-      .then(function(d) {
-        if (!d) return;
-        // Reveal the bar the moment a fresh instance gets its first activity.
-        var bar = document.getElementById('mp-stats-bar');
-        if (bar && bar.classList.contains('d-none') &&
-            (d.total_messages > 0 || d.total_mailboxes > 0 || d.total_reports > 0)) {
-          bar.classList.remove('d-none');
-        }
-        updateStat('stat-messages',  d.total_messages);
-        updateStat('stat-mailboxes', d.total_mailboxes);
-        updateStat('stat-active',    d.active_mailboxes);
-        if (d.total_reports > 0) updateStat('stat-score', d.avg_score);
-      })
+      .then(applyStats)
       .catch(function() {});
   }
 
-  // First update after 30s, then every 60s
-  setTimeout(function() {
-    fetchStats();
-    setInterval(fetchStats, 60000);
-  }, 30000);
+  var pollTimer = null;
+  function startPollingFallback() {
+    if (pollTimer) return;
+    poll();
+    pollTimer = setInterval(poll, 15000);
+  }
+
+  function start() {
+    // Live updates via SSE; fall back to polling if unavailable or on error.
+    if (typeof EventSource === 'undefined') { startPollingFallback(); return; }
+    var es = new EventSource('/api/stats/events');
+    es.addEventListener('stats', function(ev) {
+      try { applyStats(JSON.parse(ev.data)); } catch (_) {}
+    });
+    es.addEventListener('error', function() {
+      es.close();
+      startPollingFallback();
+    });
+  }
+
+  // Start after the count-up animation (~1s) so the initial ramp isn't cut short.
+  setTimeout(start, 1300);
 }
 
 // Lösch-Bestätigung im Modal

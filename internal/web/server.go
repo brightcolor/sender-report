@@ -33,7 +33,6 @@ import (
 	reportpdf "github.com/brightcolor/sender-report/internal/pdf"
 	"github.com/brightcolor/sender-report/internal/ratelimit"
 	"github.com/brightcolor/sender-report/internal/sealedbox"
-	"github.com/brightcolor/sender-report/internal/statsfiles"
 	"github.com/brightcolor/sender-report/internal/store"
 	"github.com/brightcolor/sender-report/internal/telemetry"
 	"github.com/brightcolor/sender-report/internal/version"
@@ -427,6 +426,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/readyz", s.ready)
 	mux.HandleFunc("/metrics", s.metricsPage)
 	mux.HandleFunc("/api/stats", s.statsHandler)
+	mux.HandleFunc("/api/stats/events", s.statsEvents)
 	mux.HandleFunc("/api/mailboxes", s.createMailbox)
 	mux.HandleFunc("/api/mailboxes/", s.mailboxAPI)
 	mux.HandleFunc("/api/reports/", s.reportAPI)
@@ -590,7 +590,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	// Phase 2: mailbox creation is now client-side (crypto key generation in browser).
 	// The home page renders an empty widget; JavaScript fills it after generating
 	// the X25519 key pair and calling POST /api/mailboxes with {identifier, public_key}.
-	stats := statsfiles.Read(s.cfg.DataDir)
+	stats, _ := s.store.GetGlobalStats(r.Context())
 	data := HomeData{
 		AppName:        s.cfg.AppName,
 		Domain:         domain,
@@ -1775,18 +1775,74 @@ func (r *statusRecorder) WriteHeader(status int) {
 	r.ResponseWriter.WriteHeader(status)
 }
 
-// statsHandler returns global platform statistics as JSON.
+// statsHandler returns live global platform statistics as JSON (read straight
+// from the DB counters, always up to date). Used for the initial render fallback
+// and as the polling fallback when SSE is unavailable.
 // GET /api/stats
 func (s *Server) statsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	stats := statsfiles.Read(s.cfg.DataDir)
+	stats, err := s.store.GetGlobalStats(r.Context())
+	if err != nil {
+		jsonResp(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=30")
+	w.Header().Set("Cache-Control", "no-cache")
 	if err := json.NewEncoder(w).Encode(stats); err != nil {
 		s.logger.Printf("stats encode error: %v", err)
+	}
+}
+
+// statsEvents streams live platform statistics via Server-Sent Events, pushing an
+// update every few seconds (and immediately on connect) whenever the values
+// change. Reads straight from the DB counters, so it reflects new activity within
+// seconds. GET /api/stats/events
+func (s *Server) statsEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	last := ""
+	send := func() error {
+		stats, err := s.store.GetGlobalStats(r.Context())
+		if err != nil {
+			return err
+		}
+		raw, _ := json.Marshal(stats)
+		if string(raw) == last {
+			return nil
+		}
+		last = string(raw)
+		_, _ = fmt.Fprintf(w, "event: stats\ndata: %s\n\n", raw)
+		flusher.Flush()
+		return nil
+	}
+
+	_ = send()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			if err := send(); err != nil {
+				return
+			}
+		}
 	}
 }
 

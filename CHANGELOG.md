@@ -4,7 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.8.2] - 2026-06-04
+## [1.9.0] - 2026-06-04
+
+### Changed
+- **Home-page statistics are now live.** Stats are read straight from the DB
+  counters (always current) and pushed to the browser via **Server-Sent Events**
+  (`GET /api/stats/events`, ~3 s cadence, only on change), so the counters tick up
+  within seconds instead of after the old 30 s/60 s poll. `/api/stats` now also
+  serves live DB values and remains the polling fallback when SSE is unavailable.
+
+### Removed
+- The plain-text `stat_*` files in the data volume and the 5-minute file writer
+  (`internal/statsfiles`). They added staleness and an editable-override path that
+  is no longer needed now that everything comes from the DB. To adjust the
+  displayed numbers, edit the `counters` table directly (e.g.
+  `UPDATE counters SET value = 0;`).
 
 ### Changed
 - The home-page scanner animation now lists **every check** from the report (one
