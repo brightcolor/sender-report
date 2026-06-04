@@ -4,7 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.14.0] - 2026-06-04
+## [1.14.1] - 2026-06-04
+
+### Added
+- **Rechecks are now persisted** (they survive a reload). Because reports are
+  end-to-end encrypted, the browser re-seals the updated report with the rechecked
+  value and the recomputed score and sends the new ciphertext to a new endpoint
+  (`POST /api/recheck-persist/{token}/{msgref}`). The server validates the sealed
+  blob, recomputes the authoritative score/label from the supplied checks
+  (`analyzer.ComputeScore`), overwrites `messages.payload_enc`, and updates the
+  cleartext report row (score, label, stripped checks) — without touching the
+  cumulative counters. The score ring on the report updates immediately too.
 
 ### Added
 - **Per-check "Neu prüfen" (live recheck).** Fixed a DNS record? You can now

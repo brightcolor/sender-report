@@ -448,6 +448,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/pdf/", s.reportPDFHandler)
 	mux.HandleFunc("/api/payload/", s.payloadAPI)
 	mux.HandleFunc("/api/recheck/", s.recheckAPI)
+	mux.HandleFunc("/api/recheck-persist/", s.recheckPersistAPI)
 	mux.HandleFunc("/mailbox/", s.mailboxPage)
 	mux.HandleFunc("/report/", s.reportPage)
 	mux.HandleFunc("/raw/", s.rawPage)
@@ -1086,6 +1087,89 @@ func (s *Server) recheckAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, http.StatusOK, res)
+}
+
+// recheckPersistAPI persists the result of a client-side recheck. Because reports
+// are end-to-end encrypted, the server cannot edit them itself: the client
+// re-seals the updated payload (with the rechecked check + recomputed values) and
+// sends the new ciphertext plus the cleartext check list. The server stores the
+// new ciphertext, recomputes the authoritative score/label from the checks, and
+// updates the cleartext report row. Route: POST /api/recheck-persist/{token}/{msgref}
+func (s *Server) recheckPersistAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonResp(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	ip := s.clientIP(r)
+	if s.payloadLimiter != nil && !s.payloadLimiter.Allow("recheck:"+ip) {
+		jsonResp(w, http.StatusTooManyRequests, map[string]string{"error": "rate limited"})
+		return
+	}
+	parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/api/recheck-persist/"), "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "bad path"})
+		return
+	}
+	token, msgRef := parts[0], parts[1]
+	ctx := r.Context()
+
+	mb, err := s.store.GetMailboxByToken(ctx, token)
+	if err != nil {
+		jsonResp(w, http.StatusNotFound, map[string]string{"error": "mailbox not found"})
+		return
+	}
+	msgs, err := s.store.ListMessagesByMailbox(ctx, mb.ID, 500)
+	if err != nil {
+		jsonResp(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
+	var msg *model.Message
+	for i := range msgs {
+		if messageReference(token, msgs[i].ID) == msgRef {
+			msg = &msgs[i]
+			break
+		}
+	}
+	if msg == nil || !msg.Encrypted() {
+		jsonResp(w, http.StatusNotFound, map[string]string{"error": "message not found"})
+		return
+	}
+
+	var body struct {
+		PayloadEnc string              `json:"payload_enc"`
+		Checks     []model.CheckResult `json:"checks"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4*1024*1024)).Decode(&body); err != nil {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return
+	}
+	// Validate the new ciphertext is a real sealed blob ("MPE1" magic) before storing.
+	if blob, derr := base64.RawURLEncoding.DecodeString(body.PayloadEnc); derr != nil || len(blob) < 4 || string(blob[:4]) != "MPE1" {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid payload"})
+		return
+	}
+	if len(body.Checks) == 0 {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "no checks"})
+		return
+	}
+
+	// Authoritative score from the supplied checks (not gameable via a sent number).
+	score, label := analyzer.ComputeScore(body.Checks)
+	stripped := make([]model.CheckResult, 0, len(body.Checks))
+	for _, c := range body.Checks {
+		stripped = append(stripped, model.CheckResult{ID: c.ID, Name: c.Name, Status: c.Status})
+	}
+	checksJSON, _ := json.Marshal(stripped)
+
+	if err := s.store.UpdateMessagePayloadEnc(ctx, msg.ID, body.PayloadEnc); err != nil {
+		jsonResp(w, http.StatusInternalServerError, map[string]string{"error": "store error"})
+		return
+	}
+	if err := s.store.UpdateReportScoreChecks(ctx, msg.ID, score, label, string(checksJSON)); err != nil {
+		jsonResp(w, http.StatusInternalServerError, map[string]string{"error": "store error"})
+		return
+	}
+	jsonResp(w, http.StatusOK, map[string]any{"status": "saved", "score": score, "score_label": label})
 }
 
 // mailboxJSON returns the standard JSON payload for a newly created/found mailbox.

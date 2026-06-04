@@ -1479,6 +1479,23 @@ func checkImportance(id string) string {
 // essential checks is not a clean pass.
 const essentialPerfectCap = 9.5
 
+// ComputeScore re-derives the overall score and label from a set of checks using
+// the same rules as a full analysis (start at 10, sum deltas, clamp, essential
+// gate). Used to keep the stored score authoritative after a single-check recheck.
+func ComputeScore(checks []model.CheckResult) (float64, string) {
+	score := 10.0
+	for _, c := range checks {
+		score += c.ScoreDelta
+	}
+	score = clampScore(score)
+	if score > essentialPerfectCap && !essentialsAllPass(checks) {
+		score = essentialPerfectCap
+	}
+	r := model.AnalysisReport{Score: score}
+	assignLabel(&r)
+	return score, r.ScoreLabel
+}
+
 // essentialsAllPass reports whether every essential, always-present check
 // (SPF, DKIM, DMARC, PTR) actually passed. Checks that aren't present in the
 // report (e.g. behind a disabled feature) are not required.

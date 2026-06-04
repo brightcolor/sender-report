@@ -253,6 +253,35 @@ func (s *Store) SaveReport(ctx context.Context, report model.AnalysisReport) (mo
 	return report, nil
 }
 
+// UpdateMessagePayloadEnc overwrites the sealed E2E payload for a message (used
+// after a client-side recheck re-encrypts the updated report).
+func (s *Store) UpdateMessagePayloadEnc(ctx context.Context, messageID int64, payloadEnc string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE messages SET payload_enc = ? WHERE id = ?`, payloadEnc, messageID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UpdateReportScoreChecks updates the cleartext score, label and (stripped) check
+// list for a message's report — without touching the cumulative counters (this is
+// an in-place correction, not a new report).
+func (s *Store) UpdateReportScoreChecks(ctx context.Context, messageID int64, score float64, label, checksJSON string) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE reports SET score = ?, score_label = ?, checks_json = ? WHERE message_id = ?`,
+		score, label, checksJSON, messageID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) GetReport(ctx context.Context, reportID int64) (model.AnalysisReport, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, message_id, created_at, score, score_label, checks_json, warnings_json, suggestions_json, headers_json, links_json, spam_signals_json

@@ -347,3 +347,27 @@ func TestEssentialsAllPassGate(t *testing.T) {
 		t.Fatal("a warning on an essential must not count as all-pass")
 	}
 }
+
+func TestComputeScore(t *testing.T) {
+	// All essentials pass, no deductions → perfect 10 / Excellent.
+	clean := []model.CheckResult{
+		{ID: "spf", Status: "pass"}, {ID: "dkim", Status: "pass"},
+		{ID: "dmarc", Status: "pass"}, {ID: "ptr", Status: "pass"},
+	}
+	if s, l := ComputeScore(clean); s != 10 || l != "Excellent" {
+		t.Fatalf("clean → got %v/%q, want 10/Excellent", s, l)
+	}
+	// An essential only "info" caps the score below 10 even with no deductions.
+	capped := append([]model.CheckResult{{ID: "spf", Status: "info"}}, clean[1:]...)
+	if s, _ := ComputeScore(capped); s != 9.5 {
+		t.Fatalf("unconfirmed essential → got %v, want 9.5", s)
+	}
+	// Heavy deductions clamp at 0.
+	bad := []model.CheckResult{
+		{ID: "spf", Status: "fail", ScoreDelta: -2.6}, {ID: "dkim", Status: "fail", ScoreDelta: -2.6},
+		{ID: "dmarc", Status: "fail", ScoreDelta: -2.6}, {ID: "ptr", Status: "fail", ScoreDelta: -2.6},
+	}
+	if s, l := ComputeScore(bad); s != 0 || l != "High Risk" {
+		t.Fatalf("bad → got %v/%q, want 0/High Risk", s, l)
+	}
+}

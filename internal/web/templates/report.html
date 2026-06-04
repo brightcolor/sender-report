@@ -1155,9 +1155,14 @@ function buildRecheckInputs(payload) {
   };
 }
 
-function showDecrypted(payload) {
+var DEC_PAYLOAD = null;   // the decrypted payload (kept so a recheck can re-seal it)
+var DEC_SECRET  = null;   // the secret token (kept to re-seal after a recheck)
+
+function showDecrypted(payload, secretToken) {
   if (PANEL)   PANEL.classList.add('d-none');
   if (LOADING) LOADING.classList.add('d-none');
+  DEC_PAYLOAD = payload;
+  if (secretToken) DEC_SECRET = secretToken;
   RECHECK_INPUTS = buildRecheckInputs(payload);
   if (CONTENT) {
     CONTENT.innerHTML = renderDecryptedReport(payload);
@@ -1295,7 +1300,7 @@ window.addEventListener('DOMContentLoaded', async function() {
   if (!stored) return; // no key — show lock banner, wait for user
   if (PANEL)   PANEL.classList.add('d-none');
   if (LOADING) LOADING.classList.remove('d-none');
-  try   { showDecrypted((await decryptWith(stored)).payload); }
+  try   { showDecrypted((await decryptWith(stored)).payload, stored); }
   catch { if (PANEL)   PANEL.classList.remove('d-none');
            if (LOADING) LOADING.classList.add('d-none'); }
 });
@@ -1315,7 +1320,7 @@ if (submitBtn) {
       storeSecret(result.info.identifier, key);
       var modal = bootstrap.Modal.getInstance(document.getElementById('mp-key-modal'));
       if (modal) modal.hide();
-      showDecrypted(result.payload);
+      showDecrypted(result.payload, key);
     } catch(e) {
       showKeyErr('Entschlüsselung fehlgeschlagen – Schlüssel prüfen.');
       submitBtn.disabled = false;
@@ -1524,16 +1529,85 @@ function setupRecheckButtons() {
       if (typeof colorScoreDeltas === 'function') colorScoreDeltas();
       var newItem = document.getElementById('chk-' + uid);
       var ns = newItem && newItem.querySelector('.mp-recheck-status');
-      if (ns) {
-        ns.textContent = 'aktualisiert ✓';
-        setTimeout(function(){ if (ns) ns.textContent = ''; }, 4000);
-      }
+      if (ns) ns.textContent = 'aktualisiert ✓ — speichere …';
+      // Persist the new value (re-encrypt + store) so it survives a reload.
+      persistRecheck(fresh, ns);
     } catch (e) {
       btn.disabled = false;
       btn.innerHTML = orig;
       if (statusEl) statusEl.textContent = 'Recheck fehlgeschlagen – später erneut versuchen.';
     }
   });
+}
+
+// jsComputeScore mirrors analyzer.ComputeScore (Go): start at 10, sum deltas,
+// clamp 0..10, then cap at 9.5 unless the essentials (spf/dkim/dmarc/ptr) all pass.
+function jsComputeScore(checks) {
+  var s = 10;
+  var ess = {spf:0, dkim:0, dmarc:0, ptr:0}, essKeys = Object.keys(ess);
+  (checks||[]).forEach(function(c){
+    s += (typeof c.score_delta === 'number') ? c.score_delta : 0;
+    if (ess.hasOwnProperty(c.id)) ess[c.id] = (c.status === 'pass') ? 1 : -1;
+  });
+  if (s < 0) s = 0; if (s > 10) s = 10;
+  var allEss = essKeys.every(function(k){ return ess[k] !== -1; });
+  if (s > 9.5 && !allEss) s = 9.5;
+  var label = s >= 9 ? 'Excellent' : s >= 7.5 ? 'Good' : s >= 5.5 ? 'Needs Work' : 'High Risk';
+  return { score: s, label: label };
+}
+
+// persistRecheck re-encrypts the decrypted report with the rechecked value and
+// stores the new ciphertext + score server-side, so the change survives a reload.
+async function persistRecheck(fresh, statusEl) {
+  try {
+    var crypto = window.SenderReportCrypto;
+    if (!DEC_PAYLOAD || !DEC_PAYLOAD.report || !DEC_SECRET || !crypto) {
+      if (statusEl) statusEl.textContent = 'aktualisiert ✓ (nur in dieser Ansicht)';
+      return;
+    }
+    var checks = DEC_PAYLOAD.report.checks || (DEC_PAYLOAD.report.checks = []);
+    var idx = checks.findIndex(function(c){ return c.id === fresh.id; });
+    if (idx >= 0) checks[idx] = fresh; else checks.push(fresh);
+    var sc = jsComputeScore(checks);
+    DEC_PAYLOAD.report.score = sc.score;
+    DEC_PAYLOAD.report.score_label = sc.label;
+
+    var info = await crypto.fromToken(DEC_SECRET);
+    var blob = await crypto.seal(crypto._utf8(JSON.stringify(DEC_PAYLOAD)), info.public);
+    var enc  = crypto._toBase64url(blob);
+
+    var res = await fetch('/api/recheck-persist/' + TOKEN + '/' + MSGREF, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify({ payload_enc: enc, checks: checks })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var saved = await res.json();
+    // Reflect the new authoritative score in the hero ring.
+    updateHeroScore(saved.score, saved.score_label);
+    if (statusEl) {
+      statusEl.textContent = 'aktualisiert & gespeichert ✓';
+      setTimeout(function(){ if (statusEl) statusEl.textContent = ''; }, 4000);
+    }
+  } catch (e) {
+    if (statusEl) statusEl.textContent = 'aktualisiert ✓ (Speichern fehlgeschlagen)';
+  }
+}
+
+// updateHeroScore updates the score ring + label after a persisted recheck.
+function updateHeroScore(score, label) {
+  if (typeof score !== 'number') return;
+  var ring = document.querySelector('.mp-score-hero .mp-ring');
+  var val  = document.querySelector('.mp-score-hero .mp-ring-value');
+  var hero = document.querySelector('.mp-score-hero');
+  if (val) val.textContent = score.toFixed(1);
+  if (ring) ring.style.setProperty('--score', (score * 10) + '%');
+  if (hero) {
+    hero.classList.remove('status-pass','status-warn','status-fail');
+    hero.classList.add(score >= 7.5 ? 'status-pass' : (score >= 5.5 ? 'status-warn' : 'status-fail'));
+  }
+  if (window.__mpReport) window.__mpReport.score = score;
 }
 
 function renderDecryptedReport(p) {
