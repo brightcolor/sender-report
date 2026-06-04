@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.14.5] - 2026-06-04
+
+### Changed
+- The theme toggle now always flips the currently *visible* theme on the first
+  click. Default is still "auto" (follow the system), but e.g. with a dark system
+  theme the first click switches straight to light (previously the first click
+  set "dark" explicitly, which looked like nothing happened).
+
 ## [1.14.4] - 2026-06-04
 
 ### Changed

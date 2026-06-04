@@ -40,8 +40,11 @@ function applyThemePreference(preference) {
 function setupThemeToggle() {
   applyThemePreference(localStorage.getItem('sr:theme') || 'auto');
   document.getElementById('theme-toggle')?.addEventListener('click', () => {
-    const current = document.documentElement.dataset.themePreference || 'auto';
-    const next = current === 'auto' ? 'dark' : current === 'dark' ? 'light' : 'auto';
+    // Always flip to the opposite of the currently *visible* theme. So from the
+    // default "auto" (resolved via the system) the very first click switches the
+    // actually shown theme — e.g. system=dark → first click = light.
+    const resolved = resolveThemePreference(localStorage.getItem('sr:theme') || 'auto');
+    const next = resolved === 'dark' ? 'light' : 'dark';
     localStorage.setItem('sr:theme', next);
     applyThemePreference(next);
   });
