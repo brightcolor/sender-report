@@ -1,0 +1,177 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   sender.report — portable "look & feel" layer
+   ----------------------------------------------------------------------------
+   A thin design layer that gives a clean, modern SaaS-dashboard look on top of
+   Bootstrap 5.3. AdminLTE is optional — the "cool" part is this layer, not the
+   admin template.
+
+   How to use:
+     1. Bootstrap 5.3 CSS + JS
+     2. Bootstrap Icons   (https://icons.getbootstrap.com)
+     3. Inter font        (see @import below, or self-host)
+     4. This file, loaded AFTER Bootstrap
+     5. Put data-bs-theme="light" (or "dark"/"auto") on <html>
+
+   Everything is driven by Bootstrap CSS variables, so light/dark mode and your
+   brand color "just work". Change --sr-accent to rebrand.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* 1 ── Font ─────────────────────────────────────────────────────────────────
+   Inter is the single biggest reason it looks "modern". Self-host for privacy;
+   the @import is just the quick path. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+:root {
+  /* Brand accent — change this one value to rebrand. */
+  --sr-accent: #0d6efd;
+  --sr-accent-rgb: 13, 110, 253;
+
+  /* Corner radius + soft shadow used everywhere. */
+  --sr-radius: .75rem;
+  --sr-shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.06);
+}
+
+/* Make the accent the Bootstrap primary, so btn-primary/text-primary inherit it. */
+:root, [data-bs-theme="light"], [data-bs-theme="dark"] {
+  --bs-primary: var(--sr-accent);
+  --bs-primary-rgb: var(--sr-accent-rgb);
+}
+
+/* 2 ── Base typography ──────────────────────────────────────────────────────
+   The whole UI uses Inter; numbers are tabular; headlines are tight + bold. */
+body {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, .h1, .h2, .h3 {
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+.sr-num,           /* put on any number you want aligned/monospaced */
+.font-tabular { font-variant-numeric: tabular-nums; }
+code, kbd, samp, .sr-mono {
+  font-family: 'Cascadia Code', 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+}
+
+/* 3 ── Cards: rounded, soft border, gentle shadow ───────────────────────────*/
+.card {
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--sr-radius);
+  box-shadow: var(--sr-shadow);
+}
+.card-header {
+  background: transparent;
+  border-bottom: 1px solid var(--bs-border-color);
+  font-weight: 600;
+}
+
+/* 4 ── Status color system (success / warning / danger / info) ───────────────
+   Tinted "pills" — the signature element. Use <span class="sr-pill pass">…</span>
+   (pass=grün, warn=gelb, fail=rot, info=blau). */
+.sr-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  padding: .2rem .55rem;
+  border-radius: 99px;
+  font-size: .75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  line-height: 1.2;
+}
+.sr-pill.pass { color: var(--bs-success); background: rgba(var(--bs-success-rgb), .1); border-color: rgba(var(--bs-success-rgb), .3); }
+.sr-pill.warn { color: var(--bs-warning); background: rgba(var(--bs-warning-rgb), .1); border-color: rgba(var(--bs-warning-rgb), .3); }
+.sr-pill.fail { color: var(--bs-danger);  background: rgba(var(--bs-danger-rgb),  .1); border-color: rgba(var(--bs-danger-rgb),  .3); }
+.sr-pill.info { color: var(--bs-info);    background: rgba(var(--bs-info-rgb),    .1); border-color: rgba(var(--bs-info-rgb),    .3); }
+
+/* Small square status icon (e.g. ✓ ! ✗ i) for list rows. */
+.sr-status-dot {
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .7rem; font-weight: 900; flex-shrink: 0;
+}
+.sr-status-dot.pass { color: var(--bs-success); background: rgba(var(--bs-success-rgb), .12); }
+.sr-status-dot.warn { color: var(--bs-warning); background: rgba(var(--bs-warning-rgb), .12); }
+.sr-status-dot.fail { color: var(--bs-danger);  background: rgba(var(--bs-danger-rgb),  .12); }
+.sr-status-dot.info { color: var(--bs-info);    background: rgba(var(--bs-info-rgb),    .12); }
+
+/* 5 ── Soft "glow" accents ──────────────────────────────────────────────────
+   A subtle radial tint. Put .sr-glow on a card; set --g-rgb to a status color
+   for a green/yellow/red hero, e.g. style="--g-rgb: var(--bs-success-rgb)". */
+.sr-glow { position: relative; overflow: hidden; --g-rgb: var(--bs-primary-rgb); }
+.sr-glow::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 60% 120% at 0% 50%,
+    rgba(var(--g-rgb), .16) 0%, rgba(var(--g-rgb), .06) 45%, transparent 75%);
+  pointer-events: none;
+}
+.sr-glow > * { position: relative; }
+
+/* Coloured left accent bar for cards/sections by status. */
+.sr-accent-left          { border-left: 3px solid rgba(var(--bs-primary-rgb), .6); }
+.sr-accent-left.pass     { border-left-color: var(--bs-success); }
+.sr-accent-left.warn     { border-left-color: var(--bs-warning); }
+.sr-accent-left.fail     { border-left-color: var(--bs-danger); }
+
+/* 6 ── Score ring (conic-gradient donut) ────────────────────────────────────
+   <div class="sr-ring" style="--score:73%; --ring:var(--bs-warning)">
+     <div class="sr-ring-inner"><span class="sr-ring-value">7.3</span>
+       <span class="sr-ring-sub">/10</span></div>
+   </div> */
+.sr-ring {
+  --score: 0%;
+  --ring: var(--bs-primary);
+  width: 138px; height: 138px;
+  border-radius: 50%;
+  padding: 14px;
+  background: conic-gradient(var(--ring) var(--score), var(--bs-secondary-bg) 0);
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.sr-ring-inner {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: var(--bs-card-bg, var(--bs-body-bg));
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.sr-ring-value {
+  font-size: 2.4rem; font-weight: 900; line-height: 1;
+  letter-spacing: -.05em; color: var(--ring);
+  font-variant-numeric: tabular-nums;
+  font-family: 'Cascadia Code', ui-monospace, Consolas, monospace;
+}
+.sr-ring-sub { font-size: .72rem; font-weight: 700; color: var(--bs-secondary-color); }
+
+/* 7 ── Stat strip (the home-page counters) ──────────────────────────────────*/
+.sr-stats {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--sr-radius);
+  padding: .75rem 1rem;
+}
+.sr-stat { display: flex; flex-direction: column; align-items: center; gap: .1rem; padding: 0 1.25rem; flex: 1; min-width: 90px; }
+.sr-stat-icon  { font-size: 1.1rem; color: var(--bs-primary); }
+.sr-stat-value { font-size: 1.45rem; font-weight: 800; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--bs-emphasis-color); }
+.sr-stat-label { font-size: .7rem; color: var(--bs-secondary-color); white-space: nowrap; }
+.sr-stat-sep   { width: 1px; height: 2.5rem; background: var(--bs-border-color); }
+
+/* 8 ── Section header with importance/category color (collapsible groups) ───*/
+.sr-section-header { padding: .8rem 1rem; border-bottom: 2px solid rgba(var(--bs-primary-rgb), .38);
+  background: linear-gradient(0deg, rgba(var(--bs-primary-rgb), .05), rgba(var(--bs-primary-rgb), .11)); }
+.sr-section-title  { font-size: 1.05rem; font-weight: 800; letter-spacing: .01em; color: var(--bs-emphasis-color); }
+.sr-section-hint   { font-size: .82rem; color: var(--bs-secondary-color); }
+
+/* 9 ── Buttons: a touch rounder, consistent with the cards ──────────────────*/
+.btn { border-radius: .5rem; font-weight: 600; }
+.btn-sm { border-radius: .4rem; }
+
+/* 10 ── Importance badge (Kritisch / Wichtig / Empfohlen / Optional) ─────────*/
+.sr-imp { display: inline-block; font-size: .62rem; font-weight: 700; letter-spacing: .03em;
+  text-transform: uppercase; padding: .12rem .4rem; border-radius: 99px; white-space: nowrap; }
+.sr-imp[data-level="kritisch"]  { color: var(--bs-danger);  background: rgba(var(--bs-danger-rgb), .14); }
+.sr-imp[data-level="wichtig"]   { color: var(--bs-warning); background: rgba(var(--bs-warning-rgb), .18); }
+.sr-imp[data-level="empfohlen"] { color: var(--bs-primary); background: rgba(var(--bs-primary-rgb), .14); }
+.sr-imp[data-level="optional"]  { color: var(--bs-secondary-color); background: rgba(var(--bs-secondary-rgb), .16); }
