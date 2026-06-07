@@ -952,9 +952,9 @@ func spfStrictnessCheck(records []string) model.CheckResult {
 	}
 	switch all {
 	case "-all":
-		return withDetails(pass("spf_strictness", "SPF-Strenge", 0.2, "SPF endet auf -all (hardfail) – strengste und empfohlene Einstellung.", ""), det)
+		return withDetails(pass("spf_strictness", "SPF-Strenge", 0.0, "SPF endet auf -all (hardfail) – strengste und empfohlene Einstellung.", ""), det)
 	case "~all":
-		return withDetails(info("spf_strictness", "SPF-Strenge", 0.0, "SPF endet auf ~all (softfail) – akzeptabel, -all bietet aber stärkeren Schutz.", "Wenn alle legitimen Sendequellen erfasst sind, auf -all umstellen."), det)
+		return withDetails(warn("spf_strictness", "SPF-Strenge", 0.0, "SPF endet auf ~all (softfail) – akzeptabel, -all bietet aber stärkeren Schutz.", "Wenn alle legitimen Sendequellen erfasst sind, auf -all umstellen."), det)
 	case "?all":
 		return withDetails(warn("spf_strictness", "SPF-Strenge", -0.3, "SPF endet auf ?all (neutral) – bietet praktisch keinen Schutz.", "Auf -all oder ~all umstellen."), det)
 	default:
@@ -1443,8 +1443,8 @@ func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult 
 	// consistent and realistic; a few checks compute their own continuous or
 	// reputation-based magnitude and keep it.
 	switch c.ID {
-	case "domain_age", "rbl", "spamassassin", "rspamd":
-		// keep the self-computed ScoreDelta
+	case "domain_age", "rbl", "spamassassin", "rspamd", "spf_strictness":
+		// keep the self-computed ScoreDelta (nuanced per-case values)
 	default:
 		c.ScoreDelta = scoreFor(c.Importance, c.Status)
 	}

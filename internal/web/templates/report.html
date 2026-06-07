@@ -320,7 +320,7 @@
                         <div class="mp-chk-inner">
                           <span class="mp-status-dot {{.Status}}">{{statusGlyph .Status}}</span>
                           <span class="mp-chk-name">
-                            <strong>{{.Name}}{{if .Importance}} <span class="mp-imp" data-imp="{{.Importance}}">{{.Importance}}</span>{{end}}</strong>
+                            <strong>{{.Name}}{{if and .Importance (or (eq .Status "warn") (eq .Status "fail"))}} <span class="mp-imp" data-imp="{{.Importance}}">{{.Importance}}</span>{{end}}</strong>
                             <small>{{.Summary}}</small>
                           </span>
                           <span class="mp-pill {{.Status}}">{{statusLabel .Status}}</span>
@@ -1526,7 +1526,7 @@ function renderDecCheckItem(c, uid){
      '<h2 class="accordion-header mp-chk-head"><button class="accordion-button '+col+'" type="button" '+
      'data-bs-toggle="collapse" data-bs-target="#cb-'+uid+'">'+
      '<div class="mp-chk-inner"><span class="mp-status-dot '+esc(c.status)+'">'+statusGlyph(c.status)+'</span>'+
-     '<span class="mp-chk-name"><strong>'+esc(c.name)+(c.importance?' <span class="mp-imp" data-imp="'+esc(c.importance)+'">'+esc(c.importance)+'</span>':'')+'</strong><small>'+esc(c.summary)+'</small></span>'+
+     '<span class="mp-chk-name"><strong>'+esc(c.name)+((c.importance&&(c.status==='warn'||c.status==='fail'))?' <span class="mp-imp" data-imp="'+esc(c.importance)+'">'+esc(c.importance)+'</span>':'')+'</strong><small>'+esc(c.summary)+'</small></span>'+
      '<span class="mp-pill '+esc(c.status)+'">'+statusLbl(c.status)+'</span>'+
      '<strong class="mp-delta">'+esc(delta)+'</strong></div></button>'+recheckBtn+'</h2>'+
      '<div id="cb-'+uid+'" class="accordion-collapse collapse '+open+'"><div class="accordion-body">';
