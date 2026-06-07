@@ -1495,7 +1495,7 @@ function updateGroupHeader(card){
 
 // Check IDs that can be re-run live (DNS/RDAP/blocklist based) — mirrors
 // analyzer.Recheckable in Go.
-var RECHECKABLE = {spf:1, spf_strictness:1, dmarc:1, mx_records:1, address_records:1, dkim_keylength:1,
+var RECHECKABLE = {spf:1, spf_strictness:1, dmarc:1, dmarc_policy:1, mx_records:1, address_records:1, dkim_keylength:1,
   envelope_mx:1, mta_sts:1, tls_rpt:1, bimi:1, dnssec:1, dane_tlsa:1, ptr:1, ptr_pattern:1,
   domain_age:1, domain_blocklist:1, link_blocklist:1};
 

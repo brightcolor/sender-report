@@ -86,7 +86,7 @@ type RecheckInput struct {
 // its key-length check.
 func Recheckable(id string) bool {
 	switch id {
-	case "spf", "spf_strictness", "dmarc", "mx_records", "address_records", "dkim_keylength",
+	case "spf", "spf_strictness", "dmarc", "dmarc_policy", "mx_records", "address_records", "dkim_keylength",
 		"envelope_mx", "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa",
 		"ptr", "ptr_pattern", "domain_age", "domain_blocklist", "link_blocklist":
 		return true
@@ -113,6 +113,8 @@ func (e *Engine) Recheck(ctx context.Context, id string, in RecheckInput) (res m
 		res = spfStrictnessRecheck(ctx, firstNonEmpty(in.EnvelopeDomain, in.FromDomain))
 	case "dmarc":
 		res = dmarcRecordRecheck(ctx, in.FromDomain)
+	case "dmarc_policy":
+		res = dmarcPolicyRecheck(ctx, in.FromDomain)
 	case "mx_records":
 		res = mxRecordCheck(ctx, primary)
 	case "address_records":
@@ -212,6 +214,26 @@ func dmarcRecordRecheck(ctx context.Context, fromDomain string) model.CheckResul
 		return fail("dmarc", "DMARC", 0, fmt.Sprintf("Kein DMARC-Record für %s gefunden.", fromDomain), "_dmarc."+fromDomain+" TXT mit v=DMARC1 veröffentlichen.")
 	}
 	return pass("dmarc", "DMARC", 0, fmt.Sprintf("DMARC-Record für %s gefunden (p=%s). Das vollständige Alignment wird beim nächsten echten Versand geprüft.", fromDomain, emptyFallback(policy, "none")), "")
+}
+
+// dmarcPolicyRecheck re-fetches the DMARC record and re-evaluates the policy
+// strength (p= tag). Used after updating the DMARC policy in DNS.
+func dmarcPolicyRecheck(ctx context.Context, fromDomain string) model.CheckResult {
+	fromDomain = normDomain(fromDomain)
+	if fromDomain == "" {
+		return info("dmarc_policy", "DMARC-Policy-Stärke", 0, "Keine From-Domain für den Recheck ermittelbar.", "")
+	}
+	recs, _ := net.DefaultResolver.LookupTXT(ctx, "_dmarc."+fromDomain)
+	var dmarcRecs []string
+	policy := ""
+	for _, r := range recs {
+		lr := strings.ToLower(strings.TrimSpace(r))
+		if strings.HasPrefix(lr, "v=dmarc1") {
+			dmarcRecs = append(dmarcRecs, strings.TrimSpace(r))
+			policy = extractTagValue(lr, "p")
+		}
+	}
+	return dmarcPolicyCheck(dmarcRecs, policy)
 }
 
 func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisReport) {

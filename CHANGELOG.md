@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.4] - 2026-06-07
+
+### Added
+- **`dmarc_policy` live recheck.** The DMARC policy strength check now has
+  a refresh icon like all other DNS-based checks. Clicking it re-fetches the
+  `_dmarc.<domain>` TXT record and re-evaluates the `p=` tag (none /
+  quarantine / reject) without re-sending a mail.
+
 ## [1.16.3] - 2026-06-07
 
 ### Changed
