@@ -276,6 +276,11 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	envelopeDomain := domainPart(in.Message.SMTPFrom)
 	returnPathDomain := domainPart(headers.Get("Return-Path"))
 	authHeaderValues := headerValues(headers, "Authentication-Results")
+
+	// Detect mail type early (header-only, no body needed) so type-dependent
+	// checks can be gated/replaced with N/A results before scoring.
+	mailType := detectMailType(headers)
+	report.MailType = mailType
 	authResults := strings.ToLower(strings.Join(authHeaderValues, " ; "))
 
 	spfResult := parseAuthResult(authResults, "spf")
@@ -384,8 +389,12 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 		report.Checks = append(report.Checks, warn("from_alignment", "Envelope-From / Header-From", -0.7, "Envelope-From und Header-From sind nicht aligned.", "Bounce-Domain und sichtbare From-Domain besser angleichen."))
 	}
 
-	// Return-Path
-	if headers.Get("Return-Path") == "" {
+	// Return-Path — only relevant for bulk/newsletter and unknown-type mails.
+	// For personal/transactional single messages it is not expected and carries
+	// no quality signal, so we mark it N/A to avoid misleading warnings.
+	if mailType == "personal" || mailType == "transactional" {
+		report.Checks = append(report.Checks, na("return_path", "Return-Path", mailType))
+	} else if headers.Get("Return-Path") == "" {
 		report.Checks = append(report.Checks, warn("return_path", "Return-Path", -0.5, "Kein Return-Path Header sichtbar.", "Envelope-From und Return-Path klar setzen."))
 	} else if returnPathDomain != "" {
 		report.Checks = append(report.Checks, pass("return_path", "Return-Path", 0.1, "Return-Path ist vorhanden.", ""))
@@ -437,7 +446,7 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 		report.SpamSignals = append(report.SpamSignals, unicodeSignal)
 	}
 
-	newsletterChecks := newsletterHeuristics(headers, parsedBody)
+	newsletterChecks := newsletterHeuristics(headers, parsedBody, mailType)
 	report.Checks = append(report.Checks, newsletterChecks...)
 
 	// ── Network-bound checks: executed concurrently ────────────────────────────
@@ -556,6 +565,85 @@ func fail(id, name string, delta float64, summary, suggestion string) model.Chec
 }
 func info(id, name string, delta float64, summary, suggestion string) model.CheckResult {
 	return model.CheckResult{ID: id, Name: name, Status: "info", ScoreDelta: delta, Summary: summary, Suggestion: suggestion}
+}
+
+// na returns a "not applicable" check result for checks that are irrelevant for
+// a detected mail type (e.g. Return-Path for personal mails). N/A checks carry
+// no score delta and are shown greyed-out in the report.
+func na(id, name, mailType string) model.CheckResult {
+	return model.CheckResult{
+		ID:      id,
+		Name:    name,
+		Status:  "na",
+		Summary: "Nicht zutreffend für " + MailTypeLabel(mailType) + "-Mails – kein Einfluss auf den Score.",
+	}
+}
+
+// detectMailType inspects the message headers and returns one of
+// "personal", "transactional", "bulk", or "unknown".
+func detectMailType(headers mail.Header) string {
+	// ── Bulk / Newsletter signals ──────────────────────────────────────────────
+	prec := strings.ToLower(strings.TrimSpace(headers.Get("Precedence")))
+	if prec == "bulk" || prec == "list" || prec == "junk" {
+		return "bulk"
+	}
+	for _, h := range []string{
+		"List-Unsubscribe", "List-ID", "List-Id",
+		"List-Archive", "List-Post",
+		"Feedback-ID", "X-Feedback-ID",
+	} {
+		if strings.TrimSpace(headers.Get(h)) != "" {
+			return "bulk"
+		}
+	}
+
+	// ── Transactional signals ──────────────────────────────────────────────────
+	autoSub := strings.ToLower(strings.TrimSpace(headers.Get("Auto-Submitted")))
+	if autoSub != "" && autoSub != "no" {
+		return "transactional"
+	}
+
+	// ── Personal MUA signals ───────────────────────────────────────────────────
+	mua := strings.ToLower(strings.TrimSpace(headers.Get("X-Mailer"))) +
+		" " + strings.ToLower(strings.TrimSpace(headers.Get("User-Agent")))
+	for _, kw := range []string{
+		"outlook", "thunderbird", "apple mail", "airmail", "evolution",
+		"lotus notes", "the bat", "mutt", "emclient", "yahoo mail", "gmail",
+	} {
+		if strings.Contains(mua, kw) {
+			return "personal"
+		}
+	}
+
+	return "unknown"
+}
+
+// MailTypeLabel returns a human-readable German label for a mail type.
+func MailTypeLabel(t string) string {
+	switch t {
+	case "bulk":
+		return "Newsletter/Bulk"
+	case "transactional":
+		return "Transactional"
+	case "personal":
+		return "Persönlich"
+	default:
+		return "Unbekannt"
+	}
+}
+
+// MailTypeIcon returns the emoji icon for a mail type.
+func MailTypeIcon(t string) string {
+	switch t {
+	case "bulk":
+		return "📬"
+	case "transactional":
+		return "⚙️"
+	case "personal":
+		return "🧑"
+	default:
+		return "❓"
+	}
 }
 
 // errorCheck represents a check that could not be completed internally (panic or
@@ -1252,6 +1340,18 @@ func withDetails(c model.CheckResult, details map[string]string) model.CheckResu
 }
 
 func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult {
+	// N/A checks: only set category (for correct section grouping) and exit early.
+	// No scoring override, no importance badge, no recommendations.
+	if c.Status == "na" {
+		c.Category = checkCategory(c.ID)
+		c.Severity = "none"
+		c.ScoreDelta = 0
+		if c.Explanation == "" {
+			c.Explanation = naExplanation(c.ID)
+		}
+		return c
+	}
+
 	c.Category = checkCategory(c.ID)
 	c.Severity = checkSeverity(c.Status)
 	c.Importance = checkImportance(c.ID)
@@ -1569,6 +1669,8 @@ func checkSeverity(status string) string {
 		return "medium"
 	case "pass":
 		return "low"
+	case "na":
+		return "none"
 	default:
 		return "info"
 	}
@@ -1666,6 +1768,19 @@ func defaultExplanation(id string) string {
 		return "Zero-Width-Zeichen (U+200B, U+FEFF etc.), Bidi-Override-Zeichen und Unicode-Homoglyphen-Substitutionen sind bekannte Techniken, um Spamfilter zu umgehen und Nutzer zu täuschen. Wichtigkeit: hoch wenn vorhanden – SpamAssassin, Rspamd und Gmail erkennen gängige Unicode-Obfuskationsmuster explizit. Tipp: Normale Sonderzeichen für Sprache (Umlaute, Akzente) sind unproblematisch; nur Zero-Width- und Steuerzeichen vermeiden."
 	default:
 		return "Dieser Check bewertet ein technisches Signal, das Mailprovider für Zustellbarkeit, Missbrauchserkennung oder Nutzervertrauen heranziehen."
+	}
+}
+
+// naExplanation returns the explanation text for a check that is not applicable
+// for the detected mail type.
+func naExplanation(id string) string {
+	switch id {
+	case "return_path":
+		return "Return-Path (Bounce-Adresse) ist primär für Massen- und Newsletter-Mails relevant, damit Unzustellbarkeitsmeldungen (NDR/DSN) automatisch verarbeitet werden können. Für persönliche und transaktionale Einzelmails wird kein gesonderter Return-Path erwartet – der Absender ist über den From-Header eindeutig. Dieser Check hat keinen Einfluss auf den Score für diese Mail."
+	case "list_unsub":
+		return "List-Unsubscribe ist ein Pflichtfeld für Newsletter und Bulk-Mails (seit 2024 von Gmail und Yahoo für Versender über 5.000 Mails/Tag vorgeschrieben). Für persönliche und transaktionale Einzelmails ist er nicht erforderlich und würde im Kontext sogar befremdlich wirken. Kein Einfluss auf den Score für diese Mail."
+	default:
+		return "Dieser Check ist für den erkannten Mail-Typ nicht zutreffend und hat keinen Einfluss auf den Score."
 	}
 }
 
@@ -2316,15 +2431,34 @@ func unicodeObfuscationCheck(text string) (model.CheckResult, string) {
 	return pass("unicode", "Unicode/Obfuscation", 0.1, "Keine offensichtliche Unicode-Obfuscation erkannt.", ""), ""
 }
 
-func newsletterHeuristics(headers mail.Header, body parsedBody) []model.CheckResult {
+func newsletterHeuristics(headers mail.Header, body parsedBody, mailType string) []model.CheckResult {
 	checks := make([]model.CheckResult, 0)
-	all := strings.ToLower(body.AllText)
-	newsletterHint := strings.Contains(all, "unsubscribe") || strings.Contains(strings.ToLower(headers.Get("Precedence")), "bulk") || strings.TrimSpace(headers.Get("List-Id")) != ""
-	if newsletterHint {
+
+	switch mailType {
+	case "personal", "transactional":
+		// List-Unsubscribe is irrelevant for these mail types.
+		checks = append(checks, na("list_unsub", "List-Unsubscribe", mailType))
+		return checks
+	case "bulk":
+		// Bulk mail MUST have List-Unsubscribe (Gmail/Yahoo requirement since 2024).
 		if headers.Get("List-Unsubscribe") == "" {
-			checks = append(checks, warn("list_unsub", "List-Unsubscribe", -0.7, "Newsletter-Hinweise vorhanden, aber List-Unsubscribe fehlt.", "List-Unsubscribe Header ergänzen."))
+			checks = append(checks, warn("list_unsub", "List-Unsubscribe", -0.7, "Bulk-Mail erkannt, aber List-Unsubscribe fehlt (Gmail/Yahoo-Anforderung seit 2024).", "List-Unsubscribe Header ergänzen."))
 		} else {
 			checks = append(checks, pass("list_unsub", "List-Unsubscribe", 0.2, "List-Unsubscribe Header vorhanden.", ""))
+		}
+		// Fall through to preheader check below (relevant for bulk/newsletter).
+	default:
+		// Unknown mail type: fall back to heuristic (body/header hints).
+		all := strings.ToLower(body.AllText)
+		newsletterHint := strings.Contains(all, "unsubscribe") ||
+			strings.Contains(strings.ToLower(headers.Get("Precedence")), "bulk") ||
+			strings.TrimSpace(headers.Get("List-Id")) != ""
+		if newsletterHint {
+			if headers.Get("List-Unsubscribe") == "" {
+				checks = append(checks, warn("list_unsub", "List-Unsubscribe", -0.7, "Newsletter-Hinweise vorhanden, aber List-Unsubscribe fehlt.", "List-Unsubscribe Header ergänzen."))
+			} else {
+				checks = append(checks, pass("list_unsub", "List-Unsubscribe", 0.2, "List-Unsubscribe Header vorhanden.", ""))
+			}
 		}
 	}
 

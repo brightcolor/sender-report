@@ -63,6 +63,7 @@ type AnalysisReport struct {
 	CreatedAt   time.Time           `json:"created_at"`
 	Score       float64             `json:"score"`
 	ScoreLabel  string              `json:"score_label"`
+	MailType    string              `json:"mail_type,omitempty"` // "personal" | "transactional" | "bulk" | "unknown"
 	Checks      []CheckResult       `json:"checks"`
 	Warnings    []string            `json:"warnings"`
 	Suggestions []string            `json:"suggestions"`

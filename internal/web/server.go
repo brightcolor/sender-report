@@ -107,6 +107,7 @@ type ReportCheckGroup struct {
 	WarnCount int                 `json:"warn_count"`
 	FailCount int                 `json:"fail_count"`
 	InfoCount int                 `json:"info_count"`
+	NACount   int                 `json:"na_count"`
 }
 
 // RBLHit is returned by the rblHits template function.
@@ -381,6 +382,8 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"splitLines":         splitLinesFn,
 		"techLabel":          techLabel,
 		"techLabelsJSON":     techLabelsJSON,
+		"mailTypeLabel":      analyzer.MailTypeLabel,
+		"mailTypeIcon":       analyzer.MailTypeIcon,
 		"appVersion":         func() string { return version.Version },
 		"jsonEncode": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
@@ -1650,6 +1653,8 @@ func groupReportChecks(checks []model.CheckResult) []ReportCheckGroup {
 				grp.WarnCount++
 			case "fail":
 				grp.FailCount++
+			case "na":
+				grp.NACount++
 			default:
 				grp.InfoCount++
 			}
@@ -1730,6 +1735,8 @@ func statusGlyph(status string) template.HTML {
 		return template.HTML(`<i class="bi bi-exclamation-lg"></i>`)
 	case "fail":
 		return template.HTML(`<i class="bi bi-x-lg"></i>`)
+	case "na":
+		return template.HTML(`<i class="bi bi-dash-lg"></i>`)
 	default:
 		return template.HTML(`<i class="bi bi-info-lg"></i>`)
 	}
@@ -1743,6 +1750,8 @@ func statusLabel(status string) string {
 		return "Warnung"
 	case "fail":
 		return "Fehler"
+	case "na":
+		return "N/A"
 	default:
 		return "Info"
 	}

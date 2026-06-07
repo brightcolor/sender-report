@@ -234,6 +234,11 @@ body,
   background-color: rgba(var(--bs-info-rgb), .1);
   border-color: rgba(var(--bs-info-rgb), .3);
 }
+.mp-pill.na {
+  color: var(--bs-secondary);
+  background-color: rgba(var(--bs-secondary-rgb), .08);
+  border-color: rgba(var(--bs-secondary-rgb), .2);
+}
 
 /* ── Status icon square (accordion check items) ─────────────────────────── */
 .mp-status-dot {
@@ -251,6 +256,7 @@ body,
 .mp-status-dot.warn { background-color: rgba(var(--bs-warning-rgb), .12); color: var(--bs-warning); }
 .mp-status-dot.fail { background-color: rgba(var(--bs-danger-rgb),  .12); color: var(--bs-danger); }
 .mp-status-dot.info { background-color: rgba(var(--bs-info-rgb),    .12); color: var(--bs-info); }
+.mp-status-dot.na   { background-color: rgba(var(--bs-secondary-rgb), .1); color: var(--bs-secondary); }
 .mp-status-dot i { font-size: .85rem; line-height: 1; }
 
 /* ── Inbox wait animation ────────────────────────────────────────────────── */
@@ -1138,6 +1144,7 @@ body,
 .mp-grp-badge.warn { background-color: rgba(var(--bs-warning-rgb), .12); color: var(--bs-warning); }
 .mp-grp-badge.fail { background-color: rgba(var(--bs-danger-rgb),  .12); color: var(--bs-danger); }
 .mp-grp-badge.info { background-color: rgba(var(--bs-info-rgb),    .12); color: var(--bs-info); }
+.mp-grp-badge.na   { background-color: rgba(var(--bs-secondary-rgb), .1); color: var(--bs-secondary); }
 
 /* ── Rspamd check panel ─────────────────────────────────────────────────── */
 .mp-rspamd-hero {
@@ -1547,6 +1554,7 @@ body,
   .mp-check-item.warn > .accordion-header > .accordion-button { border-left: 3px solid #fd7e14 !important; }
   .mp-check-item.fail > .accordion-header > .accordion-button { border-left: 3px solid #dc3545 !important; }
   .mp-check-item.info > .accordion-header > .accordion-button { border-left: 3px solid #0dcaf0 !important; }
+  .mp-check-item.na   > .accordion-header > .accordion-button { border-left: 3px solid #6c757d !important; }
 
   .mp-status-dot.pass { color: #198754 !important; }
   .mp-status-dot.warn { color: #fd7e14 !important; }

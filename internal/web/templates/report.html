@@ -117,6 +117,8 @@
               <p class="text-uppercase fw-bold small text-secondary mb-1" style="letter-spacing:.06em">
                 Gesamtscore
                 {{if .Encrypted}}<span id="mp-e2e-badge-report" class="badge text-bg-secondary ms-2" style="font-size:.65rem; vertical-align:middle"><i class="bi bi-lock-fill me-1"></i>E2E verschlüsselt</span>{{end}}
+                {{if and (not .Encrypted) .Report.MailType}}<span class="badge text-bg-secondary ms-2" style="font-size:.65rem; vertical-align:middle" title="Automatisch erkannter Mail-Typ">{{mailTypeIcon .Report.MailType}} {{mailTypeLabel .Report.MailType}}</span>{{end}}
+                <span id="mp-mail-type-badge" class="badge text-bg-secondary ms-2" style="font-size:.65rem; vertical-align:middle; display:none" title="Automatisch erkannter Mail-Typ (Auto-Detection)"></span>
               </p>
               <h1 class="h2 fw-bold mb-1">{{.HeroTitle}}</h1>
               <p class="text-secondary mb-3">{{.HeroSubtitle}}</p>
@@ -296,6 +298,7 @@
                       {{if gt .WarnCount 0}}<span class="badge mp-grp-badge warn">{{.WarnCount}} !</span>{{end}}
                       {{if gt .FailCount 0}}<span class="badge mp-grp-badge fail">{{.FailCount}} ✗</span>{{end}}
                       {{if gt .InfoCount 0}}<span class="badge mp-grp-badge info">{{.InfoCount}} i</span>{{end}}
+                      {{if gt .NACount 0}}<span class="badge mp-grp-badge na">{{.NACount}} –</span>{{end}}
                     </span>
                     <i class="bi bi-chevron-down mp-group-chevron"></i>
                   </span>
@@ -321,7 +324,7 @@
                             <small>{{.Summary}}</small>
                           </span>
                           <span class="mp-pill {{.Status}}">{{statusLabel .Status}}</span>
-                          <strong class="mp-delta">{{printf "%+.1f" .ScoreDelta}}</strong>
+                          {{if eq .Status "na"}}<strong class="mp-delta text-secondary">—</strong>{{else}}<strong class="mp-delta">{{printf "%+.1f" .ScoreDelta}}</strong>{{end}}
                         </div>
                       </button>
                     </h2>
@@ -1206,6 +1209,19 @@ function showDecrypted(payload, secretToken) {
     badge.innerHTML = '<i class="bi bi-unlock-fill me-1"></i>Entschlüsselt';
   }
 
+  // Show the auto-detected mail type badge.
+  var mailType = payload.report && payload.report.mail_type;
+  if (mailType) {
+    var mtIcons  = {personal:'🧑', transactional:'⚙️', bulk:'📬'};
+    var mtLabels = {personal:'Persönlich', transactional:'Transactional', bulk:'Newsletter/Bulk'};
+    var mtBadge  = document.getElementById('mp-mail-type-badge');
+    if (mtBadge && mtLabels[mailType]) {
+      mtBadge.textContent = (mtIcons[mailType] || '') + ' ' + mtLabels[mailType];
+      mtBadge.style.display = '';
+      mtBadge.title = 'Automatisch erkannter Mail-Typ: ' + mtLabels[mailType];
+    }
+  }
+
   // Befülle Share-Block mit klickbaren Feldern.
   var shareBlock = document.getElementById('mp-share-block');
   if (shareBlock && TOKEN) {
@@ -1338,7 +1354,7 @@ function esc(s) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function statusLbl(s) {
-  return {pass:'Bestanden',warn:'Warnung',fail:'Fehler',info:'Info'}[s] || s;
+  return {pass:'Bestanden',warn:'Warnung',fail:'Fehler',info:'Info',na:'N/A'}[s] || s;
 }
 
 // statusGlyph returns the icon shown inside the coloured status square.
@@ -1346,6 +1362,7 @@ function statusGlyph(s) {
   return {
     pass: '<i class="bi bi-check-lg"></i>',
     warn: '<i class="bi bi-exclamation-lg"></i>',
+    na:   '<i class="bi bi-dash-lg"></i>',
     fail: '<i class="bi bi-x-lg"></i>',
     info: '<i class="bi bi-info-lg"></i>'
   }[s] || '';
@@ -1361,8 +1378,8 @@ function techLabel(key) {
 }
 
 // Sort checks so the most actionable bubble to the top within a section:
-// errors → warnings → infos → passed. Mirrors sortChecks() in server.go.
-var CHECK_RANK = { fail: 0, warn: 1, info: 2, pass: 3 };
+// errors → warnings → infos → passed → n/a. Mirrors sortChecks() in server.go.
+var CHECK_RANK = { fail: 0, warn: 1, info: 2, pass: 3, na: 10 };
 function sortChecksBySeverity(checks) {
   return (checks || []).slice().sort(function(a, b) {
     var ra = CHECK_RANK[a.status]; if (ra == null) ra = 9;
@@ -1417,11 +1434,12 @@ var GROUP_HINTS = {
 
 // groupBadgesHTML / groupStatusHTML build the section-header counters and status
 // pill; shared by the initial render and the post-recheck header update.
-function groupBadgesHTML(p,w,f,inf){
+function groupBadgesHTML(p,w,f,inf,na_count){
   return (p?'<span class="badge mp-grp-badge pass">'+p+' ✓</span>':'')+
          (w?'<span class="badge mp-grp-badge warn">'+w+' !</span>':'')+
          (f?'<span class="badge mp-grp-badge fail">'+f+' ✗</span>':'')+
-         (inf?'<span class="badge mp-grp-badge info">'+inf+' i</span>':'');
+         (inf?'<span class="badge mp-grp-badge info">'+inf+' i</span>':'')+
+         (na_count?'<span class="badge mp-grp-badge na">'+na_count+' –</span>':'');
 }
 function groupStatusHTML(grpState){
   return grpState==='fail'
@@ -1433,9 +1451,10 @@ function groupStatusHTML(grpState){
 
 function renderCheckGroup(name, checks, gi) {
   checks = sortChecksBySeverity(checks);
-  var p=0,w=0,f=0,inf=0;
+  var p=0,w=0,f=0,inf=0,na_count=0;
   checks.forEach(function(c){
-    if(c.status==='pass')p++; else if(c.status==='warn')w++;
+    if(c.status==='na')na_count++;
+    else if(c.status==='pass')p++; else if(c.status==='warn')w++;
     else if(c.status==='fail')f++; else inf++;
   });
   var grpState = f>0 ? 'fail' : (w>0 ? 'warn' : 'pass');
@@ -1449,7 +1468,7 @@ function renderCheckGroup(name, checks, gi) {
   var h='<div class="card mb-3 mp-group-card mp-grp-'+grpState+'"><div class="card-header mp-group-header p-0">'+
         '<button class="mp-group-toggle collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#'+gid+'" aria-expanded="false" aria-controls="'+gid+'">'+
         '<span class="mp-group-row">'+groupStatusHTML(grpState)+'<span class="mp-group-title">'+esc(name)+'</span>'+
-        '<span class="mp-group-badges">'+groupBadgesHTML(p,w,f,inf)+'</span>'+
+        '<span class="mp-group-badges">'+groupBadgesHTML(p,w,f,inf,na_count)+'</span>'+
         '<i class="bi bi-chevron-down mp-group-chevron"></i></span>'+hint+'</button>'+secBtn+'</div>'+
         '<div id="'+gid+'" class="collapse"><div class="card-body p-0"><div class="accordion accordion-flush" id="dec-grp-'+gi+'">';
   checks.forEach(function(c,ci){ h+=renderDecCheckItem(c, 'dec-'+gi+'-'+ci); });
@@ -1461,12 +1480,16 @@ function renderCheckGroup(name, checks, gi) {
 function updateGroupHeader(card){
   if(!card) return;
   var items=card.querySelectorAll('.mp-check-item');
-  var p=0,w=0,f=0,inf=0;
-  items.forEach(function(it){ var s=it.dataset.status; if(s==='pass')p++; else if(s==='warn')w++; else if(s==='fail')f++; else inf++; });
+  var p=0,w=0,f=0,inf=0,na_count=0;
+  items.forEach(function(it){
+    var s=it.dataset.status;
+    if(s==='na')na_count++;
+    else if(s==='pass')p++; else if(s==='warn')w++; else if(s==='fail')f++; else inf++;
+  });
   var grpState = f>0?'fail':(w>0?'warn':'pass');
   card.classList.remove('mp-grp-fail','mp-grp-warn','mp-grp-pass');
   card.classList.add('mp-grp-'+grpState);
-  var b=card.querySelector('.mp-group-badges'); if(b) b.innerHTML=groupBadgesHTML(p,w,f,inf);
+  var b=card.querySelector('.mp-group-badges'); if(b) b.innerHTML=groupBadgesHTML(p,w,f,inf,na_count);
   var st=card.querySelector('.mp-group-status'); if(st) st.outerHTML=groupStatusHTML(grpState);
 }
 
@@ -1479,9 +1502,10 @@ var RECHECKABLE = {spf:1, spf_strictness:1, dmarc:1, mx_records:1, address_recor
 // renderDecCheckItem renders a single decrypted check accordion item. Used by
 // renderCheckGroup and to re-render one item in place after a live recheck.
 function renderDecCheckItem(c, uid){
-  var delta=c.score_delta?(c.score_delta>0?'+':'')+Number(c.score_delta).toFixed(1):'';
+  var delta=c.status==='na'?'—':(c.score_delta?(c.score_delta>0?'+':'')+Number(c.score_delta).toFixed(1):'');
   var open=c.status==='fail'?'show':'', col=c.status!=='fail'?'collapsed':'';
-  var recheckBtn = RECHECKABLE[c.id]
+  // N/A checks never get a recheck button.
+  var recheckBtn = (c.status!=='na') && RECHECKABLE[c.id]
     ? '<button class="mp-chk-recheck" type="button" data-recheck="'+esc(c.id)+'" title="Neu prüfen (frische DNS-/Reputations-Abfrage)" aria-label="Neu prüfen"><i class="bi bi-arrow-clockwise"></i></button>'
     : '';
   var h='<div class="accordion-item mp-check-item '+esc(c.status)+'" data-status="'+esc(c.status)+'" id="chk-'+uid+'">'+

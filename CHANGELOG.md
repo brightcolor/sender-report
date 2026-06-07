@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-06-07
+
+### Added
+- **Mail-type auto-detection.** The analyzer now detects the mail type from headers
+  (`Precedence`, `List-Unsubscribe`, `List-ID`, `Feedback-ID`, `Auto-Submitted`,
+  `X-Mailer`, `User-Agent`) and classifies each message as `personal`, `transactional`,
+  `bulk`, or `unknown`. The detected type is stored in `AnalysisReport.MailType` and
+  included in the E2E-encrypted payload.
+- **N/A check status.** Checks that are irrelevant for a given mail type are now marked
+  `na` (not applicable) instead of being scored as failures. Affected checks:
+  - `return_path` → N/A for personal and transactional mails
+  - `list_unsub` → N/A for personal and transactional; always enforced for bulk
+  N/A checks show a grey dash icon, carry no score delta, and display a full
+  explanation of why they are not applicable.
+- **Mail-type badge in the report hero.** A small badge (🧑 Persönlich /
+  ⚙️ Transactional / 📬 Newsletter/Bulk) appears next to the score heading.
+  For E2E-encrypted reports it is populated by JS after decryption; for
+  cleartext reports it is rendered server-side.
+- **N/A count in section headers.** Sections with N/A checks show a grey "– N" badge
+  alongside the existing pass/warn/fail/info counters.
+
 ## [1.15.2] - 2026-06-04
 
 ### Fixed
