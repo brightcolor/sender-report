@@ -52,7 +52,7 @@ func TestNewsletterHeuristicsListUnsubscribe(t *testing.T) {
 	headers["Precedence"] = []string{"bulk"}
 	body := parsedBody{AllText: "hello subscribers"}
 
-	checks := newsletterHeuristics(headers, body)
+	checks := newsletterHeuristics(headers, body, "bulk")
 	if len(checks) == 0 {
 		t.Fatal("expected newsletter checks")
 	}
@@ -61,7 +61,7 @@ func TestNewsletterHeuristicsListUnsubscribe(t *testing.T) {
 	}
 
 	headers["List-Unsubscribe"] = []string{"<mailto:unsubscribe@example.org>"}
-	checks = newsletterHeuristics(headers, body)
+	checks = newsletterHeuristics(headers, body, "bulk")
 	if len(checks) == 0 {
 		t.Fatal("expected newsletter checks with list-unsubscribe")
 	}
