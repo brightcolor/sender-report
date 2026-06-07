@@ -695,7 +695,9 @@ body,
 .mp-addr-inline {
   cursor: pointer;
   border-radius: 3px;
-  padding: 1px 3px;
+  padding: 1px 4px;
+  font-family: 'Cascadia Code', 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-weight: 600;
   transition: background-color .15s, color .15s;
 }
 .mp-addr-inline:hover { background-color: rgba(var(--bs-primary-rgb), .12); color: var(--bs-primary); }
@@ -1411,6 +1413,7 @@ body,
   display: block;
   width: 100%;
   font-family: 'Cascadia Code', 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-weight: 600;
   font-size: .82rem;
   color: var(--bs-body-color);
   overflow: hidden;

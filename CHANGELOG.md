@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.1] - 2026-06-07
+
+### Changed
+- **Monospace link fields.** All fields that show the mailbox address or share
+  link (`mp-addr-inline`, `mp-share-text`) now use the same cool monospace stack
+  (`Cascadia Code` → `JetBrains Mono` → `ui-monospace` → `Consolas`) and
+  `font-weight: 600` for a slightly bolder, technical look.
+
 ## [1.16.0] - 2026-06-07
 
 ### Added
