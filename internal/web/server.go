@@ -384,6 +384,8 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"techLabelsJSON":     techLabelsJSON,
 		"mailTypeLabel":      analyzer.MailTypeLabel,
 		"mailTypeIcon":       analyzer.MailTypeIcon,
+		"fmtDelta":           fmtDelta,
+		"fmtScore":           fmtScore,
 		"appVersion":         func() string { return version.Version },
 		"jsonEncode": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
@@ -1755,6 +1757,31 @@ func statusLabel(status string) string {
 	default:
 		return "Info"
 	}
+}
+
+// fmtDelta formats a score delta with up to 2 decimal places, stripping
+// trailing zeros, and prefixing positive values with "+".
+// Examples: -0.25 → "-0.25", -0.6 → "-0.6", 0 → "–".
+func fmtDelta(d float64) string {
+	if d == 0 {
+		return "–"
+	}
+	s := strconv.FormatFloat(d, 'f', 2, 64)
+	s = strings.TrimRight(s, "0")
+	s = strings.TrimRight(s, ".")
+	if d > 0 {
+		return "+" + s
+	}
+	return s
+}
+
+// fmtScore formats the overall score (0..10) with up to 2 decimal places,
+// stripping trailing zeros: 9.15 → "9.15", 10.0 → "10", 9.5 → "9.5".
+func fmtScore(f float64) string {
+	s := strconv.FormatFloat(f, 'f', 2, 64)
+	s = strings.TrimRight(s, "0")
+	s = strings.TrimRight(s, ".")
+	return s
 }
 
 func detailsText(details map[string]string) string {

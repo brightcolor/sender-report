@@ -94,7 +94,7 @@
     <hr class="mp-print-rule">
     <div class="mp-print-meta-row">
       <span><strong>Mailbox:</strong> {{.Mailbox.Address}}</span>
-      <span><strong>Score:</strong> {{printf "%.1f" .Report.Score}}/10</span>
+      <span><strong>Score:</strong> {{fmtScore .Report.Score}}/10</span>
       <span><strong>Erstellt:</strong> <span id="mp-print-date"></span></span>
     </div>
   </div>
@@ -109,7 +109,7 @@
           <div class="card-body d-flex align-items-center gap-4 p-4 flex-wrap justify-content-center justify-content-sm-start text-center text-sm-start">
             <div class="mp-ring mx-auto mx-sm-0" style="--score:{{scorePercent .Report.Score}}%">
               <div class="mp-ring-inner">
-                <span class="mp-ring-value">{{printf "%.1f" .Report.Score}}</span>
+                <span class="mp-ring-value">{{fmtScore .Report.Score}}</span>
                 <span class="mp-ring-sub">/10</span>
               </div>
             </div>
@@ -324,7 +324,7 @@
                             <small>{{.Summary}}</small>
                           </span>
                           <span class="mp-pill {{.Status}}">{{statusLabel .Status}}</span>
-                          {{if eq .Status "na"}}<strong class="mp-delta text-secondary">—</strong>{{else}}<strong class="mp-delta">{{printf "%+.1f" .ScoreDelta}}</strong>{{end}}
+                          {{if eq .Status "na"}}<strong class="mp-delta text-secondary">—</strong>{{else}}<strong class="mp-delta">{{fmtDelta .ScoreDelta}}</strong>{{end}}
                         </div>
                       </button>
                     </h2>
@@ -1357,6 +1357,20 @@ function statusLbl(s) {
   return {pass:'Bestanden',warn:'Warnung',fail:'Fehler',info:'Info',na:'N/A'}[s] || s;
 }
 
+// fmtDelta formats a score delta without unnecessary rounding:
+// -0.25 → "-0.25", -0.6 → "-0.6", 0 → "–".
+function fmtDelta(d) {
+  if (d == null || d === 0) return '–';
+  var v = Math.round(d * 100) / 100; // cap at 2 decimal places, avoid FP noise
+  var s = v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  return (v > 0 ? '+' : '') + s;
+}
+// fmtScore formats the total score without trailing zeros: 9.15 → "9.15", 10 → "10".
+function fmtScore(v) {
+  var s = v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  return s;
+}
+
 // statusGlyph returns the icon shown inside the coloured status square.
 function statusGlyph(s) {
   return {
@@ -1502,7 +1516,7 @@ var RECHECKABLE = {spf:1, spf_strictness:1, dmarc:1, dmarc_policy:1, mx_records:
 // renderDecCheckItem renders a single decrypted check accordion item. Used by
 // renderCheckGroup and to re-render one item in place after a live recheck.
 function renderDecCheckItem(c, uid){
-  var delta=c.status==='na'?'—':(c.score_delta?(c.score_delta>0?'+':'')+Number(c.score_delta).toFixed(1):'');
+  var delta=c.status==='na'?'—':fmtDelta(c.score_delta||0);
   var open=c.status==='fail'?'show':'', col=c.status!=='fail'?'collapsed':'';
   // N/A checks never get a recheck button.
   var recheckBtn = (c.status!=='na') && RECHECKABLE[c.id]
@@ -1722,7 +1736,7 @@ function updateHeroScore(score, label) {
   var ring = document.querySelector('.mp-score-hero .mp-ring');
   var val  = document.querySelector('.mp-score-hero .mp-ring-value');
   var hero = document.querySelector('.mp-score-hero');
-  if (val) val.textContent = score.toFixed(1);
+  if (val) val.textContent = fmtScore(score);
   if (ring) ring.style.setProperty('--score', (score * 10) + '%');
   if (hero) {
     hero.classList.remove('status-pass','status-warn','status-fail');

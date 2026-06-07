@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.5] - 2026-06-07
+
+### Changed
+- **Exact score and delta display (no rounding).** Score deltas are now shown
+  with up to 2 decimal places, stripping trailing zeros: `-0.25` instead of
+  `-0.3`, `-0.6` instead of `-0.6` (unchanged here), `–` for zero. The total
+  score is similarly shown without forced single-decimal rounding: `9.15`
+  instead of `9.2`. This makes the individual deltas add up visibly to the
+  total score without apparent discrepancies.
+
 ## [1.16.4] - 2026-06-07
 
 ### Added
