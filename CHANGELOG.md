@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.3] - 2026-06-07
+
+### Changed
+- **Mail-type default flipped to "personal".** If no explicit bulk signals
+  are present (`Precedence`, `List-*`, `Feedback-ID`) and no transactional
+  `Auto-Submitted` header, the mail is now classified as `personal` instead
+  of `unknown`. Bulk mailers always carry at least one of these headers;
+  everything else (custom domains, Google Workspace, self-hosted, etc.)
+  is treated as a human-sent message and bulk-only checks (`return_path`,
+  `list_unsub`) are marked N/A.
+
 ## [1.16.2] - 2026-06-07
 
 ### Fixed

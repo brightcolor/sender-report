@@ -616,14 +616,17 @@ func detectMailType(headers mail.Header) string {
 	}
 
 	// ── Consumer webmail provider (no X-Mailer set by web UI) ─────────────────
-	// If the From-address domain belongs to a well-known consumer webmail
-	// provider there are no bulk signals, classify as personal.
 	fromAddr := strings.ToLower(strings.TrimSpace(headers.Get("From")))
 	if isConsumerWebmail(fromAddr) {
 		return "personal"
 	}
 
-	return "unknown"
+	// ── Default: no bulk signals present → treat as personal ──────────────────
+	// Bulk mailers always carry at least one of Precedence/List-*/Feedback-ID.
+	// If none of those are present, the mail is most likely a human-sent
+	// message (custom domain, Workspace, self-hosted, etc.) and bulk-only
+	// checks (Return-Path, List-Unsubscribe) should not penalise it.
+	return "personal"
 }
 
 // isConsumerWebmail reports whether the From-header address belongs to a
