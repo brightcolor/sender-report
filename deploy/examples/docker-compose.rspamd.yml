@@ -6,3 +6,6 @@ services:
     expose:
       - "11334"
     mem_limit: 256m
+    # Controller access + pinned DNS resolvers (8.8.8.8 / 1.1.1.1).
+    volumes:
+      - ./rspamd/local.d:/etc/rspamd/local.d:ro

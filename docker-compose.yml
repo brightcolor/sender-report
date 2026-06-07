@@ -37,6 +37,9 @@ services:
     container_name: rspamd
     restart: unless-stopped
     mem_limit: 256m
+    # Local overrides: controller access + pinned DNS resolvers (8.8.8.8 / 1.1.1.1).
+    volumes:
+      - ./rspamd/local.d:/etc/rspamd/local.d:ro
     # Kein Port-Expose nötig — sender-report erreicht rspamd intern über
     # den Docker-Netzwerknamen 'rspamd'.
     # Optionales Rspamd-Web-UI (read-only, kein Passwort):

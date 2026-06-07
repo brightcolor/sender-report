@@ -4,7 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.15.1] - 2026-06-04
+## [1.15.2] - 2026-06-04
+
+### Fixed
+- **Rspamd DNS resolution.** Pinned Rspamd's resolver to public nameservers
+  (`8.8.8.8` / `1.1.1.1`) via `rspamd/local.d/options.inc`, so DNSBL/URIBL/SPF/DKIM
+  lookups work instead of failing through Docker's embedded resolver. Also mount
+  `rspamd/local.d` into the rspamd service in `docker-compose.yml` and the standalone
+  example (the quickstart override already mounted it).
 
 ### Added
 - `THIRD_PARTY_NOTICES.md` reproducing the licenses of all statically linked Go
