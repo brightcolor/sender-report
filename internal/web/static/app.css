@@ -1354,11 +1354,11 @@ body,
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .mp-chk-inner .mp-pill,
-  .mp-chk-inner .mp-delta { display: none; }
+  .mp-chk-inner .mp-pill { display: none; }
   .mp-chk-inner {
-    grid-template-columns: 26px minmax(0, 1fr);
+    grid-template-columns: 26px minmax(0, 1fr) auto;
   }
+  .mp-chk-inner .mp-delta { font-size: .8rem; min-width: 2.5rem; }
   .mp-live-meta { display: none; }
   .mp-report-side { position: static; }
   .mp-consent-inner { flex-direction: column; gap: .75rem; }
@@ -1662,10 +1662,15 @@ body,
 .mp-adv-option:hover { border-color: var(--bs-primary) !important; }
 
 /* ── Per-check recheck button (in the check header) ──────────────────────────── */
-.mp-chk-head { display: flex; align-items: stretch; }
+/* Absolute-positioned so the accordion button always takes the full header
+   width — pill + delta stay right-aligned regardless of recheck presence. */
+.mp-chk-head { position: relative; display: flex; align-items: stretch; }
 .mp-chk-head > .accordion-button { flex: 1 1 auto; }
+/* Reserve right space for the recheck button only when one is present. */
+.mp-chk-head:has(.mp-chk-recheck) > .accordion-button { padding-right: 3.2rem; }
 .mp-chk-recheck {
-  flex: 0 0 auto;
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
   border: 0;
   border-left: 1px solid var(--bs-border-color);
   background: var(--bs-body-bg);
@@ -1686,6 +1691,7 @@ body,
 .mp-chk-recheck .spinner-border { width: 1.05rem; height: 1.05rem; border-width: .15em; }
 @media (max-width: 576px) {
   .mp-chk-recheck { min-width: 3.4rem; font-size: 1.2rem; } /* larger tap target on mobile */
+  .mp-chk-head:has(.mp-chk-recheck) > .accordion-button { padding-right: 3.6rem; }
 }
 
 /* Section-level reload (in the group header, sibling of the toggle button) */
