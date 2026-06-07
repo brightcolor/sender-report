@@ -615,7 +615,63 @@ func detectMailType(headers mail.Header) string {
 		}
 	}
 
+	// ── Consumer webmail provider (no X-Mailer set by web UI) ─────────────────
+	// If the From-address domain belongs to a well-known consumer webmail
+	// provider there are no bulk signals, classify as personal.
+	fromAddr := strings.ToLower(strings.TrimSpace(headers.Get("From")))
+	if isConsumerWebmail(fromAddr) {
+		return "personal"
+	}
+
 	return "unknown"
+}
+
+// isConsumerWebmail reports whether the From-header address belongs to a
+// well-known consumer webmail provider (as opposed to a business or ESP domain).
+func isConsumerWebmail(fromHeader string) bool {
+	// Extract the domain part from the address (handle "Name <user@domain>" form).
+	at := strings.LastIndex(fromHeader, "@")
+	if at < 0 {
+		return false
+	}
+	domain := fromHeader[at+1:]
+	// Strip trailing ">" and whitespace that may follow the domain.
+	domain = strings.TrimRight(domain, "> \t\r\n")
+
+	// Remove any subdomain prefix so mail.yahoo.de → yahoo.de still matches.
+	// We keep one level of TLD so e.g. googlemail.com works directly.
+	parts := strings.Split(domain, ".")
+	if len(parts) >= 2 {
+		// Use last two labels as the registrable domain for lookup.
+		domain = parts[len(parts)-2] + "." + parts[len(parts)-1]
+	}
+
+	switch domain {
+	case
+		// Google
+		"gmail.com", "googlemail.com",
+		// Microsoft
+		"outlook.com", "hotmail.com", "hotmail.de", "hotmail.fr",
+		"live.com", "live.de", "live.fr", "msn.com",
+		// Yahoo
+		"yahoo.com", "yahoo.de", "yahoo.fr", "yahoo.co.uk",
+		"yahoo.es", "yahoo.it", "ymail.com",
+		// Apple
+		"icloud.com", "me.com", "mac.com",
+		// German providers
+		"gmx.de", "gmx.net", "gmx.com", "gmx.at", "gmx.ch",
+		"web.de", "t-online.de", "freenet.de", "arcor.de",
+		// Privacy / encrypted
+		"protonmail.com", "proton.me", "tutanota.com", "tutanota.de",
+		"tuta.io", "skiff.com",
+		// Other popular consumer providers
+		"fastmail.com", "fastmail.fm", "pm.me",
+		"aol.com", "aol.de", "aim.com",
+		"zoho.com", "mail.com",
+		"yandex.com", "yandex.ru":
+		return true
+	}
+	return false
 }
 
 // MailTypeLabel returns a human-readable German label for a mail type.

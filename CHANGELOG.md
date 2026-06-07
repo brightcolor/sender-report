@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.2] - 2026-06-07
+
+### Fixed
+- **Mail-type detection for webmail clients.** Gmail, Outlook.com, Yahoo,
+  iCloud, GMX, web.de, ProtonMail and ~30 other consumer webmail providers
+  set no `X-Mailer`/`User-Agent` header via their web UI, causing mails to
+  fall back to "unknown" instead of "personal". Added `isConsumerWebmail()`
+  that matches the From-address domain against a list of known consumer
+  providers, so `return_path` and `list_unsub` are correctly marked N/A for
+  personal mails sent via webmail.
+
 ## [1.16.1] - 2026-06-07
 
 ### Changed
