@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-06-09
+
+### Added
+- **RBL details in encrypted reports.** The rich RBL display (impact banner,
+  per-provider hit list with delisting buttons, collapsible delisting hints,
+  pre-delisting checklist, DE/EN template letter) already existed for
+  non-encrypted reports. Added `renderRblDetails()` in JS so E2E-encrypted
+  reports render the identical structured output after client-side decryption.
+
 ## [1.16.5] - 2026-06-07
 
 ### Changed

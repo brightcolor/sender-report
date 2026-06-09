@@ -1403,6 +1403,94 @@ function sortChecksBySeverity(checks) {
   });
 }
 
+// renderRblDetails renders the structured RBL hit list with delisting buttons and
+// pre-delisting checklist for encrypted reports. Mirrors the server-side RBL block.
+function renderRblDetails(td) {
+  if (!td) return '';
+  var ip      = td.remote_ip || '';
+  var impact  = td.deliverability_impact || '';
+  var listed  = (td.listed_providers && td.listed_providers !== 'none') ? td.listed_providers.split('\n') : [];
+  var resps   = (td.listing_responses && td.listing_responses !== 'none') ? td.listing_responses.split('\n') : [];
+  var urls    = (td.provider_delist_urls && td.provider_delist_urls !== 'none') ? td.provider_delist_urls.split('\n') : [];
+  var steps   = (td.provider_delisting && td.provider_delisting !== 'none') ? td.provider_delisting.split('\n\n') : [];
+  var preRaw  = (td.pre_delisting_checks && td.pre_delisting_checks !== 'none') ? td.pre_delisting_checks.split('\n') : [];
+  var hasHits = listed.length > 0;
+  var h = '';
+
+  // Impact banner
+  if (impact) {
+    var bannerCls = hasHits ? 'alert-danger' : 'alert-success';
+    var bannerIcon = hasHits ? 'exclamation-triangle-fill' : 'check-circle-fill';
+    h += '<div class="alert '+bannerCls+' py-2 mb-3 d-flex align-items-start gap-2">'+
+         '<i class="bi bi-'+bannerIcon+' flex-shrink-0 mt-1"></i><span>'+esc(impact)+'</span></div>';
+  }
+
+  // Listed providers with delisting buttons
+  if (hasHits) {
+    h += '<h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">'+
+         '<i class="bi bi-list-check me-1"></i>Gelistet auf</h6>'+
+         '<div class="d-flex flex-column gap-2 mb-3">';
+    listed.forEach(function(prov, i) {
+      if (!prov.trim()) return;
+      var resp     = (i < resps.length)  ? resps[i].trim()  : '';
+      var urlRaw   = (i < urls.length)   ? urls[i].trim()   : '';
+      var stepRaw  = (i < steps.length)  ? steps[i].trim()  : '';
+      // urls are stored as "ProviderName: https://..."
+      var url = urlRaw.indexOf(': ') > -1 ? urlRaw.slice(urlRaw.indexOf(': ') + 2).trim() : urlRaw;
+      var step = stepRaw.indexOf(': ') > -1 ? stepRaw.slice(stepRaw.indexOf(': ') + 2).trim() : stepRaw;
+      var hintId = 'rbl-js-hint-'+i;
+      h += '<div class="mp-rbl-hit"><div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">'+
+           '<div><strong>'+esc(prov.trim())+'</strong>'+
+           (resp && resp !== 'none' ? '<code class="text-danger small ms-2">→ '+esc(resp)+'</code>' : '')+
+           '</div>';
+      if (url && url !== 'none') {
+        h += '<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-danger flex-shrink-0">'+
+             '<i class="bi bi-box-arrow-up-right me-1"></i>Delisting</a>';
+      }
+      h += '</div>';
+      if (step && step !== 'none') {
+        h += '<button class="btn btn-link btn-sm text-secondary p-0 mt-1" type="button" '+
+             'data-bs-toggle="collapse" data-bs-target="#'+hintId+'">'+
+             '<i class="bi bi-info-circle me-1"></i>Delisting-Hinweise anzeigen</button>'+
+             '<div id="'+hintId+'" class="collapse mt-2">'+
+             '<p class="small text-secondary mb-0" style="white-space:pre-line">'+esc(step)+'</p></div>';
+      }
+      h += '</div>';
+    });
+    h += '</div>';
+
+    // Pre-delisting checklist
+    if (preRaw.length) {
+      h += '<h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">'+
+           '<i class="bi bi-card-checklist me-1"></i>Vor dem Delisting</h6>'+
+           '<ol class="mp-feat-list ps-3 mb-3">';
+      preRaw.forEach(function(line){ if (line.trim()) h += '<li class="mb-1">'+esc(line.replace(/^\d+\.\s*/, ''))+'</li>'; });
+      h += '</ol>';
+    }
+
+    // Template letter (collapsed)
+    var uid = 'rbl-js-letter';
+    h += '<button class="btn btn-outline-secondary btn-sm mb-3" type="button" '+
+         'data-bs-toggle="collapse" data-bs-target="#'+uid+'">'+
+         '<i class="bi bi-chat-left-text me-1"></i>Formulierungshilfe anzeigen (DE / EN)</button>'+
+         '<div id="'+uid+'" class="collapse mb-3">'+
+         '<ul class="nav nav-tabs mb-0"><li class="nav-item">'+
+         '<button class="nav-link active small" data-bs-toggle="tab" data-bs-target="#'+uid+'-de" type="button">Deutsch</button></li>'+
+         '<li class="nav-item"><button class="nav-link small" data-bs-toggle="tab" data-bs-target="#'+uid+'-en" type="button">English</button></li></ul>'+
+         '<div class="tab-content border border-top-0 rounded-bottom p-3">'+
+         '<div class="tab-pane fade show active" id="'+uid+'-de">'+
+         '<pre class="mp-raw-pre mb-0" style="font-size:.8rem">'+esc(
+           'Sehr geehrte Damen und Herren,\n\nhiermit beantrage ich die Entfernung der IP-Adresse '+ip+' aus Ihrer Blockliste.\n\nDie Ursache für das Listing war: [bitte ergänzen].\nWir haben folgende Maßnahmen ergriffen: [bitte ergänzen].\n\nDie IP-Adresse sendet seit [Datum] keinen unerwünschten Verkehr mehr.\nIch bitte um Prüfung und Entfernung aus Ihrer Liste.\n\nMit freundlichen Grüßen\n[Name / Unternehmen / Kontakt]'
+         )+'</pre></div>'+
+         '<div class="tab-pane fade" id="'+uid+'-en">'+
+         '<pre class="mp-raw-pre mb-0" style="font-size:.8rem">'+esc(
+           'Dear Sir or Madam,\n\nI am writing to request the removal of IP address '+ip+' from your blocklist.\n\nThe reason for the listing was: [please describe].\nWe have taken the following corrective actions: [please describe].\n\nThe IP address has not generated any unsolicited traffic since [date].\nPlease review and remove it from your list.\n\nKind regards,\n[Name / Company / Contact]'
+         )+'</pre></div>'+
+         '</div></div>';
+  }
+  return h;
+}
+
 // Render the Rspamd symbol table (parsed from sym:NAME -> "score|desc|explain").
 // Mirrors the server-side template so encrypted reports show identical output.
 function renderRspamdSymbols(td) {
@@ -1532,6 +1620,8 @@ function renderDecCheckItem(c, uid){
      '<div id="cb-'+uid+'" class="accordion-collapse collapse '+open+'"><div class="accordion-body">';
   if(c.id==='rspamd'&&c.technical_details)
     h+=renderRspamdSymbols(c.technical_details);
+  if(c.id==='rbl'&&c.technical_details)
+    h+=renderRblDetails(c.technical_details);
   if(c.explanation)
     h+='<div class="mb-3"><h6 class="text-uppercase small fw-bold text-secondary mb-1" style="letter-spacing:.06em">Erklärung</h6><p class="mb-0">'+esc(c.explanation)+'</p></div>';
   if(c.recommendation&&(c.status==='warn'||c.status==='fail'))
