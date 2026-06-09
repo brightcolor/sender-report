@@ -1,6 +1,6 @@
 {{define "about"}}
 <!doctype html>
-<html lang="de" data-bs-theme="light">
+<html lang="{{.Lang}}" data-bs-theme="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -69,18 +69,28 @@
         </li>
         <li class="nav-item dropdown">
           <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-            Mehr
+            {{t .Lang "nav.more"}}
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>Über sender.report</a></li>
-            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>Was wird geprüft?</a></li>
+            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>{{t .Lang "nav.about"}} sender.report</a></li>
+            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>{{t .Lang "nav.about_checks"}}</a></li>
             <li><a class="dropdown-item small" href="/about#faq"><i class="bi bi-question-circle me-2"></i>FAQ</a></li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>Datenschutz</a></li>
+            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>{{t .Lang "nav.privacy"}}</a></li>
           </ul>
         </li>
+        <!-- Language switcher -->
         <li class="nav-item">
-          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
+          <form method="post" action="/lang" class="d-inline">
+            {{if eq .Lang "de"}}
+            <button class="btn btn-outline-secondary btn-sm" type="submit" name="l" value="en" title="Switch to English">EN</button>
+            {{else}}
+            <button class="btn btn-outline-secondary btn-sm" type="submit" name="l" value="de" title="Auf Deutsch wechseln">DE</button>
+            {{end}}
+          </form>
+        </li>
+        <li class="nav-item">
+          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="{{t .Lang "nav.theme_toggle"}}">
             <i class="theme-icon bi bi-circle-half"></i>
           </button>
         </li>
@@ -97,13 +107,21 @@
         <div class="d-flex align-items-center gap-2 mb-2">
           <a href="/" class="text-secondary text-decoration-none small"><i class="bi bi-house me-1"></i>Start</a>
           <span class="text-secondary small opacity-50">/</span>
-          <span class="text-secondary small">Über sender.report</span>
+          <span class="text-secondary small">{{t .Lang "nav.about"}} sender.report</span>
         </div>
+        {{if eq .Lang "de"}}
         <h1 class="fw-bold mb-3" style="font-size:2rem">Über sender.report</h1>
         <p class="text-secondary mb-0" style="font-size:1.075rem; max-width:600px; line-height:1.7">
           sender.report ist ein selbst-gehostetes Werkzeug, das deine E-Mail-Zustellbarkeit
           analysiert — ohne Account, ohne Tracking, ohne Drittanbieter.
         </p>
+        {{else}}
+        <h1 class="fw-bold mb-3" style="font-size:2rem">About sender.report</h1>
+        <p class="text-secondary mb-0" style="font-size:1.075rem; max-width:600px; line-height:1.7">
+          sender.report is a self-hosted tool that analyses your email deliverability —
+          no account, no tracking, no third parties.
+        </p>
+        {{end}}
       </div>
     </section>
 

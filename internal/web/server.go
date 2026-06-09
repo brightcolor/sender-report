@@ -72,6 +72,7 @@ type PrivacyData struct {
 	OperatorAddress  string
 	OperatorEmail    string
 	HideTemplateNote bool
+	Lang             string
 }
 
 type MailboxData struct {
@@ -943,10 +944,12 @@ func (s *Server) aboutPage(w http.ResponseWriter, r *http.Request) {
 		AppName   string
 		Domain    string
 		PublicURL string
+		Lang      string
 	}{
 		AppName:   s.cfg.AppName,
 		Domain:    host,
 		PublicURL: s.publicBaseURL(r),
+		Lang:      string(i18n.Detect(r)),
 	})
 }
 
@@ -961,6 +964,7 @@ func (s *Server) privacyPage(w http.ResponseWriter, r *http.Request) {
 		OperatorAddress:  s.cfg.PrivacyOperatorAddress,
 		OperatorEmail:    s.cfg.PrivacyOperatorEmail,
 		HideTemplateNote: s.cfg.PrivacyHideTemplateNote,
+		Lang:             string(i18n.Detect(r)),
 	})
 }
 

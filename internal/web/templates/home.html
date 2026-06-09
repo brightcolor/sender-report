@@ -73,14 +73,14 @@
         </li>
         <li class="nav-item dropdown">
           <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-            Mehr
+            {{t .Lang "nav.more"}}
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>Über sender.report</a></li>
-            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>Was wird geprüft?</a></li>
+            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>{{t .Lang "nav.about"}} sender.report</a></li>
+            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>{{t .Lang "nav.about_checks"}}</a></li>
             <li><a class="dropdown-item small" href="/about#faq"><i class="bi bi-question-circle me-2"></i>FAQ</a></li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>Datenschutz</a></li>
+            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>{{t .Lang "nav.privacy"}}</a></li>
           </ul>
         </li>
         <!-- Language switcher -->
@@ -94,7 +94,7 @@
           </form>
         </li>
         <li class="nav-item">
-          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
+          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="{{t .Lang "nav.theme_toggle"}}">
             <i class="theme-icon bi bi-circle-half"></i>
           </button>
         </li>
@@ -108,20 +108,21 @@
 
       <!-- ══ Claim ════════════════════════════════════════════════════════ -->
       <div class="text-center mb-3">
-        <h1 class="fw-bold mb-2" style="font-size:1.75rem">E-Mail Deliverability Test</h1>
+        <h1 class="fw-bold mb-2" style="font-size:1.75rem">{{if eq .Lang "de"}}E-Mail Deliverability Test{{else}}Email Deliverability Test{{end}}</h1>
         <p class="text-secondary mb-0" style="max-width:480px; margin:0 auto">
-          Schick eine Testmail an die Adresse unten — sender.report prüft
-          SPF, DKIM, DMARC, Spam-Score und mehr in Sekunden.
+          {{if eq .Lang "de"}}Schick eine Testmail an die Adresse unten — sender.report prüft
+          SPF, DKIM, DMARC, Spam-Score und mehr in Sekunden.{{else}}Send a test email to the address below — sender.report checks
+          SPF, DKIM, DMARC, spam score and more in seconds.{{end}}
         </p>
       </div>
 
       <!-- ══ Kurzanleitung ════════════════════════════════════════════════ -->
       <div class="mp-steps-bar mb-3">
-        <span class="mp-step"><span class="mp-step-num">1</span>Adresse kopieren</span>
+        <span class="mp-step"><span class="mp-step-num">1</span>{{if eq .Lang "de"}}Adresse kopieren{{else}}Copy address{{end}}</span>
         <span class="mp-step-arrow">›</span>
-        <span class="mp-step"><span class="mp-step-num">2</span>Testmail senden</span>
+        <span class="mp-step"><span class="mp-step-num">2</span>{{if eq .Lang "de"}}Testmail senden{{else}}Send test email{{end}}</span>
         <span class="mp-step-arrow">›</span>
-        <span class="mp-step"><span class="mp-step-num">3</span>Report öffnen</span>
+        <span class="mp-step"><span class="mp-step-num">3</span>{{t .Lang "home.open_report"}}</span>
       </div>
 
       <!-- ══ Stats-Leiste ════════════════════════════════════════════════ -->
@@ -266,31 +267,38 @@
         <div class="d-flex align-items-start gap-2 mb-3">
           <i class="bi bi-shield-lock-fill text-success" style="font-size:1.45rem; line-height:1"></i>
           <div>
-            <h6 class="fw-bold mb-1">Sicher – ganz ohne Aufwand für dich</h6>
+            <h6 class="fw-bold mb-1">{{t .Lang "home.trust_title"}}</h6>
             <p class="text-secondary small mb-0">
-              Deine Testmail kommt – wie jede E-Mail – zuerst im Klartext an und wird
+              {{if eq .Lang "de"}}Deine Testmail kommt – wie jede E-Mail – zuerst im Klartext an und wird
               sofort analysiert (SPF, DKIM, Spam-Score und mehr). Nur für diesen winzigen
               Moment liegt ihr Inhalt offen vor – meist nur den Bruchteil einer Sekunde.
-              Unmittelbar danach wird er verschlüsselt; ab da öffnet ihn nur noch dein Schlüssel.
+              Unmittelbar danach wird er verschlüsselt; ab da öffnet ihn nur noch dein Schlüssel.{{else}}Your test email arrives – like any email – in plain text first and is
+              immediately analysed (SPF, DKIM, spam score and more). Only for this tiny
+              moment is its content exposed – usually just a fraction of a second.
+              Right after that it is encrypted; from then on only your key can open it.{{end}}
             </p>
           </div>
         </div>
         <ul class="mp-trust-points">
           <li>
             <i class="bi bi-key-fill text-primary"></i>
-            <div><strong>Dein Link ist der Schlüssel.</strong> Der passende Schlüssel steckt
+            <div>{{if eq .Lang "de"}}<strong>Dein Link ist der Schlüssel.</strong> Der passende Schlüssel steckt
               nur in deinem persönlichen Link. Nur wer ihn hat, kann den Report öffnen –
-              nicht einmal wir können mitlesen.</div>
+              nicht einmal wir können mitlesen.{{else}}<strong>Your link is the key.</strong> The decryption key lives
+              only in your personal link. Only those who have it can open the report –
+              not even we can read it.{{end}}</div>
           </li>
           <li>
             <i class="bi bi-people-fill text-primary"></i>
-            <div><strong>Du entscheidest, wer reinschaut.</strong> Teilst du den Link, teilst du
-              den Zugang. Behältst du ihn für dich, bleibt alles ganz bei dir.</div>
+            <div>{{if eq .Lang "de"}}<strong>Du entscheidest, wer reinschaut.</strong> Teilst du den Link, teilst du
+              den Zugang. Behältst du ihn für dich, bleibt alles ganz bei dir.{{else}}<strong>You decide who sees it.</strong> Share the link and you share access.
+              Keep it to yourself and everything stays private.{{end}}</div>
           </li>
           <li>
             <i class="bi bi-fire text-primary"></i>
-            <div><strong>Verschwindet von selbst.</strong> Kein Konto, kein Passwort, keine Spuren –
-              deine Mailbox und alle Daten löschen sich automatisch.</div>
+            <div>{{if eq .Lang "de"}}<strong>Verschwindet von selbst.</strong> Kein Konto, kein Passwort, keine Spuren –
+              deine Mailbox und alle Daten löschen sich automatisch.{{else}}<strong>Disappears on its own.</strong> No account, no password, no traces –
+              your mailbox and all data are deleted automatically.{{end}}</div>
           </li>
         </ul>
       </div>
@@ -305,26 +313,26 @@
       <div class="modal-content">
         <div class="modal-header border-bottom-0 pb-0">
           <h5 class="modal-title text-danger" id="mp-delete-modal-label">
-            <i class="bi bi-trash3 me-2"></i>Mailbox löschen?
+            <i class="bi bi-trash3 me-2"></i>{{if eq .Lang "de"}}Mailbox löschen?{{else}}Delete mailbox?{{end}}
           </h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{t .Lang "nav.close"}}"></button>
         </div>
         <div class="modal-body pt-2">
           <p class="mb-2">
-            Die Mailbox <strong id="mp-delete-addr" class="text-break"></strong> wird dauerhaft gelöscht.
+            {{if eq .Lang "de"}}Die Mailbox <strong id="mp-delete-addr" class="text-break"></strong> wird dauerhaft gelöscht.{{else}}The mailbox <strong id="mp-delete-addr" class="text-break"></strong> will be permanently deleted.{{end}}
           </p>
           <div id="mp-delete-msg-warn" class="alert alert-warning d-none py-2 mb-2" role="alert">
             <i class="bi bi-exclamation-triangle-fill me-1"></i>
             <span id="mp-delete-msg-count"></span>
           </div>
           <p class="text-secondary small mb-0">
-            <i class="bi bi-x-circle text-danger me-1"></i>Diese Aktion kann <strong>nicht rückgängig</strong> gemacht werden.
+            <i class="bi bi-x-circle text-danger me-1"></i>{{if eq .Lang "de"}}Diese Aktion kann <strong>nicht rückgängig</strong> gemacht werden.{{else}}This action <strong>cannot be undone</strong>.{{end}}
           </p>
         </div>
         <div class="modal-footer border-top-0 pt-0">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{t .Lang "home.cancel"}}</button>
           <button type="button" class="btn btn-danger" id="mp-delete-confirm-btn">
-            <i class="bi bi-trash3 me-1"></i>Endgültig löschen
+            <i class="bi bi-trash3 me-1"></i>{{if eq .Lang "de"}}Endgültig löschen{{else}}Delete permanently{{end}}
           </button>
         </div>
       </div>
@@ -337,26 +345,32 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="mp-adv-checks-label">
-            <i class="bi bi-sliders me-2 text-primary"></i>Erweiterte Reputations-Checks
+            <i class="bi bi-sliders me-2 text-primary"></i>{{t .Lang "home.adv_modal_title"}}
           </h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{t .Lang "nav.close"}}"></button>
         </div>
         <div class="modal-body">
 
           <p class="text-secondary small mb-3">
-            Diese Zusatzprüfungen liefern wertvolle Signale – fragen dafür aber
+            {{if eq .Lang "de"}}Diese Zusatzprüfungen liefern wertvolle Signale – fragen dafür aber
             <strong>externe Dienste</strong> ab. Du entscheidest selbst, ob du sie nutzen möchtest.
-            Standardmäßig sind sie <strong>ausgeschaltet</strong>. Die Auswahl gilt für deine aktuelle Mailbox.
+            Standardmäßig sind sie <strong>ausgeschaltet</strong>. Die Auswahl gilt für deine aktuelle Mailbox.{{else}}These additional checks provide valuable signals – but they query
+            <strong>external services</strong>. You decide whether you want to use them.
+            By default they are <strong>disabled</strong>. The selection applies to your current mailbox.{{end}}
           </p>
 
           <div class="alert alert-light border d-flex gap-2 py-2 px-3 small mb-4" role="note">
             <i class="bi bi-info-circle text-primary mt-1"></i>
             <div>
-              <strong>Was bedeutet das?</strong> Bei aktivierten Checks wird die
+              {{if eq .Lang "de"}}<strong>Was bedeutet das?</strong> Bei aktivierten Checks wird die
               <em>Absender-Domain</em> (und bei Link-Prüfung die Domains der enthaltenen Links)
               an die jeweiligen Anbieter übermittelt. Der <em>Inhalt</em> deiner Mail verlässt
               den Server dabei nie. Mehr dazu in der
-              <a href="/privacy" target="_blank" rel="noopener">Datenschutzerklärung</a>.
+              <a href="/privacy" target="_blank" rel="noopener">Datenschutzerklärung</a>.{{else}}<strong>What does this mean?</strong> When checks are enabled, the
+              <em>sender domain</em> (and for link checks, the domains of any links in the email)
+              is transmitted to the respective providers. The <em>content</em> of your email never
+              leaves the server. Learn more in our
+              <a href="/privacy" target="_blank" rel="noopener">{{if eq .Lang "de"}}Datenschutzerklärung{{else}}Privacy Policy{{end}}</a>.{{end}}
             </div>
           </div>
 
@@ -367,16 +381,18 @@
                      id="adv-check-domain-age" style="cursor:pointer">
               <label class="form-check-label" for="adv-check-domain-age" style="cursor:pointer">
                 <span class="fw-semibold d-block mb-1">
-                  Domain-Alter <span class="badge text-bg-success ms-1" style="font-size:.65rem">Empfohlen</span>
+                  {{if eq .Lang "de"}}Domain-Alter{{else}}Domain Age{{end}} <span class="badge text-bg-success ms-1" style="font-size:.65rem">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
                 </span>
                 <span class="text-secondary small d-block mb-2">
-                  Wie lange ist die Absender-Domain schon registriert? Brandneue Domains
+                  {{if eq .Lang "de"}}Wie lange ist die Absender-Domain schon registriert? Brandneue Domains
                   (wenige Tage/Wochen alt) sind ein starkes Spam-Signal – etablierte Filter
-                  bewerten sie deutlich schlechter.
+                  bewerten sie deutlich schlechter.{{else}}How long has the sender domain been registered? Brand-new domains
+                  (a few days/weeks old) are a strong spam signal – established filters
+                  rate them significantly worse.{{end}}
                 </span>
                 <span class="d-flex flex-wrap gap-x-3 gap-y-1 small text-secondary">
-                  <span><i class="bi bi-hdd-network me-1"></i>Anbieter: <strong>rdap.org</strong> (RDAP/WHOIS)</span>
-                  <span><i class="bi bi-arrow-up-right me-1"></i>Übermittelt: <strong>Absender-Domain</strong></span>
+                  <span><i class="bi bi-hdd-network me-1"></i>{{if eq .Lang "de"}}Anbieter{{else}}Provider{{end}}: <strong>rdap.org</strong> (RDAP/WHOIS)</span>
+                  <span><i class="bi bi-arrow-up-right me-1"></i>{{if eq .Lang "de"}}Übermittelt{{else}}Transmitted{{end}}: <strong>{{if eq .Lang "de"}}Absender-Domain{{else}}Sender domain{{end}}</strong></span>
                 </span>
               </label>
             </div>
@@ -388,30 +404,33 @@
               <input class="form-check-input flex-shrink-0 mt-1" type="checkbox" role="switch"
                      id="adv-check-domain-blocklist" style="cursor:pointer">
               <label class="form-check-label" for="adv-check-domain-blocklist" style="cursor:pointer">
-                <span class="fw-semibold d-block mb-1">Domain- &amp; Link-Blocklisten</span>
+                <span class="fw-semibold d-block mb-1">{{if eq .Lang "de"}}Domain- &amp; Link-Blocklisten{{else}}Domain &amp; Link Blocklists{{end}}</span>
                 <span class="text-secondary small d-block mb-2">
-                  Steht die Absender-Domain oder eine in der Mail verlinkte Domain auf einer
+                  {{if eq .Lang "de"}}Steht die Absender-Domain oder eine in der Mail verlinkte Domain auf einer
                   bekannten Spam-/Missbrauchs-Blockliste? Treffer hier führen bei vielen
-                  Providern direkt zu Ablehnung oder Spam-Ordner.
+                  Providern direkt zu Ablehnung oder Spam-Ordner.{{else}}Is the sender domain or a domain linked in the email listed on a
+                  known spam/abuse blocklist? Hits here lead directly to rejection
+                  or the spam folder at many providers.{{end}}
                 </span>
                 <span class="d-flex flex-wrap gap-x-3 gap-y-1 small text-secondary">
-                  <span><i class="bi bi-hdd-network me-1"></i>Anbieter: <strong>Spamhaus DBL, URIBL</strong> (DNS-Abfrage)</span>
-                  <span><i class="bi bi-arrow-up-right me-1"></i>Übermittelt: <strong>Absender- &amp; Link-Domains</strong></span>
+                  <span><i class="bi bi-hdd-network me-1"></i>{{if eq .Lang "de"}}Anbieter{{else}}Provider{{end}}: <strong>Spamhaus DBL, URIBL</strong> ({{if eq .Lang "de"}}DNS-Abfrage{{else}}DNS query{{end}})</span>
+                  <span><i class="bi bi-arrow-up-right me-1"></i>{{if eq .Lang "de"}}Übermittelt{{else}}Transmitted{{end}}: <strong>{{if eq .Lang "de"}}Absender- &amp; Link-Domains{{else}}Sender &amp; link domains{{end}}</strong></span>
                 </span>
               </label>
             </div>
           </div>
 
           <p class="text-secondary mb-0" style="font-size:.78rem">
-            <i class="bi bi-shield-check me-1"></i>Es werden ausschließlich Domainnamen abgefragt –
-            keine E-Mail-Adressen, kein Mailinhalt, keine personenbezogenen Daten.
+            <i class="bi bi-shield-check me-1"></i>{{if eq .Lang "de"}}Es werden ausschließlich Domainnamen abgefragt –
+            keine E-Mail-Adressen, kein Mailinhalt, keine personenbezogenen Daten.{{else}}Only domain names are queried –
+            no email addresses, no mail content, no personal data.{{end}}
           </p>
 
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{t .Lang "home.cancel"}}</button>
           <button type="button" class="btn btn-primary" id="mp-adv-checks-save">
-            <i class="bi bi-check2 me-1"></i>Auswahl übernehmen
+            <i class="bi bi-check2 me-1"></i>{{t .Lang "home.apply"}}
           </button>
         </div>
       </div>

@@ -31,19 +31,19 @@
         </svg>{{.AppName}}
       </a>
       <span class="navbar-text d-none d-lg-block text-secondary small ms-3">
-        Mailbox &middot; {{.Mailbox.Address}}
+        {{t .Lang "nav.mailbox"}} &middot; {{.Mailbox.Address}}
       </span>
       <ul class="navbar-nav ms-auto align-items-center gap-2">
         <li class="nav-item dropdown">
           <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-            Mehr
+            {{t .Lang "nav.more"}}
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>Über sender.report</a></li>
-            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>Was wird geprüft?</a></li>
+            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>{{t .Lang "nav.about"}} sender.report</a></li>
+            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>{{t .Lang "nav.about_checks"}}</a></li>
             <li><a class="dropdown-item small" href="/about#faq"><i class="bi bi-question-circle me-2"></i>FAQ</a></li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>Datenschutz</a></li>
+            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>{{t .Lang "nav.privacy"}}</a></li>
           </ul>
         </li>
         <li class="nav-item">
@@ -56,13 +56,13 @@
           </form>
         </li>
         <li class="nav-item">
-          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
+          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="{{t .Lang "nav.theme_toggle"}}">
             <i class="theme-icon bi bi-circle-half"></i>
           </button>
         </li>
         <li class="nav-item">
           <a class="btn btn-outline-secondary btn-sm" href="/">
-            <i class="bi bi-house me-1"></i>Startseite
+            <i class="bi bi-house me-1"></i>{{t .Lang "nav.home_link"}}
           </a>
         </li>
       </ul>
@@ -75,7 +75,7 @@
       <div class="container-fluid">
         <div class="row align-items-center">
           <div class="col">
-            <h3 class="mb-0">Mailbox</h3>
+            <h3 class="mb-0">{{t .Lang "nav.mailbox"}}</h3>
           </div>
         </div>
       </div>
@@ -112,7 +112,7 @@
                 <p class="mb-0 text-secondary small">
                   {{t .Lang "mailbox.send_to"}}
                   <code id="mail-address" class="mp-addr-inline" onclick="copyAddress()"
-                        title="Klicken zum Kopieren" role="button" tabindex="0"
+                        title="{{t .Lang "home.copy_hint"}}" role="button" tabindex="0"
                         onkeydown="if(event.key==='Enter'||event.key===' ')copyAddress()">{{.Mailbox.Address}}</code>
                   &middot; {{t .Lang "mailbox.auto_update"}}
                 </p>
@@ -121,7 +121,7 @@
               <!-- Meta -->
               <dl class="mp-live-meta mb-0 flex-shrink-0">
                 <div>
-                  <dt>Gültig bis</dt>
+                  <dt>{{t .Lang "mailbox.valid_until"}}</dt>
                   <dd>
                     <span data-time="{{.Mailbox.ExpiresAt.Format "2006-01-02T15:04:05Z07:00"}}">
                       {{.Mailbox.ExpiresAt.Format "02.01.2006, 15:04 MST"}}
@@ -132,14 +132,14 @@
                             data-expires="{{.Mailbox.ExpiresAt.Format "2006-01-02T15:04:05Z07:00"}}"
                             data-created="{{.Mailbox.CreatedAt.Format "2006-01-02T15:04:05Z07:00"}}"
                             data-max-days="{{.MaxExtendDays}}"
-                            title="Gültigkeit verlängern">
-                      <i class="bi bi-clock-history"></i> Verlängern
+                            title="{{t .Lang "mailbox.extend_title"}}">
+                      <i class="bi bi-clock-history"></i> {{t .Lang "mailbox.extend"}}
                     </button>
                   </dd>
                 </div>
                 <div>
-                  <dt>Direktlink</dt>
-                  <dd><a href="{{.PublicURL}}/mailbox/{{.Mailbox.Token}}">Link kopieren</a></dd>
+                  <dt>{{t .Lang "mailbox.direct_link"}}</dt>
+                  <dd><a href="{{.PublicURL}}/mailbox/{{.Mailbox.Token}}">{{t .Lang "mailbox.copy_link"}}</a></dd>
                 </div>
               </dl>
 
@@ -151,9 +151,9 @@
         <div class="card">
           <div class="card-header d-flex align-items-center justify-content-between">
             <h3 class="card-title mb-0">
-              <i class="bi bi-inbox me-2 text-secondary"></i>Empfangene Nachrichten
+              <i class="bi bi-inbox me-2 text-secondary"></i>{{t .Lang "mailbox.received_messages"}}
             </h3>
-            <span class="text-secondary small">Neueste zuerst</span>
+            <span class="text-secondary small">{{t .Lang "mailbox.newest_first"}}</span>
           </div>
           <div class="card-body p-0">
             {{if .Messages}}
@@ -161,10 +161,10 @@
               <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                   <tr>
-                    <th>Nachricht</th>
-                    <th class="d-none d-md-table-cell">Empfangen</th>
+                    <th>{{t .Lang "mailbox.col_message"}}</th>
+                    <th class="d-none d-md-table-cell">{{t .Lang "report.received"}}</th>
                     <th>Score</th>
-                    <th class="text-end pe-3">Aktionen</th>
+                    <th class="text-end pe-3">{{t .Lang "mailbox.col_actions"}}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -172,7 +172,7 @@
                   <tr>
                     <td class="ps-3">
                       <div class="fw-semibold">
-                        {{if .Message.Subject}}{{.Message.Subject}}{{else}}<em class="text-secondary">(kein Betreff)</em>{{end}}
+                        {{if .Message.Subject}}{{.Message.Subject}}{{else}}<em class="text-secondary">{{t $.Lang "misc.no_subject"}}</em>{{end}}
                       </div>
                       <div class="text-secondary small">{{.Message.SMTPFrom}}</div>
                     </td>
@@ -199,7 +199,7 @@
                           <i class="bi bi-bar-chart-fill me-1"></i>Report
                         </a>
                         {{else}}
-                        <span class="badge text-bg-secondary align-self-center">Analyse&hellip;</span>
+                        <span class="badge text-bg-secondary align-self-center">{{t $.Lang "mailbox.analysing"}}</span>
                         {{end}}
                         <a class="btn btn-sm btn-outline-secondary"
                            href="/raw/{{$.Mailbox.Token}}/{{msgref $.Mailbox.Token .Message.ID}}/headers"
@@ -222,9 +222,9 @@
             {{else}}
             <div class="text-center py-5 px-3">
               <i class="bi bi-envelope-open display-3 text-secondary mb-3 d-block"></i>
-              <h5>Noch keine E-Mail empfangen</h5>
+              <h5>{{t .Lang "mailbox.no_email_yet"}}</h5>
               <p class="text-secondary mb-0">
-                Diese Seite aktualisiert sich automatisch, sobald eine Nachricht eingeht.
+                {{t .Lang "mailbox.auto_updates_msg"}}
               </p>
             </div>
             {{end}}
@@ -242,9 +242,9 @@
       <div class="modal-content">
         <div class="modal-header border-bottom-0 pb-1">
           <h5 class="modal-title" id="mp-extend-modal-label">
-            <i class="bi bi-clock-history me-2 text-primary"></i>Gültigkeit verlängern
+            <i class="bi bi-clock-history me-2 text-primary"></i>{{t .Lang "mailbox.extend_title"}}
           </h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{t .Lang "mailbox.modal_close"}}"></button>
         </div>
         <div class="modal-body">
 
@@ -256,7 +256,7 @@
 
           <!-- Slider -->
           <label class="form-label fw-semibold mb-1">
-            Neue Laufzeit ab jetzt
+            {{t .Lang "mailbox.modal_new_duration"}}
             <span id="mp-extend-days-label" class="text-primary ms-1"></span>
           </label>
           <input type="range" class="form-range mb-3" id="mp-extend-slider"
@@ -264,16 +264,16 @@
 
           <!-- Date picker -->
           <label class="form-label fw-semibold mb-1" for="mp-extend-date">
-            Oder exaktes Datum &amp; Uhrzeit wählen
+            {{t .Lang "mailbox.modal_or_date"}}
           </label>
           <input type="datetime-local" class="form-control mb-3" id="mp-extend-date">
 
           <p class="text-secondary small mb-0" id="mp-extend-info"></p>
         </div>
         <div class="modal-footer border-top-0 pt-0">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{t .Lang "mailbox.modal_cancel"}}</button>
           <button type="button" class="btn btn-primary" id="mp-extend-confirm-btn">
-            <i class="bi bi-check2 me-1"></i>Verlängern
+            <i class="bi bi-check2 me-1"></i>{{t .Lang "mailbox.extend"}}
           </button>
         </div>
       </div>

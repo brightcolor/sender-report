@@ -1,6 +1,6 @@
 {{define "privacy"}}
 <!doctype html>
-<html lang="de" data-bs-theme="light">
+<html lang="{{.Lang}}" data-bs-theme="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -35,18 +35,28 @@
       <ul class="navbar-nav ms-auto align-items-center gap-2">
         <li class="nav-item dropdown">
           <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-            Mehr
+            {{t .Lang "nav.more"}}
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>Über sender.report</a></li>
-            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>Was wird geprüft?</a></li>
+            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>{{t .Lang "nav.about"}} sender.report</a></li>
+            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>{{t .Lang "nav.about_checks"}}</a></li>
             <li><a class="dropdown-item small" href="/about#faq"><i class="bi bi-question-circle me-2"></i>FAQ</a></li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>Datenschutz</a></li>
+            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>{{t .Lang "nav.privacy"}}</a></li>
           </ul>
         </li>
+        <!-- Language switcher -->
         <li class="nav-item">
-          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
+          <form method="post" action="/lang" class="d-inline">
+            {{if eq .Lang "de"}}
+            <button class="btn btn-outline-secondary btn-sm" type="submit" name="l" value="en" title="Switch to English">EN</button>
+            {{else}}
+            <button class="btn btn-outline-secondary btn-sm" type="submit" name="l" value="de" title="Auf Deutsch wechseln">DE</button>
+            {{end}}
+          </form>
+        </li>
+        <li class="nav-item">
+          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="{{t .Lang "nav.theme_toggle"}}">
             <i class="theme-icon bi bi-circle-half"></i>
           </button>
         </li>
