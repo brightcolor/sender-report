@@ -1430,6 +1430,9 @@ func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult 
 		if c.Explanation == "" {
 			c.Explanation = naExplanation(c.ID)
 		}
+		c.NameEN = checkNameEN(c.ID)
+		c.SummaryEN = "Not applicable for this mail type – no impact on score."
+		c.ExplanationEN = naExplanationEN(c.ID)
 		return c
 	}
 
@@ -1554,6 +1557,8 @@ func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult 
 	if c.Recommendation == "" {
 		c.Recommendation = c.Suggestion
 	}
+	// Populate English variants for i18n report rendering.
+	enrichEnglish(&c, ctx)
 	return c
 }
 
@@ -1852,6 +1857,369 @@ func defaultExplanation(id string) string {
 	}
 }
 
+// ── English content enrichment ────────────────────────────────────────────────
+
+// enrichEnglish fills the *EN fields on a check result with English text so
+// reports can be rendered in English without re-analysis. English names,
+// summaries, explanations and recommendations are stored alongside the German
+// originals in the encrypted payload.
+//
+//nolint:cyclop,funlen
+func enrichEnglish(c *model.CheckResult, ctx checkContext) {
+	c.NameEN = checkNameEN(c.ID)
+	c.SummaryEN = summaryEN(c.ID, c.Status, c.Summary, ctx)
+	c.ExplanationEN = explanationEN(c.ID)
+	c.RecommendationEN = recommendationEN(c.ID, c.Status, ctx)
+}
+
+// checkNameEN returns the English check name for a given ID.
+func checkNameEN(id string) string {
+	names := map[string]string{
+		"spf": "SPF", "dkim": "DKIM", "dmarc": "DMARC",
+		"spf_alignment": "SPF Alignment", "dkim_alignment": "DKIM Alignment",
+		"dmarc_alignment": "DMARC Alignment", "dmarc_policy": "DMARC Policy Strength",
+		"spf_strictness": "SPF Strictness", "dkim_keylength": "DKIM Key Strength",
+		"from_alignment": "Envelope-From / Header-From", "return_path": "Return-Path",
+		"reply_to": "Reply-To", "display_name": "Display Name",
+		"ptr": "Reverse DNS (PTR)", "ptr_pattern": "PTR Pattern",
+		"helo": "HELO/EHLO", "mx_records": "MX Records",
+		"address_records": "Address Records (A/AAAA)", "tls_transport": "TLS Transport",
+		"received_chain": "Received Header Chain", "arc": "ARC",
+		"envelope_mx": "Bounce MX", "mta_sts": "MTA-STS",
+		"tls_rpt": "TLS-RPT", "bimi": "BIMI",
+		"dnssec": "DNSSEC", "dane_tlsa": "DANE/TLSA",
+		"domain_age": "Domain Age", "rbl": "DNSBL/RBL",
+		"domain_blocklist": "Domain Blocklist", "link_blocklist": "Link Blocklist",
+		"spamassassin": "SpamAssassin", "rspamd": "Rspamd",
+		"mime_parse": "MIME Parsing", "mime_ct": "MIME Content-Type",
+		"mime_boundary": "MIME Boundary", "plain_text": "Plain Text Part",
+		"multipart_alt": "Multipart Alternative", "attachments": "Attachments",
+		"image_text_ratio": "Image/Text Ratio", "charset": "Character Set",
+		"links": "Links", "shortener": "Link Shorteners",
+		"tracking_links": "Tracking Links", "html": "HTML Structure",
+		"hidden_html": "Hidden HTML", "html_validity": "HTML Validity",
+		"subject": "Subject", "subject_exclaim": "Subject Exclamation Marks",
+		"subject_caps": "Subject ALL-CAPS", "unicode": "Unicode/Obfuscation",
+		"list_unsub": "List-Unsubscribe", "preheader": "Preheader",
+		"date": "Date Header", "date_skew": "Date Plausibility",
+		"message_id": "Message-ID", "body_read": "Body Readability",
+	}
+	if n, ok := names[id]; ok {
+		return n
+	}
+	return id
+}
+
+// explanationEN returns the English explanation for a check ID.
+//
+//nolint:funlen
+func explanationEN(id string) string {
+	switch id {
+	case "spf":
+		return "SPF (Sender Policy Framework) defines which servers are authorised to send email on behalf of a domain. Receiving servers check the sending IP against the SPF TXT record of the envelope-from domain. Gmail, Outlook, Yahoo and most gateways weight SPF heavily, especially when DMARC is active. Without an SPF pass, DMARC cannot be satisfied and many providers increase the spam score or reject the message outright."
+	case "dkim":
+		return "DKIM (DomainKeys Identified Mail) cryptographically signs relevant headers and body content. The receiving server fetches the public key via DNS using the selector in the DKIM-Signature header. Gmail, Outlook, Yahoo and Apple Mail use DKIM heavily to detect tampering, forwarding issues and domain spoofing. DKIM is the second pillar of DMARC and strongly influences domain reputation. Without a DKIM signature emails land in spam far more often."
+	case "dmarc":
+		return "DMARC ties SPF and DKIM to the visible From domain. A message passes DMARC if SPF or DKIM succeeds AND the respective domain aligns with the From domain. Modern providers expect at least a DMARC policy for reputable sending domains; for bulk mail it has been practically mandatory since the 2024 Gmail/Yahoo requirements. Without DMARC, other providers can abuse your domain for phishing (domain spoofing), and large providers classify non-DMARC-authenticated bulk mail as spam."
+	case "ptr":
+		return "Reverse DNS (PTR/rDNS) shows which hostname belongs to a sending IP. Receivers typically check: (1) does the IP have a valid PTR record? (2) does that PTR hostname resolve back to the same IP (forward-confirmed rDNS)? (3) does the PTR name plausibly match HELO/EHLO? Outlook/Exchange, Barracuda, Mimecast and enterprise gateways reject directly when PTR is missing. Gmail and Yahoo use it as a quality signal. A missing or inconsistent PTR record is one of the most common reasons for direct rejection by enterprise mail gateways. PTR records are set at your IP/hosting provider, not in your own DNS."
+	case "dmarc_policy":
+		return "The DMARC policy (p=) tells receivers what to do with mail that fails DMARC. p=none = monitoring only (no protection), p=quarantine = send to spam, p=reject = reject entirely. Only quarantine/reject actively protect your domain against spoofing/phishing. Gmail and Yahoo increasingly expect at least an enforced policy from bulk senders. Recommended approach: start with p=none + rua reporting, clean up sources, then gradually raise to quarantine and reject."
+	case "spf_strictness":
+		return "The trailing 'all' mechanism of an SPF record determines how strictly unauthorised servers are treated: -all = hardfail (recommended), ~all = softfail, ?all = neutral (ineffective), +all = allows everyone (dangerous). RFC 7208 also limits SPF to 10 DNS lookups — exceeding this causes a PermError. A too-permissive or broken SPF record undermines SPF and therefore DMARC."
+	case "dkim_keylength":
+		return "The DKIM key strength determines how tamper-proof the signature is. 512/768-bit RSA is considered broken, 1024-bit is outdated; at least 2048-bit RSA or Ed25519 is recommended. Large providers downgrade or ignore weak keys, effectively disabling DKIM (and therefore DMARC). Rotate the selector when changing keys."
+	case "spf_alignment":
+		return "SPF alignment checks whether the envelope-from domain (MAIL FROM) matches the visible header-from domain. For DMARC, SPF alignment must hold — otherwise SPF may pass but DMARC still fails. ESPs often use their own bounce domains; these must be configured as a subdomain of the from domain, or DKIM must carry DMARC on its own."
+	case "dkim_alignment":
+		return "DKIM alignment checks whether the domain in the d= tag of the DKIM signature matches the visible header-from domain. Only aligned DKIM passes count for DMARC. Without correct DKIM alignment, DMARC can fail even if the signature itself is technically valid."
+	case "dmarc_alignment":
+		return "DMARC alignment is the overall check: does SPF or DKIM pass AND is the respective domain aligned with the visible From domain? Only if at least one of these two paths holds does DMARC count as passed. Gmail, Yahoo, Apple Mail and Outlook require DMARC alignment for bulk senders; without an aligned pass, DMARC enforcement fails and the domain is open to spoofing."
+	case "rbl":
+		return "DNS-based blocklists (DNSBL/RBL) list IPs known for spam, malware or botnet activity. A single listing on a major list like Spamhaus ZEN causes direct rejection at Gmail, Outlook, Yahoo and most enterprise gateways. Multiple listings signal a serious infrastructure problem that must be fixed before further sending."
+	case "domain_age":
+		return "The registration age of the sending domain is a strong reputation signal. Freshly registered domains are treated with great suspicion by Gmail, Outlook and Spamhaus — domains under 30 days are a classic spam/phishing pattern. Older, established domains enjoy a trust advantage. Note: soft signal (old domains can be hijacked, new ones can be legitimate); fetched via RDAP from a third-party service, therefore opt-in."
+	case "ptr_pattern":
+		return "Even when forward-confirmed rDNS technically passes, spam filters examine the pattern of the PTR hostname. Names like '203-0-113-5.dynamic.isp.net', 'dsl-…', 'pool-…' or 'customer-…' signal residential/dynamic IPs from which legitimate mail servers do not normally send. SpamAssassin (RDNS_DYNAMIC) and many gateways score such patterns very negatively. Solution: set a dedicated, meaningful mail server PTR at your hosting provider."
+	case "helo":
+		return "HELO/EHLO is the hostname an MTA presents when opening an SMTP connection. Many filters check that it is a valid FQDN and that it plausibly matches the PTR hostname of the sending IP. An IP literal or single-label name is a strong spam signal."
+	case "mx_records":
+		return "MX records define which servers receive email for a domain. Correct MX records are a sign of a properly configured mail infrastructure and are checked by some filters as a plausibility signal."
+	case "tls_transport":
+		return "TLS transport encrypts the SMTP connection between mail servers. Modern mail delivery requires TLS (STARTTLS or SMTPS). Without TLS, message content can be read or manipulated in transit. Gmail, Outlook and Yahoo require TLS from bulk senders."
+	case "from_alignment":
+		return "From alignment checks whether the envelope-from (SMTP MAIL FROM) and the visible header-from address belong to the same domain. Deviations are technically possible (e.g. ESP bounce addresses) but can endanger DMARC alignment and give spam filters a spoofing signal."
+	case "return_path":
+		return "Return-Path contains the bounce address (envelope-from / SMTP MAIL FROM). Delivery status notifications (DSN/NDR) go here when delivery fails. Return-Path should match the SPF domain and be consistent with the SMTP envelope-from. Many spam filters check Return-Path for domain alignment, missing MX records and blacklist status."
+	case "reply_to":
+		return "The Reply-To header redirects replies to a different address than the From. Absent is normal; present should be intentional. A Reply-To pointing to a completely different domain is a classic phishing signal and is flagged by many filters."
+	case "display_name":
+		return "The display name in the From header ('Friendly From') is freely chosen and heavily abused in phishing: a familiar brand or person name as display, while the actual sending domain is entirely different. Providers and security gateways detect display name spoofing and brand impersonation and classify such mail as phishing."
+	case "envelope_mx":
+		return "The Return-Path/envelope-from is the bounce address: undeliverable mail (DSN/NDR) goes there. If this domain cannot receive mail (no MX, no A/AAAA), bounces are lost — bad for list hygiene management and a quality signal for filters."
+	case "mta_sts":
+		return "MTA-STS (RFC 8461) allows a domain to mandate encrypted SMTP transport (TLS) rather than just using it opportunistically. Sending servers check the policy published via HTTPS and abort if valid TLS is not possible — protecting against downgrade/man-in-the-middle attacks."
+	case "tls_rpt":
+		return "TLS-RPT (RFC 8460) lets receiving servers send aggregate reports about failed or downgraded TLS connections to a reporting address. This way you notice TLS/MTA-STS problems before they cause delivery failures."
+	case "bimi":
+		return "BIMI (Brand Indicators for Message Identification) displays your brand logo next to the message at supporting providers (Gmail, Apple Mail, Yahoo). Requires an enforced DMARC policy (quarantine/reject) and an SVG logo (some providers also require a VMC certificate)."
+	case "dnssec":
+		return "DNSSEC cryptographically signs DNS responses and protects against DNS manipulation (cache poisoning, spoofing). A signed sender zone is a maturity signal and a prerequisite for DANE."
+	case "dane_tlsa":
+		return "DANE (TLSA records, RFC 7672) binds the mail server's TLS certificate to the domain via DNSSEC, enforcing authenticated TLS for SMTP transport — an alternative/complement to MTA-STS. Requires DNSSEC."
+	case "arc":
+		return "ARC (Authenticated Received Chain) preserves authentication results (SPF, DKIM, DMARC) across forwarding hops. Particularly relevant for mailing lists, alumni forwarding and catch-all setups where SPF/DKIM signatures can break."
+	case "list_unsub":
+		return "List-Unsubscribe is mandatory for newsletters and bulk mail (required by Gmail and Yahoo since 2024 for senders of more than 5,000 emails/day). For personal and transactional individual messages it is not required."
+	case "preheader":
+		return "The preheader text is the first visible text in the mail body and is shown by mail clients (Gmail, Outlook, Apple Mail, iOS Mail) as a preview snippet next to the subject. Without an explicit preheader, clients often pull unsuitable text (links, unsubscribe notices, HTML code)."
+	case "unicode":
+		return "Zero-width characters (U+200B, U+FEFF etc.), bidi override characters and Unicode homoglyph substitutions are known techniques to bypass spam filters and deceive users. SpamAssassin, Rspamd and Gmail explicitly detect common Unicode obfuscation patterns."
+	case "subject":
+		return "The email subject is evaluated for spam signals: excessive exclamation marks, ALL-CAPS, common spam phrases and suspicious patterns that trigger spam filter rules."
+	case "domain_blocklist":
+		return "Domain blocklists (e.g. Spamhaus DBL) list domains that appear in spam/phishing — independent of the sending IP. A listed sending domain leads to direct rejection or spam classification at many providers."
+	case "link_blocklist":
+		return "URI/domain blocklists (URIBL, SURBL, Spamhaus DBL) check the domains linked in the email against known spam/malware domains. Since spam almost always contains a link, this is one of the most effective filter signals."
+	case "spamassassin":
+		return "SpamAssassin is a widely used open-source spam filter that scores emails using hundreds of rules (header patterns, content analysis, RBL checks, Bayes). A score above the threshold (typically 5.0) causes the mail to be classified as spam."
+	case "rspamd":
+		return "Rspamd is a modern, high-performance spam filter used by many mail servers. It analyses mail using statistical methods, machine learning and rule-based checks. The action (greylist/add_header/rewrite_subject/reject) depends on the total score."
+	case "mime_parse":
+		return "A correctly structured MIME message is a prerequisite for all further authentication, header and content checks. Malformed raw messages are scored lower or rejected directly by providers."
+	case "message_id":
+		return "Every email should have a stable, globally unique Message-ID. Missing or malformed Message-IDs are a classic spam signal and can also cause problems with threading in mail clients."
+	case "received_chain":
+		return "Received headers document the complete transport path of the message. Each MTA adds its Received header. Receiving systems use the chain for IP reputation analysis, routing analysis and forensics."
+	default:
+		return "This check evaluates a technical signal that mail providers use for deliverability, abuse detection or user trust."
+	}
+}
+
+// summaryEN returns an English summary for a check result. Where the summary
+// contains domain names or IPs extracted from the original German summary, we
+// re-use the German summary for brevity (it is still understandable as-is).
+func summaryEN(id, status, deSummary string, ctx checkContext) string {
+	// For most checks the summary contains dynamic values (domain, IP, score)
+	// that are already language-neutral. We translate the fixed-phrase cases
+	// and fall back to the German summary for the dynamic ones.
+	switch id + ":" + status {
+	// SPF
+	case "spf:pass":
+		return "SPF passed according to Authentication-Results."
+	case "spf:fail":
+		return "SPF reports a fail or softfail."
+	case "spf:warn":
+		return "SPF record present but no clear result in the header."
+	case "spf:info":
+		return "SPF record present, no definitive result."
+	// DKIM
+	case "dkim:pass":
+		return "DKIM passed according to Authentication-Results."
+	case "dkim:fail":
+		return "DKIM reports a failure."
+	case "dkim:warn":
+		return "DKIM signature present but no valid result detectable."
+	case "dkim:info":
+		return "No DKIM signature found."
+	// DMARC
+	case "dmarc:pass":
+		return "DMARC passed according to Authentication-Results."
+	case "dmarc:fail":
+		if ctx.FromDomain != "" {
+			return "No DMARC record found for " + ctx.FromDomain + "."
+		}
+		return "DMARC failed or no record found."
+	case "dmarc:warn":
+		return "DMARC record present but no clear pass in the header."
+	// DMARC policy
+	case "dmarc_policy:pass":
+		return "DMARC p=reject – strongest protection against domain spoofing."
+	case "dmarc_policy:warn":
+		return "DMARC p=none – monitoring only, no active protection against domain spoofing."
+	// PTR
+	case "ptr:pass":
+		return "Reverse DNS is correctly set up (forward-confirmed rDNS)."
+	case "ptr:fail":
+		return "Reverse DNS (PTR) is missing or not forward-confirmed."
+	case "ptr:warn":
+		return "Reverse DNS is present but inconsistent."
+	// SPF strictness
+	case "spf_strictness:pass":
+		return "SPF ends with -all (hardfail) – strictest and recommended setting."
+	case "spf_strictness:warn":
+		return "SPF ends with ~all (softfail) – acceptable, but -all provides stronger protection."
+	case "spf_strictness:fail":
+		return "SPF ends with +all – allows ANYONE to send on your behalf (dangerous)."
+	case "spf_strictness:info":
+		return "No SPF record evaluable."
+	// RBL
+	case "rbl:pass":
+		return "No hits in the configured blocklists."
+	case "rbl:fail":
+		return "Sending IP is listed on one or more blocklists."
+	case "rbl:info":
+		return "RBL check active but no providers configured."
+	// TLS
+	case "tls_transport:pass":
+		return "Email was transmitted with TLS encryption."
+	case "tls_transport:warn":
+		return "No clear TLS transport signal found."
+	case "tls_transport:fail":
+		return "Email appears to have been transmitted without TLS."
+	// MX
+	case "mx_records:pass":
+		return "MX records found for the sending domain."
+	case "mx_records:fail":
+		return "No MX records found for the sending domain."
+	// Display name
+	case "display_name:pass":
+		return "Display name is consistent with the actual sender domain."
+	case "display_name:fail":
+		return "Display name contains a domain different from the actual sender – phishing signal."
+	// HELO
+	case "helo:pass":
+		return "HELO/EHLO looks plausible."
+	case "helo:fail":
+		return "HELO/EHLO is missing."
+	case "helo:warn":
+		return "HELO/EHLO does not look like a valid FQDN."
+	// Alignments
+	case "spf_alignment:pass":
+		return "Envelope-from and header-from domains are SPF-aligned."
+	case "spf_alignment:fail":
+		return "Envelope-from and header-from domains are not aligned for SPF."
+	case "dkim_alignment:pass":
+		return "DKIM d= domain matches the header-from domain."
+	case "dkim_alignment:fail":
+		return "DKIM d= domain does not match the header-from domain."
+	case "dmarc_alignment:pass":
+		return "DMARC alignment check passed (SPF or DKIM aligned)."
+	case "dmarc_alignment:fail":
+		return "DMARC alignment failed: neither SPF nor DKIM aligns with the From domain."
+	// Message-ID
+	case "message_id:pass":
+		return "Message-ID present."
+	case "message_id:fail":
+		return "Message-ID is missing."
+	// List-Unsubscribe
+	case "list_unsub:pass":
+		return "List-Unsubscribe header present."
+	case "list_unsub:warn":
+		return "Bulk mail detected but List-Unsubscribe is missing (Gmail/Yahoo requirement since 2024)."
+	case "list_unsub:na":
+		return "Not applicable for this mail type – no impact on score."
+	// Return-Path
+	case "return_path:pass":
+		return "Return-Path header is present."
+	case "return_path:warn":
+		return "No Return-Path header visible."
+	case "return_path:na":
+		return "Not applicable for this mail type – no impact on score."
+	// BIMI
+	case "bimi:pass":
+		return "BIMI record published – logo display at supporting providers (requires enforced DMARC)."
+	case "bimi:info":
+		return "No BIMI record found (optional; requires DMARC p=quarantine/reject and an SVG logo)."
+	// MTA-STS
+	case "mta_sts:pass":
+		return "MTA-STS policy published."
+	case "mta_sts:info":
+		return "No MTA-STS policy found (optional but recommended)."
+	// DNSSEC
+	case "dnssec:pass":
+		return "DNSSEC is enabled for the sending domain."
+	case "dnssec:info":
+		return "DNSSEC not detected (optional)."
+	// ARC
+	case "arc:info":
+		if strings.Contains(deSummary, "vorhanden") {
+			return "ARC headers present."
+		}
+		return "No ARC headers present (only relevant for forwarding scenarios)."
+	// Received chain
+	case "received_chain:fail":
+		return "No Received headers present."
+	case "received_chain:info":
+		return deSummary // contains count, language-neutral
+	// Reply-To
+	case "reply_to:info":
+		return "No Reply-To header set."
+	case "reply_to:pass":
+		return "Reply-To header is present."
+	// Domain age
+	case "domain_age:pass":
+		return "Domain is established – good reputation signal."
+	case "domain_age:fail":
+		return "Sending domain is very young – strong spam/phishing signal."
+	case "domain_age:warn":
+		return "Sending domain is relatively young – some reputation impact."
+	}
+	// For remaining dynamic summaries, return German (language-neutral content).
+	return ""
+}
+
+// recommendationEN returns an English recommendation for a check.
+func recommendationEN(id, status string, ctx checkContext) string {
+	primary := firstNonEmpty(ctx.FromDomain, ctx.EnvelopeDomain)
+	ip := emptyFallback(ctx.Message.RemoteIP, "203.0.113.10")
+	_ = ip
+	switch id {
+	case "spf":
+		if status == "fail" || status == "warn" {
+			return fmt.Sprintf("Publish an SPF TXT record for %s, e.g.: v=spf1 ip4:%s ~all\nThen tighten to -all once all sending IPs are covered.", emptyFallback(ctx.EnvelopeDomain, "example.org"), ip)
+		}
+	case "dkim":
+		if status == "fail" {
+			return fmt.Sprintf("Generate a 2048-bit RSA or Ed25519 DKIM key pair, publish the public key as a TXT record at <selector>._domainkey.%s, and configure your MTA to sign all outgoing mail.", emptyFallback(ctx.FromDomain, "example.org"))
+		}
+	case "dmarc":
+		if status == "fail" {
+			return fmt.Sprintf("Publish a DMARC record: _dmarc.%s TXT \"v=DMARC1; p=none; rua=mailto:dmarc@%s\"\nMonitor aggregate reports, then raise to p=quarantine and p=reject.", emptyFallback(ctx.FromDomain, "example.org"), emptyFallback(ctx.FromDomain, "example.org"))
+		}
+	case "ptr":
+		if status == "fail" || status == "warn" {
+			return fmt.Sprintf("Set a PTR record for %s at your IP/hosting provider (NOT in your own DNS).\nTarget: %s → PTR → %s → A → %s\nCheck with: dig -x %s +short", ip, ip, emptyFallback(ctx.Message.HELO, "mail.example.org"), ip, ip)
+		}
+	case "dmarc_policy":
+		if status == "warn" {
+			return fmt.Sprintf("Raise the DMARC policy to at least p=quarantine: _dmarc.%s TXT \"v=DMARC1; p=quarantine; rua=mailto:dmarc@%s\"\nCheck DMARC aggregate reports for a few weeks first to make sure all legitimate sources are covered.", primary, primary)
+		}
+	case "spf_strictness":
+		if status == "warn" {
+			return fmt.Sprintf("Once all legitimate sending sources are covered in your SPF record, change ~all to -all for maximum protection: v=spf1 ... -all")
+		}
+		if status == "fail" {
+			return "Immediately change +all to -all or at minimum ~all. +all authorises every server in the world to send on your behalf."
+		}
+	case "rbl":
+		if status == "fail" {
+			return fmt.Sprintf("1. Temporarily stop or throttle sending from %s.\n2. Check mail queue, auth logs, bounce logs and web forms for spam waves.\n3. Fix compromised accounts, open relays, open proxies, malware and misdirected bounces.\n4. Make SPF, DKIM, DMARC, PTR/rDNS and HELO consistent.\n5. Only then request delisting at each provider and document the fix.", ip)
+		}
+	case "helo":
+		if status == "fail" || status == "warn" {
+			return "Configure the MTA to use a fully qualified domain name (FQDN) as EHLO, e.g. mail.example.org. The FQDN should ideally match the PTR hostname of the sending IP."
+		}
+	case "list_unsub":
+		if status == "warn" {
+			return fmt.Sprintf("Add a List-Unsubscribe header, e.g.:\nList-Unsubscribe: <mailto:unsubscribe@%s>, <https://%s/unsubscribe/...>\nList-Unsubscribe-Post: List-Unsubscribe=One-Click", emptyFallback(ctx.FromDomain, "example.org"), emptyFallback(ctx.FromDomain, "example.org"))
+		}
+	case "return_path":
+		if status == "warn" {
+			return fmt.Sprintf("Set a valid envelope-from/bounce address in your MTA or ESP.\nExample: bounce@%s with an SPF record authorising the sending IP.", emptyFallback(ctx.FromDomain, "example.org"))
+		}
+	case "display_name":
+		if status == "fail" || status == "warn" {
+			return "Make the display name consistent with the actual sending domain. Do not use third-party brand names or person names that differ from your domain."
+		}
+	case "tls_transport":
+		if status == "warn" || status == "fail" {
+			return "Enable STARTTLS on your outgoing MTA and ensure the certificate and hostname are valid."
+		}
+	}
+	return ""
+}
+
 // naExplanation returns the explanation text for a check that is not applicable
 // for the detected mail type.
 func naExplanation(id string) string {
@@ -1862,6 +2230,18 @@ func naExplanation(id string) string {
 		return "List-Unsubscribe ist ein Pflichtfeld für Newsletter und Bulk-Mails (seit 2024 von Gmail und Yahoo für Versender über 5.000 Mails/Tag vorgeschrieben). Für persönliche und transaktionale Einzelmails ist er nicht erforderlich und würde im Kontext sogar befremdlich wirken. Kein Einfluss auf den Score für diese Mail."
 	default:
 		return "Dieser Check ist für den erkannten Mail-Typ nicht zutreffend und hat keinen Einfluss auf den Score."
+	}
+}
+
+// naExplanationEN is the English equivalent of naExplanation.
+func naExplanationEN(id string) string {
+	switch id {
+	case "return_path":
+		return "Return-Path (bounce address) is primarily relevant for bulk/newsletter mail so that undeliverable mail notifications (NDR/DSN) can be processed automatically. For personal and transactional individual messages no Return-Path is expected – the sender is clearly identified via the From header. This check has no impact on the score for this mail."
+	case "list_unsub":
+		return "List-Unsubscribe is mandatory for newsletters and bulk mail (required by Gmail and Yahoo since 2024 for senders of more than 5,000 emails/day). For personal and transactional individual messages it is not required and would actually be out of place. No impact on the score for this mail."
+	default:
+		return "This check is not applicable for the detected mail type and has no impact on the score."
 	}
 }
 

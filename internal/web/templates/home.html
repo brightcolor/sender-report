@@ -1,6 +1,6 @@
 {{define "home"}}
 <!doctype html>
-<html lang="de" data-bs-theme="light">
+<html lang="{{.Lang}}" data-bs-theme="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -83,6 +83,16 @@
             <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>Datenschutz</a></li>
           </ul>
         </li>
+        <!-- Language switcher -->
+        <li class="nav-item">
+          <form method="post" action="/lang" class="d-inline">
+            {{if eq .Lang "de"}}
+            <button class="btn btn-outline-secondary btn-sm" type="submit" name="l" value="en" title="Switch to English">EN</button>
+            {{else}}
+            <button class="btn btn-outline-secondary btn-sm" type="submit" name="l" value="de" title="Auf Deutsch wechseln">DE</button>
+            {{end}}
+          </form>
+        </li>
         <li class="nav-item">
           <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
             <i class="theme-icon bi bi-circle-half"></i>
@@ -152,12 +162,12 @@
 
         <div class="card-header py-3 d-flex align-items-center gap-2">
           <i class="bi bi-envelope-at text-primary"></i>
-          <span class="fw-semibold">Deine Test-Mailbox</span>
+          <span class="fw-semibold">{{t .Lang "home.widget_title"}}</span>
           <span id="mp-e2e-badge"
                 class="badge text-bg-success ms-auto d-none d-inline-flex align-items-center gap-1"
                 style="font-size:.7rem"
                 title="Inhalte werden Ende-zu-Ende verschlüsselt gespeichert">
-            <i class="bi bi-lock-fill"></i>Ende-zu-Ende verschlüsselt
+            <i class="bi bi-lock-fill"></i>{{t .Lang "home.e2e_badge"}}
           </span>
         </div>
 
@@ -166,23 +176,23 @@
           <!-- Loading state -->
           <div id="mb-init-loader" class="text-center py-2">
             <div class="spinner-border spinner-border-sm text-secondary mb-2" role="status" aria-hidden="true"></div>
-            <p class="text-secondary small mb-0">Mailbox wird vorbereitet &hellip;</p>
+            <p class="text-secondary small mb-0">{{t .Lang "home.loading"}}</p>
           </div>
 
           <!-- Address + controls — filled by JS -->
           <div id="mb-main-content" class="d-none">
-            <div class="mp-addr-box mb-3" onclick="copyAddress()" title="Klicken zum Kopieren" role="button" tabindex="0"
+            <div class="mp-addr-box mb-3" onclick="copyAddress()" title="{{t .Lang "home.copy_hint"}}" role="button" tabindex="0"
                  onkeydown="if(event.key==='Enter'||event.key===' ')copyAddress()">
               <code class="mp-addr-text" id="mail-address"></code>
-              <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Klicken zum Kopieren</span>
+              <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>{{t .Lang "home.copy_hint"}}</span>
             </div>
 
             <div id="check-actions" class="d-flex gap-2 justify-content-center mb-2">
               <button id="check-btn" class="btn btn-primary px-4" type="button">
-                <i class="bi bi-play-fill me-1"></i>Check starten
+                <i class="bi bi-play-fill me-1"></i>{{t .Lang "home.start"}}
               </button>
               <button id="new-address-btn" class="btn btn-warning px-3" type="button">
-                <i class="bi bi-arrow-clockwise me-1"></i>Neue Mailbox
+                <i class="bi bi-arrow-clockwise me-1"></i>{{t .Lang "home.new_address"}}
               </button>
             </div>
 
@@ -191,7 +201,7 @@
               <button type="button" id="adv-checks-btn"
                       class="btn btn-link btn-sm text-secondary text-decoration-none p-0"
                       data-bs-toggle="modal" data-bs-target="#mp-adv-checks-modal">
-                <i class="bi bi-sliders me-1"></i>Erweiterte Reputations-Checks
+                <i class="bi bi-sliders me-1"></i>{{t .Lang "home.adv_checks"}}
                 <span id="adv-checks-count" class="badge rounded-pill text-bg-primary ms-1 d-none">0</span>
               </button>
             </div>
@@ -210,13 +220,13 @@
                 </svg>
                 <i class="mp-inbox-env-icon bi bi-envelope"></i>
               </div>
-              <p id="check-wait-msg" class="text-secondary small mb-0">Warte auf eingehende E-Mail &hellip;</p>
+              <p id="check-wait-msg" class="text-secondary small mb-0">{{t .Lang "home.waiting"}}</p>
               <div id="check-steps" class="mp-check-steps d-none mt-3 mx-auto"></div>
               <p id="check-status" class="mb-0 text-secondary small mt-2 d-none"></p>
             </div>
 
             <p id="check-status-idle" class="mb-0 text-center text-secondary small">
-              <i class="bi bi-info-circle me-1"></i>Noch keine E-Mail für diese Mailbox geprüft.
+              <i class="bi bi-info-circle me-1"></i>{{t .Lang "home.idle"}}
             </p>
           </div>
         </div>
@@ -224,17 +234,17 @@
         <div class="card-footer px-4 py-3">
           <div class="d-flex flex-wrap align-items-center gap-3 small text-secondary mb-2">
             <span>
-              <i class="bi bi-clock me-1"></i>Gültig bis
+              <i class="bi bi-clock me-1"></i>{{t .Lang "home.expires"}}
               <span id="mail-expires-at" data-time=""></span>
             </span>
             <span id="mp-e2e-footer" class="d-none">
-              <i class="bi bi-lock-fill text-success me-1"></i>E2E verschlüsselt
+              <i class="bi bi-lock-fill text-success me-1"></i>{{t .Lang "home.e2e_footer"}}
             </span>
           </div>
           <!-- ══ Frühere Mailboxen ════════════════════════════════════════════ -->
           <div id="prev-mailboxes-section" class="d-none mb-3">
             <h6 class="text-secondary small fw-semibold text-uppercase mb-2" style="letter-spacing:.06em">
-              <i class="bi bi-clock-history me-1"></i>Frühere Mailboxen
+              <i class="bi bi-clock-history me-1"></i>{{t .Lang "home.prev_title"}}
             </h6>
             <div id="prev-mailboxes-list" class="d-flex flex-column gap-2"></div>
           </div>
@@ -245,7 +255,7 @@
                  title="Klicken zum Kopieren – vollständiger Link inkl. Schlüssel"
                  onkeydown="if(event.key==='Enter'||event.key===' ')mbCopyShare('full')">
               <code class="mp-share-text" id="mb-share-full"></code>
-              <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>Link kopieren (inkl. Schlüssel)</span>
+              <span class="mp-addr-copy-hint"><i class="bi bi-clipboard me-1"></i>{{t .Lang "home.copy_link"}}</span>
             </div>
           </div>
         </div>

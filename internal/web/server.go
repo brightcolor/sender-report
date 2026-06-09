@@ -30,6 +30,7 @@ import (
 
 	"github.com/brightcolor/sender-report/internal/analyzer"
 	"github.com/brightcolor/sender-report/internal/config"
+	"github.com/brightcolor/sender-report/internal/i18n"
 	"github.com/brightcolor/sender-report/internal/model"
 	reportpdf "github.com/brightcolor/sender-report/internal/pdf"
 	"github.com/brightcolor/sender-report/internal/ratelimit"
@@ -62,6 +63,7 @@ type HomeData struct {
 	Domain    string
 	PublicURL string
 	Stats     store.GlobalStats
+	Lang      string
 }
 
 type PrivacyData struct {
@@ -79,6 +81,7 @@ type MailboxData struct {
 	Now           time.Time
 	PublicURL     string
 	MaxExtendDays int
+	Lang          string
 }
 
 type ReportData struct {
@@ -86,6 +89,7 @@ type ReportData struct {
 	Message         model.Message
 	Mailbox         model.Mailbox
 	Report          model.AnalysisReport
+	Lang            string
 	Statuses        map[string]int
 	CheckGroups     []ReportCheckGroup
 	LinkGroups      []ReportLinkGroup
@@ -386,6 +390,7 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"mailTypeIcon":       analyzer.MailTypeIcon,
 		"fmtDelta":           fmtDelta,
 		"fmtScore":           fmtScore,
+		"t": func(lang, key string) string { return i18n.T(i18n.Lang(lang), key) },
 		"appVersion":         func() string { return version.Version },
 		"jsonEncode": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
@@ -440,6 +445,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("/robots.txt", s.robotsTxt)
 	mux.HandleFunc("/sitemap.xml", s.sitemapXML)
+	mux.HandleFunc("/lang", s.setLang)
 	mux.HandleFunc("/", s.home)
 	mux.HandleFunc("/about", s.aboutPage)
 	mux.HandleFunc("/privacy", s.privacyPage)
@@ -546,6 +552,31 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte("ok"))
 }
 
+// setLang handles POST /lang?l=de|en to set the language preference cookie
+// and redirect back to the referring page.
+func (s *Server) setLang(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	lang := i18n.Lang(r.FormValue("l"))
+	if lang != i18n.DE && lang != i18n.EN {
+		lang = i18n.EN
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     i18n.CookieName,
+		Value:    string(lang),
+		Path:     "/",
+		MaxAge:   365 * 24 * 3600,
+		SameSite: http.SameSiteLaxMode,
+	})
+	ref := r.Header.Get("Referer")
+	if ref == "" {
+		ref = "/"
+	}
+	http.Redirect(w, r, ref, http.StatusSeeOther)
+}
+
 func (s *Server) ready(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ready"))
@@ -619,6 +650,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		Domain:    domain,
 		PublicURL: s.publicBaseURL(r),
 		Stats:     stats,
+		Lang:      string(i18n.Detect(r)),
 	}
 	s.render(w, "home", data)
 }
@@ -768,6 +800,7 @@ func (s *Server) mailboxPage(w http.ResponseWriter, r *http.Request) {
 		Now:           time.Now().UTC(),
 		PublicURL:     s.publicBaseURL(r),
 		MaxExtendDays: s.cfg.MailboxMaxExtendDays,
+		Lang:          string(i18n.Detect(r)),
 	})
 }
 
@@ -839,6 +872,7 @@ func (s *Server) reportPage(w http.ResponseWriter, r *http.Request) {
 		HTMLPreviewBody: htmlSource,
 		Encrypted:       encrypted,
 		MsgRef:          msgRef,
+		Lang:            string(i18n.Detect(r)),
 	})
 }
 

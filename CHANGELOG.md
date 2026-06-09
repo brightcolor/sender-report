@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-06-09
+
+### Added
+- **DE/EN language support.** The UI is now available in German and English.
+  Language is selected automatically from the browser's Accept-Language header
+  and can be overridden by clicking the DE/EN switcher in every navbar.
+  The preference is stored in the `sr_lang` cookie.
+
+  Scope of the translation:
+  - All templates (home, mailbox, report): UI chrome, labels, buttons,
+    section names, status pills, group status text, category hints.
+  - JavaScript: statusLbl, groupStatusHTML, GROUP_HINTS, importance badges,
+    RBL detail labels, check body headings, mail type badge.
+  - Analyzer: every check result now carries parallel English fields
+    (`name_en`, `summary_en`, `explanation_en`, `recommendation_en`) for
+    the most important checks (SPF, DKIM, DMARC, PTR, RBL, alignments,
+    policy checks, etc.); stored in the encrypted payload so existing
+    reports can be viewed in either language.
+  - New endpoint `POST /lang` sets the language cookie and redirects back.
+  - New package `internal/i18n` with language detection and string tables.
+
 ## [1.17.0] - 2026-06-09
 
 ### Added

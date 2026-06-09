@@ -55,6 +55,13 @@ type CheckResult struct {
 	Severity         string            `json:"severity,omitempty"`
 	Category         string            `json:"category,omitempty"`
 	Importance       string            `json:"importance,omitempty"` // Kritisch | Wichtig | Empfohlen | Optional
+
+	// English variants — populated by the analyzer so reports can be rendered
+	// in English without re-analysis. Empty for legacy/pre-i18n reports.
+	NameEN           string `json:"name_en,omitempty"`
+	SummaryEN        string `json:"summary_en,omitempty"`
+	ExplanationEN    string `json:"explanation_en,omitempty"`
+	RecommendationEN string `json:"recommendation_en,omitempty"`
 }
 
 type AnalysisReport struct {
