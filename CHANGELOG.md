@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.18.3] - 2026-06-10
+
+### Fixed
+- **report.html: all remaining hardcoded German strings translated.**
+  The i18n agent in v1.18.0 missed many static strings in report.html.
+  Everything is now language-aware via `{{t .Lang "..."}}` / `{{if eq .Lang "de"}}` / `LANG===` ternaries:
+  - Navbar: "More/Mehr", "About/Über", "What gets checked?/Was wird geprüft?",
+    "Privacy/Datenschutz", "Toggle theme/Theme wechseln", "New test/Neuer Test"
+  - Metadata boxes: "(no subject)/(kein Betreff)", "🔒 encrypted/verschlüsselt",
+    "(empty)/(leer)", date locale (en-GB / de-DE)
+  - Filter bar: "Filter:/Anzeigen:", "All/Alle", status labels
+  - E2E lock banner: full text + "Enter key/Schlüssel eingeben" + "Decrypting…"
+  - Key-entry modal: title, hint, placeholder, Cancel/Abbrechen, Decrypt/Entschlüsseln
+  - PDF modal: all labels, checkboxes, warnings, button text
+  - Raw data card header
+  - RBL "Show all checked lists" button
+  - Mail-type badge title
+  - JS decrypt flow error/status messages
+  - Recheck toasts (section recheck, save, failure messages)
+  - PDF error alerts
+
 ## [1.18.2] - 2026-06-10
 
 ### Fixed

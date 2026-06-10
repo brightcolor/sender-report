@@ -5,7 +5,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
-  <meta name="description" content="Deliverability-Report für {{.Mailbox.Address}} – Score {{printf "%.1f" .Report.Score}}/10" />
+  <meta name="description" content="{{if eq .Lang "de"}}Deliverability-Report für{{else}}Deliverability report for{{end}} {{.Mailbox.Address}} – Score {{printf "%.1f" .Report.Score}}/10" />
   <title>Report {{.Mailbox.Token}} – {{.AppName}}</title>
   <script>(function(){try{var p=localStorage.getItem('sr:theme')||'auto';var d=p==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.bsTheme=d;document.documentElement.dataset.themePreference=p;}catch(e){document.documentElement.dataset.bsTheme='light';}})()</script>
   <link rel="stylesheet" href="/static/vendor/bootstrap.min.css">
@@ -41,14 +41,14 @@
       <ul class="navbar-nav ms-auto align-items-center gap-2">
         <li class="nav-item dropdown">
           <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-            Mehr
+            {{t .Lang "nav.more"}}
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>Über sender.report</a></li>
-            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>Was wird geprüft?</a></li>
+            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>{{if eq .Lang "de"}}Über sender.report{{else}}About sender.report{{end}}</a></li>
+            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>{{t .Lang "nav.about_checks"}}</a></li>
             <li><a class="dropdown-item small" href="/about#faq"><i class="bi bi-question-circle me-2"></i>FAQ</a></li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>Datenschutz</a></li>
+            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>{{t .Lang "nav.privacy"}}</a></li>
           </ul>
         </li>
         <li class="nav-item">
@@ -61,7 +61,7 @@
           </form>
         </li>
         <li class="nav-item">
-          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="Theme wechseln">
+          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="{{t .Lang "nav.theme_toggle"}}">
             <i class="theme-icon bi bi-circle-half"></i>
           </button>
         </li>
@@ -78,7 +78,7 @@
         </li>
         <li class="nav-item">
           <a class="btn btn-primary btn-sm" href="/">
-            <i class="bi bi-plus-circle me-1"></i>Neuer Test
+            <i class="bi bi-plus-circle me-1"></i>{{if eq .Lang "de"}}Neuer Test{{else}}New test{{end}}
           </a>
         </li>
       </ul>
@@ -104,7 +104,7 @@
     <div class="mp-print-meta-row">
       <span><strong>Mailbox:</strong> {{.Mailbox.Address}}</span>
       <span><strong>Score:</strong> {{fmtScore .Report.Score}}/10</span>
-      <span><strong>Erstellt:</strong> <span id="mp-print-date"></span></span>
+      <span><strong>{{if eq .Lang "de"}}Erstellt{{else}}Created{{end}}:</strong> <span id="mp-print-date"></span></span>
     </div>
   </div>
 
@@ -127,7 +127,7 @@
                 {{t .Lang "report.score_label"}}
                 {{if .Encrypted}}<span id="mp-e2e-badge-report" class="badge text-bg-secondary ms-2" style="font-size:.65rem; vertical-align:middle"><i class="bi bi-lock-fill me-1"></i>{{t .Lang "report.e2e_badge"}}</span>{{end}}
                 {{if and (not .Encrypted) .Report.MailType}}<span class="badge text-bg-secondary ms-2" style="font-size:.65rem; vertical-align:middle" title="Automatisch erkannter Mail-Typ">{{mailTypeIcon .Report.MailType}} {{mailTypeLabel .Report.MailType}}</span>{{end}}
-                <span id="mp-mail-type-badge" class="badge text-bg-secondary ms-2" style="font-size:.65rem; vertical-align:middle; display:none" title="Automatisch erkannter Mail-Typ (Auto-Detection)"></span>
+                <span id="mp-mail-type-badge" class="badge text-bg-secondary ms-2" style="font-size:.65rem; vertical-align:middle; display:none" title="{{t .Lang "mailtype.detected"}}"></span>
               </p>
               <h1 class="h2 fw-bold mb-1">{{.HeroTitle}}</h1>
               <p class="text-secondary mb-3">{{.HeroSubtitle}}</p>
@@ -149,9 +149,9 @@
               <div class="info-box-content" style="min-width:0">
                 <span class="info-box-text">{{t .Lang "report.subject"}}</span>
                 <span id="mp-meta-subject" class="info-box-number text-truncate d-block"
-                      title="{{if .Message.Subject}}{{.Message.Subject}}{{else}}(kein Betreff){{end}}"
+                      title="{{if .Message.Subject}}{{.Message.Subject}}{{else}}{{t .Lang "misc.no_subject"}}{{end}}"
                       style="font-size:.875rem">
-                  {{if .Message.Subject}}{{.Message.Subject}}{{else}}(kein Betreff){{end}}
+                  {{if .Message.Subject}}{{.Message.Subject}}{{else}}{{t .Lang "misc.no_subject"}}{{end}}
                 </span>
               </div>
             </div>
@@ -164,7 +164,7 @@
                 <span id="mp-meta-received" class="info-box-number"
                       style="font-size:.875rem"
                       data-time="{{if not .Message.ReceivedAt.IsZero}}{{.Message.ReceivedAt.Format "2006-01-02T15:04:05Z07:00"}}{{end}}">
-                  {{if .Message.ReceivedAt.IsZero}}🔒 verschlüsselt{{else}}{{.Message.ReceivedAt.Format "2006-01-02 15:04:05 MST"}}{{end}}
+                  {{if .Message.ReceivedAt.IsZero}}{{t .Lang "misc.encrypted_content"}}{{else}}{{.Message.ReceivedAt.Format "2006-01-02 15:04:05 MST"}}{{end}}
                 </span>
               </div>
             </div>
@@ -175,7 +175,7 @@
               <div class="info-box-content" style="min-width:0">
                 <span class="info-box-text">{{t .Lang "report.from"}}</span>
                 <span id="mp-meta-smtp-from" class="info-box-number text-truncate d-block" style="font-size:.875rem">
-                  {{if .Message.SMTPFrom}}{{.Message.SMTPFrom}}{{else}}(leer){{end}}
+                  {{if .Message.SMTPFrom}}{{.Message.SMTPFrom}}{{else}}{{if eq .Lang "de"}}(leer){{else}}(empty){{end}}{{end}}
                 </span>
               </div>
             </div>
@@ -249,11 +249,11 @@
 
         <!-- ── Check filter bar — always visible ────────────────────────── -->
         <div class="d-flex gap-2 flex-wrap align-items-center mb-3" id="check-filter-bar">
-          <span class="small fw-semibold text-secondary me-1">Anzeigen:</span>
-          <button class="mp-filter-btn active" data-filter="all"  type="button">Alle</button>
-          <button class="mp-filter-btn pass"   data-filter="pass" type="button">&#10003; Bestanden</button>
-          <button class="mp-filter-btn warn"   data-filter="warn" type="button">&#33; Warnungen</button>
-          <button class="mp-filter-btn fail"   data-filter="fail" type="button">&#10007; Fehler</button>
+          <span class="small fw-semibold text-secondary me-1">{{if eq .Lang "de"}}Anzeigen:{{else}}Filter:{{end}}</span>
+          <button class="mp-filter-btn active" data-filter="all"  type="button">{{if eq .Lang "de"}}Alle{{else}}All{{end}}</button>
+          <button class="mp-filter-btn pass"   data-filter="pass" type="button">&#10003; {{t .Lang "status.pass"}}</button>
+          <button class="mp-filter-btn warn"   data-filter="warn" type="button">&#33; {{t .Lang "report.warnings"}}</button>
+          <button class="mp-filter-btn fail"   data-filter="fail" type="button">&#10007; {{t .Lang "report.errors"}}</button>
           <button class="mp-filter-btn info"   data-filter="info" type="button">&#x2139; Info</button>
         </div>
 
@@ -262,18 +262,18 @@
         <div id="mp-e2e-panel" class="alert alert-secondary d-flex align-items-center gap-3 mb-3">
           <i class="bi bi-lock-fill flex-shrink-0" style="font-size:1.25rem"></i>
           <div class="flex-grow-1 small">
-            <strong>Inhalt Ende-zu-Ende verschlüsselt.</strong>
-            Öffne den Report über deinen Direktlink (mit Schlüssel im URL) um ihn automatisch zu entschlüsseln.
+            <strong>{{if eq .Lang "de"}}Inhalt Ende-zu-Ende verschlüsselt.{{else}}Content end-to-end encrypted.{{end}}</strong>
+            {{if eq .Lang "de"}}Öffne den Report über deinen Direktlink (mit Schlüssel im URL) um ihn automatisch zu entschlüsseln.{{else}}Open the report via your direct link (with key in URL) to decrypt it automatically.{{end}}
           </div>
           <button class="btn btn-sm btn-outline-secondary flex-shrink-0"
                   id="mp-e2e-decrypt-btn" type="button"
                   data-bs-toggle="modal" data-bs-target="#mp-key-modal">
-            <i class="bi bi-key me-1"></i>Schlüssel eingeben
+            <i class="bi bi-key me-1"></i>{{if eq .Lang "de"}}Schlüssel eingeben{{else}}Enter key{{end}}
           </button>
         </div>
         <div id="mp-e2e-loading" class="text-center py-4 d-none">
           <div class="spinner-border spinner-border-sm text-secondary me-2" role="status" aria-hidden="true"></div>
-          <span class="text-secondary small">Entschlüssele &hellip;</span>
+          <span class="text-secondary small" id="mp-e2e-loading-text">{{if eq .Lang "de"}}Entschlüssele &hellip;{{else}}Decrypting &hellip;{{end}}</span>
         </div>
 
         <!-- Decrypted content injected here by JS (full two-column layout) -->
@@ -583,7 +583,7 @@ Kind regards,
                               type="button"
                               data-bs-toggle="collapse"
                               data-bs-target="#rbl-all-providers">
-                        <i class="bi bi-list-ul me-1"></i>Alle geprüften Listen anzeigen ({{len $allProviders}})
+                        <i class="bi bi-list-ul me-1"></i>{{if eq $.Lang "de"}}Alle geprüften Listen anzeigen{{else}}Show all checked lists{{end}} ({{len $allProviders}})
                       </button>
                       <div id="rbl-all-providers" class="collapse mt-2">
                         <div class="d-flex flex-column gap-2">
@@ -785,9 +785,9 @@ Kind regards,
         <div class="card mb-3">
           <div class="card-header d-flex align-items-center justify-content-between">
             <h3 class="card-title mb-0">
-              <i class="bi bi-code me-1"></i>Quelltext, Header &amp; Mail-Inhalt
+              <i class="bi bi-code me-1"></i>{{if eq .Lang "de"}}Quelltext, Header &amp; Mail-Inhalt{{else}}Source, headers &amp; mail content{{end}}
             </h3>
-            <span class="text-secondary small">Einklappbar &middot; kopierbar</span>
+            <span class="text-secondary small">{{if eq .Lang "de"}}Einklappbar &middot; kopierbar{{else}}Collapsible &middot; copyable{{end}}</span>
           </div>
           <div class="card-body p-0">
             <div class="accordion accordion-flush" id="rawAccordion">
@@ -955,23 +955,23 @@ Kind regards,
             <div class="modal-content">
               <div class="modal-header border-bottom-0 pb-0">
                 <h5 class="modal-title" id="mp-key-modal-label">
-                  <i class="bi bi-key me-2"></i>Entschlüsselungsschlüssel
+                  <i class="bi bi-key me-2"></i>{{if eq .Lang "de"}}Entschlüsselungsschlüssel{{else}}Decryption key{{end}}
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{t .Lang "nav.close"}}"></button>
               </div>
               <div class="modal-body pt-2">
                 <p class="text-secondary small mb-2">
-                  Den Schlüssel findest du im Direktlink deiner Mailbox nach dem <code>#</code>-Zeichen.
+                  {{if eq .Lang "de"}}Den Schlüssel findest du im Direktlink deiner Mailbox nach dem <code>#</code>-Zeichen.{{else}}The key is in your mailbox direct link after the <code>#</code> character.{{end}}
                 </p>
                 <textarea class="form-control font-monospace" id="mp-key-input"
-                          rows="3" placeholder="AQICAwQF… (base64url-Token aus dem Mailbox-Direktlink)"
+                          rows="3" placeholder="AQICAwQF… ({{if eq .Lang "de"}}base64url-Token aus dem Mailbox-Direktlink{{else}}base64url token from your mailbox direct link{{end}})"
                           style="font-size:.8rem; resize:none"></textarea>
                 <p class="text-danger small mt-2 d-none" id="mp-key-error"></p>
               </div>
               <div class="modal-footer border-top-0 pt-0">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{if eq .Lang "de"}}Abbrechen{{else}}Cancel{{end}}</button>
                 <button type="button" class="btn btn-primary" id="mp-key-submit">
-                  <i class="bi bi-unlock-fill me-1"></i>Entschlüsseln
+                  <i class="bi bi-unlock-fill me-1"></i>{{if eq .Lang "de"}}Entschlüsseln{{else}}Decrypt{{end}}
                 </button>
               </div>
             </div>
@@ -989,31 +989,30 @@ Kind regards,
       <div class="modal-content">
         <div class="modal-header pb-2">
           <h5 class="modal-title" id="mp-pdf-modal-label">
-            <i class="bi bi-file-earmark-pdf me-2 text-danger"></i>PDF erstellen
+            <i class="bi bi-file-earmark-pdf me-2 text-danger"></i>{{if eq .Lang "de"}}PDF erstellen{{else}}Create PDF{{end}}
           </h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{t .Lang "nav.close"}}"></button>
         </div>
         <div class="modal-body pt-2">
 
-          <!-- Checks: orientiert am aktiven Filter -->
           <p class="text-uppercase fw-semibold small text-secondary mb-2" style="letter-spacing:.06em">
-            <i class="bi bi-funnel me-1"></i>Checks einschließen
-            <span class="fw-normal text-secondary ms-1" style="font-size:.7rem">(orientiert am aktiven Filter)</span>
+            <i class="bi bi-funnel me-1"></i>{{if eq .Lang "de"}}Checks einschließen{{else}}Include checks{{end}}
+            <span class="fw-normal text-secondary ms-1" style="font-size:.7rem">({{if eq .Lang "de"}}orientiert am aktiven Filter{{else}}based on active filter{{end}})</span>
           </p>
           <div class="row g-2 mb-3">
             <div class="col-6">
               <label class="mp-pdf-opt-label pass">
-                <input type="checkbox" id="pdf-chk-pass" class="mp-pdf-chk"> <span class="mp-pill pass">✓</span> Bestanden
+                <input type="checkbox" id="pdf-chk-pass" class="mp-pdf-chk"> <span class="mp-pill pass">✓</span> {{t .Lang "status.pass"}}
               </label>
             </div>
             <div class="col-6">
               <label class="mp-pdf-opt-label warn">
-                <input type="checkbox" id="pdf-chk-warn" class="mp-pdf-chk"> <span class="mp-pill warn">!</span> Warnungen
+                <input type="checkbox" id="pdf-chk-warn" class="mp-pdf-chk"> <span class="mp-pill warn">!</span> {{t .Lang "report.warnings"}}
               </label>
             </div>
             <div class="col-6">
               <label class="mp-pdf-opt-label fail">
-                <input type="checkbox" id="pdf-chk-fail" class="mp-pdf-chk"> <span class="mp-pill fail">✗</span> Fehler
+                <input type="checkbox" id="pdf-chk-fail" class="mp-pdf-chk"> <span class="mp-pill fail">✗</span> {{t .Lang "report.errors"}}
               </label>
             </div>
             <div class="col-6">
@@ -1025,48 +1024,47 @@ Kind regards,
 
           <hr class="my-2">
 
-          <!-- Inhalt -->
           <p class="text-uppercase fw-semibold small text-secondary mb-2 mt-3" style="letter-spacing:.06em">
-            <i class="bi bi-layout-text-sidebar me-1"></i>Inhalt
+            <i class="bi bi-layout-text-sidebar me-1"></i>{{if eq .Lang "de"}}Inhalt{{else}}Content{{end}}
           </p>
 
           <label class="mp-pdf-opt-label w-100 mb-2">
             <input type="checkbox" id="pdf-chk-hero" class="mp-pdf-chk" checked>
             <span>
-              Score &amp; Zusammenfassung
-              <small class="d-block text-secondary fw-normal">Gesamtscore, Bestanden/Warnungen/Fehler</small>
+              {{if eq .Lang "de"}}Score &amp; Zusammenfassung{{else}}Score &amp; summary{{end}}
+              <small class="d-block text-secondary fw-normal">{{if eq .Lang "de"}}Gesamtscore, Bestanden/Warnungen/Fehler{{else}}Overall score, passed/warnings/errors{{end}}</small>
             </span>
           </label>
 
           <label class="mp-pdf-opt-label w-100 mb-2">
             <input type="checkbox" id="pdf-chk-meta" class="mp-pdf-chk" checked>
             <span>
-              Metadaten
-              <small class="d-block text-secondary fw-normal">Betreff, Absender, Empfangszeit, Quelle</small>
+              {{if eq .Lang "de"}}Metadaten{{else}}Metadata{{end}}
+              <small class="d-block text-secondary fw-normal">{{if eq .Lang "de"}}Betreff, Absender, Empfangszeit, Quelle{{else}}Subject, sender, received time, source{{end}}</small>
             </span>
           </label>
 
           <label class="mp-pdf-opt-label w-100 mb-2">
             <input type="checkbox" id="pdf-chk-details" class="mp-pdf-chk" checked>
             <span>
-              Technische Details aufklappen
-              <small class="d-block text-secondary fw-normal">Hinweise &amp; Erklärungen pro Check</small>
+              {{if eq .Lang "de"}}Technische Details aufklappen{{else}}Expand technical details{{end}}
+              <small class="d-block text-secondary fw-normal">{{if eq .Lang "de"}}Hinweise &amp; Erklärungen pro Check{{else}}Hints &amp; explanations per check{{end}}</small>
             </span>
           </label>
 
           <label class="mp-pdf-opt-label w-100 mb-1">
             <input type="checkbox" id="pdf-chk-share" class="mp-pdf-chk">
             <span>
-              Teilen-Links einschließen
-              <small class="d-block fw-normal" style="color:#fd7e14"><i class="bi bi-exclamation-triangle me-1"></i>Enthält den Entschlüsselungs-Schlüssel</small>
+              {{if eq .Lang "de"}}Teilen-Links einschließen{{else}}Include sharing links{{end}}
+              <small class="d-block fw-normal" style="color:#fd7e14"><i class="bi bi-exclamation-triangle me-1"></i>{{if eq .Lang "de"}}Enthält den Entschlüsselungs-Schlüssel{{else}}Includes the decryption key{{end}}</small>
             </span>
           </label>
 
         </div>
         <div class="modal-footer pt-2">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{if eq .Lang "de"}}Abbrechen{{else}}Cancel{{end}}</button>
           <button type="button" class="btn btn-success" id="mp-pdf-print-btn">
-            <i class="bi bi-file-earmark-arrow-down me-1"></i>PDF erstellen
+            <i class="bi bi-file-earmark-arrow-down me-1"></i>{{if eq .Lang "de"}}PDF erstellen{{else}}Create PDF{{end}}
           </button>
         </div>
       </div>
@@ -1189,7 +1187,7 @@ function showDecrypted(payload, secretToken) {
   // Update all metadata info-boxes with decrypted values.
   var subjectEl = document.getElementById('mp-meta-subject');
   if (subjectEl) {
-    var subj = payload.subject || '(kein Betreff)';
+    var subj = payload.subject || (LANG === 'en' ? '(no subject)' : '(kein Betreff)');
     subjectEl.textContent = subj;
     subjectEl.title       = subj;
   }
@@ -1208,7 +1206,7 @@ function showDecrypted(payload, secretToken) {
     // Re-use localizeStaticTimes pattern: set data-time and let formatter run.
     receivedEl.dataset.time  = payload.received_at;
     receivedEl.textContent   = typeof formatExpiry === 'function'
-      ? new Date(payload.received_at).toLocaleString('de-DE', {dateStyle:'short', timeStyle:'medium'})
+      ? new Date(payload.received_at).toLocaleString(LANG === 'en' ? 'en-GB' : 'de-DE', {dateStyle:'short', timeStyle:'medium'})
       : payload.received_at;
   }
 
@@ -1216,7 +1214,7 @@ function showDecrypted(payload, secretToken) {
   var badge = document.getElementById('mp-e2e-badge-report');
   if (badge) {
     badge.classList.replace('text-bg-secondary', 'text-bg-success');
-    badge.innerHTML = '<i class="bi bi-unlock-fill me-1"></i>Entschlüsselt';
+    badge.innerHTML = '<i class="bi bi-unlock-fill me-1"></i>' + (LANG === 'en' ? 'Decrypted' : 'Entschlüsselt');
   }
 
   // Show the auto-detected mail type badge.
@@ -1230,7 +1228,7 @@ function showDecrypted(payload, secretToken) {
     if (mtBadge && mtLabels[mailType]) {
       mtBadge.textContent = (mtIcons[mailType] || '') + ' ' + mtLabels[mailType];
       mtBadge.style.display = '';
-      mtBadge.title = 'Automatisch erkannter Mail-Typ: ' + mtLabels[mailType];
+      mtBadge.title = (LANG === 'en' ? 'Auto-detected mail type: ' : 'Automatisch erkannter Mail-Typ: ') + mtLabels[mailType];
     }
   }
 
@@ -1340,9 +1338,9 @@ var keyErr    = document.getElementById('mp-key-error');
 if (submitBtn) {
   submitBtn.addEventListener('click', async function() {
     var key = keyInput && keyInput.value.trim();
-    if (!key) { showKeyErr('Bitte einen Schlüssel eingeben.'); return; }
+    if (!key) { showKeyErr(LANG === 'en' ? 'Please enter a key.' : 'Bitte einen Schlüssel eingeben.'); return; }
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Entschlüssele…';
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + (LANG === 'en' ? 'Decrypting…' : 'Entschlüssele…');
     try {
       var result = await decryptWith(key);
       storeSecret(result.info.identifier, key);
@@ -1350,9 +1348,9 @@ if (submitBtn) {
       if (modal) modal.hide();
       showDecrypted(result.payload, key);
     } catch(e) {
-      showKeyErr('Entschlüsselung fehlgeschlagen – Schlüssel prüfen.');
+      showKeyErr(LANG === 'en' ? 'Decryption failed – check your key.' : 'Entschlüsselung fehlgeschlagen – Schlüssel prüfen.');
       submitBtn.disabled = false;
-      submitBtn.innerHTML = '<i class="bi bi-unlock-fill me-1"></i>Entschlüsseln';
+      submitBtn.innerHTML = '<i class="bi bi-unlock-fill me-1"></i>' + (LANG === 'en' ? 'Decrypt' : 'Entschlüsseln');
     }
   });
 }
@@ -1599,7 +1597,7 @@ function renderCheckGroup(name, checks, gi) {
   // Section reload (only if the group has at least one re-checkable check).
   var hasRecheckable = checks.some(function(c){ return RECHECKABLE[c.id]; });
   var secBtn = hasRecheckable
-    ? '<button class="mp-group-recheck" type="button" title="Ganze Sektion neu prüfen" aria-label="Sektion neu prüfen"><i class="bi bi-arrow-clockwise"></i></button>'
+    ? '<button class="mp-group-recheck" type="button" title="' + (LANG==='en'?'Re-check entire section':'Ganze Sektion neu prüfen') + '" aria-label="' + (LANG==='en'?'Re-check section':'Sektion neu prüfen') + '"><i class="bi bi-arrow-clockwise"></i></button>'
     : '';
   var h='<div class="card mb-3 mp-group-card mp-grp-'+grpState+'"><div class="card-header mp-group-header p-0">'+
         '<button class="mp-group-toggle collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#'+gid+'" aria-expanded="false" aria-controls="'+gid+'">'+
@@ -1760,7 +1758,7 @@ function setupRecheckButtons() {
       if (!targets.length) return;
       var so = sbtn.innerHTML; sbtn.disabled = true; sbtn.classList.add('is-busy');
       sbtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
-      recheckToast('Sektion wird neu geprüft …');
+      recheckToast(LANG==='en' ? 'Re-checking section …' : 'Sektion wird neu geprüft …');
       var failed = 0;
       for (var i = 0; i < targets.length; i++) {
         try {
@@ -1774,7 +1772,7 @@ function setupRecheckButtons() {
       if (typeof colorScoreDeltas === 'function') colorScoreDeltas();
       updateGroupHeader(card);
       sbtn.disabled = false; sbtn.classList.remove('is-busy'); sbtn.innerHTML = so;
-      await persistCurrent(failed ? 'Sektion teilweise aktualisiert' : 'Sektion aktualisiert');
+      await persistCurrent(LANG==='en' ? (failed ? 'Section partially updated' : 'Section updated') : (failed ? 'Sektion teilweise aktualisiert' : 'Sektion aktualisiert'));
       return;
     }
 
@@ -1796,11 +1794,11 @@ function setupRecheckButtons() {
       if (typeof setupCopyButtons === 'function') setupCopyButtons();
       if (typeof colorScoreDeltas === 'function') colorScoreDeltas();
       updateGroupHeader(grpCard);
-      recheckToast('Aktualisiert — speichere …');
+      recheckToast(LANG==='en' ? 'Updated — saving …' : 'Aktualisiert — speichere …');
       await persistCurrent();
     } catch (e) {
       btn.disabled = false; btn.classList.remove('is-busy'); btn.innerHTML = orig;
-      recheckToast('Recheck fehlgeschlagen – später erneut versuchen.', true);
+      recheckToast(LANG==='en' ? 'Re-check failed – try again later.' : 'Recheck fehlgeschlagen – später erneut versuchen.', true);
     }
   });
 }
@@ -1837,7 +1835,7 @@ async function persistCurrent(okMsg) {
   try {
     var crypto = window.SenderReportCrypto;
     if (!DEC_PAYLOAD || !DEC_PAYLOAD.report || !DEC_SECRET || !crypto) {
-      recheckToast('Aktualisiert (nur in dieser Ansicht)');
+      recheckToast(LANG==='en' ? 'Updated (view only)' : 'Aktualisiert (nur in dieser Ansicht)');
       return;
     }
     var checks = DEC_PAYLOAD.report.checks || (DEC_PAYLOAD.report.checks = []);
@@ -1859,9 +1857,9 @@ async function persistCurrent(okMsg) {
     var saved = await res.json();
     // Reflect the new authoritative score in the hero ring.
     updateHeroScore(saved.score, saved.score_label);
-    recheckToast((okMsg || 'Gespeichert') + ' ✓');
+    recheckToast((okMsg || (LANG==='en' ? 'Saved' : 'Gespeichert')) + ' ✓');
   } catch (e) {
-    recheckToast('Aktualisiert ✓ (Speichern fehlgeschlagen)', true);
+    recheckToast(LANG==='en' ? 'Updated ✓ (save failed)' : 'Aktualisiert ✓ (Speichern fehlgeschlagen)', true);
   }
 }
 
@@ -1980,10 +1978,10 @@ function renderDecryptedReport(p) {
           if (typeof mpGeneratePDF === 'function') {
             mpGeneratePDF(opts);
           } else {
-            alert('PDF-Generator nicht geladen. Seite neu laden.');
+            alert(LANG==='en' ? 'PDF generator not loaded. Reload the page.' : 'PDF-Generator nicht geladen. Seite neu laden.');
           }
         } catch(e) {
-          alert('PDF-Fehler: ' + e.message);
+          alert((LANG==='en' ? 'PDF error: ' : 'PDF-Fehler: ') + e.message);
         }
       }, 150);
     });
