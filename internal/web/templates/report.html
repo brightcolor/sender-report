@@ -1,4 +1,4 @@
-{{define "report"}}
+﻿{{define "report"}}
 <!doctype html>
 <html lang="{{.Lang}}" data-bs-theme="light">
 <head>
@@ -1638,66 +1638,66 @@ var RECHECKABLE = {spf:1, spf_strictness:1, dmarc:1, dmarc_policy:1, mx_records:
 // renderDecCheckItem renders a single decrypted check accordion item. Used by
 // renderCheckGroup and to re-render one item in place after a live recheck.
 function renderDecCheckItem(c, uid){
-  var lblExplain  = LANG===’en’ ? ‘Explanation’ : ‘Erklärung’;
-  var lblHowToFix = LANG===’en’ ? ‘How to fix it’ : ‘Wie wird\’s gemacht?’;
-  var lblSources  = LANG===’en’ ? ‘Sources & tools’ : ‘Quellen & Tools’;
-  var lblRawData  = LANG===’en’ ? ‘Show raw data’ : ‘Rohdaten anzeigen’;
-  var lblCopy     = LANG===’en’ ? ‘Copy’ : ‘Kopieren’;
-  var lblRecheck  = LANG===’en’ ? ‘Re-check (fresh DNS/reputation lookup)’ : ‘Neu prüfen (frische DNS-/Reputations-Abfrage)’;
+  var lblExplain  = LANG==='en' ? 'Explanation' : 'Erklärung';
+  var lblHowToFix = LANG==='en' ? 'How to fix it' : 'Wie wird\'s gemacht?';
+  var lblSources  = LANG==='en' ? 'Sources & tools' : 'Quellen & Tools';
+  var lblRawData  = LANG==='en' ? 'Show raw data' : 'Rohdaten anzeigen';
+  var lblCopy     = LANG==='en' ? 'Copy' : 'Kopieren';
+  var lblRecheck  = LANG==='en' ? 'Re-check (fresh DNS/reputation lookup)' : 'Neu prüfen (frische DNS-/Reputations-Abfrage)';
   // Use EN fields when available and language is English.
-  var name        = (LANG===’en’ && c.name_en)        ? c.name_en        : c.name;
-  var summary     = (LANG===’en’ && c.summary_en)     ? c.summary_en     : c.summary;
-  var explanation = (LANG===’en’ && c.explanation_en) ? c.explanation_en : c.explanation;
-  var recommendation = (LANG===’en’ && c.recommendation_en) ? c.recommendation_en : c.recommendation;
-  var delta=c.status===’na’?’—‘:fmtDelta(c.score_delta||0);
-  var open=c.status===’fail’?’show’:’’, col=c.status!==’fail’?’collapsed’:’’;
+  var name        = (LANG==='en' && c.name_en)        ? c.name_en        : c.name;
+  var summary     = (LANG==='en' && c.summary_en)     ? c.summary_en     : c.summary;
+  var explanation = (LANG==='en' && c.explanation_en) ? c.explanation_en : c.explanation;
+  var recommendation = (LANG==='en' && c.recommendation_en) ? c.recommendation_en : c.recommendation;
+  var delta=c.status==='na'?'—':fmtDelta(c.score_delta||0);
+  var open=c.status==='fail'?'show':'', col=c.status!=='fail'?'collapsed':'';
   // N/A checks never get a recheck button.
-  var recheckBtn = (c.status!==’na’) && RECHECKABLE[c.id]
-    ? ‘<button class="mp-chk-recheck" type="button" data-recheck="’+esc(c.id)+’" title="’+esc(lblRecheck)+’" aria-label="’+esc(lblRecheck)+’"><i class="bi bi-arrow-clockwise"></i></button>’
-    : ‘’;
-  var h=’<div class="accordion-item mp-check-item ‘+esc(c.status)+’" data-status="’+esc(c.status)+’" id="chk-’+uid+’">’+
-     ‘<h2 class="accordion-header mp-chk-head"><button class="accordion-button ‘+col+’" type="button" ‘+
-     ‘data-bs-toggle="collapse" data-bs-target="#cb-’+uid+’">’+
-     ‘<div class="mp-chk-inner"><span class="mp-status-dot ‘+esc(c.status)+’">’+statusGlyph(c.status)+’</span>’+
-     ‘<span class="mp-chk-name"><strong>’+esc(name)+((c.importance&&(c.status===’warn’||c.status===’fail’))?’ <span class="mp-imp" data-imp="’+esc(c.importance)+’">’+esc(impLabel(c.importance))+’</span>’:’’)+’</strong><small>’+esc(summary)+’</small></span>’+
-     ‘<span class="mp-pill ‘+esc(c.status)+’">’+statusLbl(c.status)+’</span>’+
-     ‘<strong class="mp-delta">’+esc(delta)+’</strong></div></button>’+recheckBtn+’</h2>’+
-     ‘<div id="cb-’+uid+’" class="accordion-collapse collapse ‘+open+’"><div class="accordion-body">’;
-  if(c.id===’rspamd’&&c.technical_details)
+  var recheckBtn = (c.status!=='na') && RECHECKABLE[c.id]
+    ? '<button class="mp-chk-recheck" type="button" data-recheck="'+esc(c.id)+'" title="'+esc(lblRecheck)+'" aria-label="'+esc(lblRecheck)+'"><i class="bi bi-arrow-clockwise"></i></button>'
+    : '';
+  var h='<div class="accordion-item mp-check-item '+esc(c.status)+'" data-status="'+esc(c.status)+'" id="chk-'+uid+'">'+
+     '<h2 class="accordion-header mp-chk-head"><button class="accordion-button '+col+'" type="button" '+
+     'data-bs-toggle="collapse" data-bs-target="#cb-'+uid+'">'+
+     '<div class="mp-chk-inner"><span class="mp-status-dot '+esc(c.status)+'">'+statusGlyph(c.status)+'</span>'+
+     '<span class="mp-chk-name"><strong>'+esc(name)+((c.importance&&(c.status==='warn'||c.status==='fail'))?' <span class="mp-imp" data-imp="'+esc(c.importance)+'">'+esc(impLabel(c.importance))+'</span>':'')+'</strong><small>'+esc(summary)+'</small></span>'+
+     '<span class="mp-pill '+esc(c.status)+'">'+statusLbl(c.status)+'</span>'+
+     '<strong class="mp-delta">'+esc(delta)+'</strong></div></button>'+recheckBtn+'</h2>'+
+     '<div id="cb-'+uid+'" class="accordion-collapse collapse '+open+'"><div class="accordion-body">';
+  if(c.id==='rspamd'&&c.technical_details)
     h+=renderRspamdSymbols(c.technical_details);
-  if(c.id===’rbl’&&c.technical_details)
+  if(c.id==='rbl'&&c.technical_details)
     h+=renderRblDetails(c.technical_details);
   if(explanation)
-    h+=’<div class="mb-3"><h6 class="text-uppercase small fw-bold text-secondary mb-1" style="letter-spacing:.06em">’+esc(lblExplain)+’</h6><p class="mb-0">’+esc(explanation)+’</p></div>’;
-  if(recommendation&&(c.status===’warn’||c.status===’fail’))
-    h+=’<div class="mp-fix-box mb-3"><div class="d-flex align-items-center justify-content-between mb-2">’+
-       ‘<h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>’+esc(lblHowToFix)+’</h6>’+
-       ‘<button class="btn btn-sm btn-outline-secondary" type="button" data-copy="’+esc(recommendation)+’">’+
-       ‘<i class="bi bi-clipboard me-1"></i>’+esc(lblCopy)+’</button></div>’+
-       ‘<p class="mb-0" style="white-space:pre-line">’+esc(recommendation)+’</p></div>’;
+    h+='<div class="mb-3"><h6 class="text-uppercase small fw-bold text-secondary mb-1" style="letter-spacing:.06em">'+esc(lblExplain)+'</h6><p class="mb-0">'+esc(explanation)+'</p></div>';
+  if(recommendation&&(c.status==='warn'||c.status==='fail'))
+    h+='<div class="mp-fix-box mb-3"><div class="d-flex align-items-center justify-content-between mb-2">'+
+       '<h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>'+esc(lblHowToFix)+'</h6>'+
+       '<button class="btn btn-sm btn-outline-secondary" type="button" data-copy="'+esc(recommendation)+'">'+
+       '<i class="bi bi-clipboard me-1"></i>'+esc(lblCopy)+'</button></div>'+
+       '<p class="mb-0" style="white-space:pre-line">'+esc(recommendation)+'</p></div>';
   if(c.technical_details){
-    var tdKeys=Object.keys(c.technical_details).filter(function(k){return k.indexOf(‘sym:’)!==0;});
+    var tdKeys=Object.keys(c.technical_details).filter(function(k){return k.indexOf('sym:')!==0;});
     if(tdKeys.length){
-      h+=’<div class="mt-3"><button class="btn btn-link btn-sm text-secondary p-0" type="button" ‘+
-         ‘data-bs-toggle="collapse" data-bs-target="#raw-’+uid+’">’+
-         ‘<i class="bi bi-code me-1"></i>’+esc(lblRawData)+’</button>’+
-         ‘<div id="raw-’+uid+’" class="collapse mt-2"><dl class="mp-tech-dl">’;
+      h+='<div class="mt-3"><button class="btn btn-link btn-sm text-secondary p-0" type="button" '+
+         'data-bs-toggle="collapse" data-bs-target="#raw-'+uid+'">'+
+         '<i class="bi bi-code me-1"></i>'+esc(lblRawData)+'</button>'+
+         '<div id="raw-'+uid+'" class="collapse mt-2"><dl class="mp-tech-dl">';
       tdKeys.forEach(function(k){
-        h+=’<div><dt>’+esc(techLabel(k))+’</dt><dd><code>’+esc(c.technical_details[k])+’</code></dd></div>’;
+        h+='<div><dt>'+esc(techLabel(k))+'</dt><dd><code>'+esc(c.technical_details[k])+'</code></dd></div>';
       });
-      h+=’</dl></div></div>’;
+      h+='</dl></div></div>';
     }
   }
   if(c.doc_links&&c.doc_links.length){
-    h+=’<div class="mt-3"><h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">’+
-       ‘<i class="bi bi-link-45deg me-1"></i>’+esc(lblSources)+’</h6><div class="d-flex flex-wrap gap-2">’;
+    h+='<div class="mt-3"><h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">'+
+       '<i class="bi bi-link-45deg me-1"></i>'+esc(lblSources)+'</h6><div class="d-flex flex-wrap gap-2">';
     c.doc_links.forEach(function(l){
-      h+=’<a href="’+esc(l.url)+’" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary">’+
-         esc(l.title)+’<i class="bi bi-box-arrow-up-right ms-1" style="font-size:.65rem"></i></a>’;
+      h+='<a href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary">'+
+         esc(l.title)+'<i class="bi bi-box-arrow-up-right ms-1" style="font-size:.65rem"></i></a>';
     });
-    h+=’</div></div>’;
+    h+='</div></div>';
   }
-  h+=’</div></div></div>’;
+  h+='</div></div></div>';
   return h;
 }
 

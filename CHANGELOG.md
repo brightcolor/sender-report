@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.18.2] - 2026-06-10
+
+### Fixed
+- **E2E decryption broken after i18n changes.** The background agent that
+  introduced the language-aware labels in `renderDecCheckItem` used curly/smart
+  quotes (U+2018/U+2019) as JavaScript string delimiters instead of straight
+  ASCII quotes. This caused a JS syntax error that aborted the entire encrypted
+  IIFE before any event listeners (DOMContentLoaded auto-decrypt, key-submit
+  click) could register — resulting in "nothing happens" on all decryption
+  paths. All smart quotes replaced with straight ASCII `'` quotes.
+
 ## [1.18.0] - 2026-06-09
 
 ### Added
