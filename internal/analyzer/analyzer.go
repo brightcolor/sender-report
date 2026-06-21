@@ -1686,7 +1686,7 @@ func checkCategory(id string) string {
 		return "DNS und Infrastruktur"
 	case "spamassassin", "rspamd", "domain_blocklist", "link_blocklist":
 		return "Spamfilter"
-	case "mime_ct", "mime_boundary", "plain_text", "multipart_alt", "attachments", "image_text_ratio", "charset", "links", "shortener", "tracking_links", "html", "hidden_html", "html_validity", "subject", "subject_exclaim", "subject_caps", "unicode", "list_unsub", "preheader",
+	case "mime_ct", "mime_boundary", "plain_text", "multipart_alt", "attachments", "image_text_ratio", "image_alt", "charset", "links", "shortener", "tracking_links", "html", "hidden_html", "html_validity", "harmful_html", "subject", "subject_exclaim", "subject_caps", "unicode", "list_unsub", "preheader",
 		"one_click_unsub", "template_urls":
 		return "Format und Inhalt"
 	default:
@@ -1706,7 +1706,7 @@ func checkImportance(id string) string {
 		"helo", "mx_records", "tls_transport",
 		"spamassassin", "rspamd", "display_name",
 		"list_unsub", "mime_parse", "mime_ct", "mime_boundary", "message_id", "received_chain",
-		"one_click_unsub":
+		"one_click_unsub", "harmful_html":
 		return "Wichtig"
 	case "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa", "arc", "preheader":
 		return "Optional"
@@ -1895,6 +1895,14 @@ func defaultExplanation(id string) string {
 		return "RFC 8058 definiert One-Click-Abmeldung: der Header List-Unsubscribe-Post mit dem Wert 'List-Unsubscribe=One-Click' kombiniert mit einer HTTPS-URL in List-Unsubscribe, die HTTP-POST verarbeitet und den Nutzer sofort abmeldet – ohne Bestätigungsseite oder Login. Google und Yahoo haben dies ab Februar 2024 für Bulk-Sender (>5.000 Mails/Tag) verpflichtend gemacht."
 	case "template_urls":
 		return "Erkennt nicht ersetzte Merge-Tag-Platzhalter in E-Mail-Links – Muster wie {abmelde_url}, {{email}}, *|UNSUB|* oder ${tracking_id}. Dies sind Fehler in der Bulk-Mail-Template-Rendering-Pipeline: ESP oder Versandsystem haben eine Variable nicht ersetzt. Betroffene Links sind für Empfänger kaputt und können Spamfilter auslösen sowie Abmelde- und Tracking-Flows unterbrechen."
+	case "image_alt":
+		return "Das alt-Attribut an <img>-Tags hat zwei Funktionen für die Zustellbarkeit: Erstens liefert es Fallback-Text, wenn Bilder blockiert sind (die meisten E-Mail-Clients blockieren Bilder beim ersten Öffnen standardmäßig), zweitens verbessert es das Bild/Text-Verhältnis, das Spamfilter auswerten. Eine Mail aus lauter Bildern ohne Alt-Text wirkt wie ein Spam-Template – der Empfänger sieht nichts, und Filter haben keinen Textinhalt zum Auswerten. Alt-Texte sollten das Bild prägnant beschreiben."
+	case "harmful_html":
+		return "E-Mail-HTML wird in stark eingeschränkten Umgebungen gerendert: kein JavaScript, keine Meta-Redirects, kein externes CSS. <script>-Tags oder <meta http-equiv=refresh>-Redirects im Mail-Body sind ein starkes Spam-Signal – kein seriöser Absender braucht sie, denn sie werden von keinem Mail-Client ausgeführt. Viele Spamfilter geben bei deren Fund hohe Penalty-Scores oder lehnen die Mail direkt ab."
+	case "fake_reply":
+		return "Einige Spam-Kampagnen stellen dem Betreff 'Re:' oder 'Fwd:' voran, um den Eindruck eines laufenden Gesprächs zu erwecken und Empfänger zum Öffnen zu verleiten. Eine echte Antwort oder Weiterleitung enthält immer In-Reply-To- und/oder References-Header mit der Message-ID der Originalnachricht. Fehlen diese Thread-Header, ist das Re:/Fwd:-Präfix mit hoher Wahrscheinlichkeit gefälscht – eine Technik, die viele Spamfilter explizit erkennen."
+	case "message_id_format":
+		return "Der Message-ID-Header muss dem RFC-5322-Format entsprechen: ein in spitze Klammern eingeschlossener Identifier mit einem lokalen Teil und einer Domain, getrennt durch '@', z. B. <unique-id@sending-domain.com>. Eine fehlerhafte Message-ID ist ein Spam-Signal, da seriöse Mailserver immer korrekt formatierte Message-IDs erzeugen. Manche Provider (Outlook, Gmail) nutzen das Format auch zur Erkennung von Bulk-Mail aus schlecht konfigurierten Systemen."
 	default:
 		return "Dieser Check bewertet ein technisches Signal, das Mailprovider für Zustellbarkeit, Missbrauchserkennung oder Nutzervertrauen heranziehen."
 	}
@@ -1946,9 +1954,13 @@ func checkNameEN(id string) string {
 		"list_unsub": "List-Unsubscribe", "preheader": "Preheader",
 		"date": "Date Header", "date_skew": "Date Plausibility",
 		"message_id": "Message-ID", "body_read": "Body Readability",
-		"from_domain_rcv": "From Domain Reachability",
-		"one_click_unsub": "One-Click Unsubscribe (RFC 8058)",
-		"template_urls":   "Template Placeholders in Links",
+		"from_domain_rcv":   "From Domain Reachability",
+		"one_click_unsub":   "One-Click Unsubscribe (RFC 8058)",
+		"template_urls":     "Template Placeholders in Links",
+		"image_alt":         "Image Alt Text",
+		"harmful_html":      "Harmful HTML Elements",
+		"fake_reply":        "Fake Reply Prefix",
+		"message_id_format": "Message-ID Format",
 	}
 	if n, ok := names[id]; ok {
 		return n
@@ -2041,8 +2053,16 @@ func explanationEN(id string) string {
 		return "A correctly structured MIME message is a prerequisite for all further authentication, header and content checks. Malformed raw messages are scored lower or rejected directly by providers."
 	case "message_id":
 		return "Every email should have a stable, globally unique Message-ID. Missing or malformed Message-IDs are a classic spam signal and can also cause problems with threading in mail clients."
+	case "message_id_format":
+		return "The Message-ID header must follow the format defined in RFC 5322: an angle-bracket-enclosed identifier with a local part and a domain separated by '@', e.g. <unique-id@sending-domain.com>. A malformed Message-ID is a spam signal many filters flag because legitimate mail servers always generate properly formatted Message-IDs. Some providers (Outlook, Gmail) also use Message-ID format to detect bulk mail from badly configured senders."
 	case "received_chain":
 		return "Received headers document the complete transport path of the message. Each MTA adds its Received header. Receiving systems use the chain for IP reputation analysis, routing analysis and forensics."
+	case "image_alt":
+		return "The alt attribute on <img> tags serves two purposes for email deliverability: it provides fallback text when images are blocked (most email clients block images by default on first open), and it reduces the image-to-text ratio that spam filters use. A message consisting entirely of images with no alt text looks like a spam or phishing template — the recipient sees nothing, and filters see no text content to evaluate. Alt text should describe the image concisely."
+	case "harmful_html":
+		return "Email HTML is rendered in highly restricted environments: no JavaScript, no meta-redirects, no external CSS. Finding <script> tags or <meta http-equiv=refresh> redirects in an email body is a strong spam signal because no legitimate sender needs them — they are never executed by mail clients but are commonly used by malicious bulk mail to obscure intent. Most spam filters apply heavy penalties or reject such messages outright."
+	case "fake_reply":
+		return "Some spam campaigns prefix their subject line with 'Re:' or 'Fwd:' to make messages appear part of an existing conversation and trick recipients into opening them. A genuine reply or forward always includes In-Reply-To and/or References headers referencing the original message's Message-ID. When these thread headers are absent, the Re:/Fwd: prefix is almost certainly fabricated — a technique known as 'fake-reply spam'. Many spam filters detect this pattern."
 	default:
 		return "This check evaluates a technical signal that mail providers use for deliverability, abuse detection or user trust."
 	}
@@ -2231,6 +2251,31 @@ func summaryEN(id, status, deSummary string, ctx checkContext) string {
 		return "Sending domain is very young – strong spam/phishing signal."
 	case "domain_age:warn":
 		return "Sending domain is relatively young – some reputation impact."
+	// Image alt text
+	case "image_alt:pass":
+		return "All images have an alt attribute."
+	case "image_alt:warn":
+		if strings.Contains(deSummary, "Allen") {
+			return "All images are missing the alt attribute."
+		}
+		return deSummary // contains counts, language-neutral
+	case "image_alt:info":
+		return "No images in HTML part – alt text check not applicable."
+	// Harmful HTML
+	case "harmful_html:pass":
+		return "No obvious harmful HTML elements detected."
+	case "harmful_html:fail":
+		return "Script tags found in HTML body – strong spam signal, blocked by all email clients."
+	case "harmful_html:warn":
+		return "Meta-refresh redirect detected in HTML – some spam filters penalise this."
+	// Fake reply prefix
+	case "fake_reply:warn":
+		return deSummary // contains the detected prefix, language-neutral enough
+	// Message-ID format
+	case "message_id_format:pass":
+		return "Message-ID has correct RFC format (<id@domain>)."
+	case "message_id_format:warn":
+		return deSummary // contains the actual value, language-neutral
 	}
 	// For remaining dynamic summaries, return German (language-neutral content).
 	return ""
@@ -2299,6 +2344,25 @@ func recommendationEN(id, status string, ctx checkContext) string {
 		return "Add a 'List-Unsubscribe-Post: List-Unsubscribe=One-Click' header alongside your List-Unsubscribe header. The HTTPS URL in List-Unsubscribe must handle a POST request and immediately unsubscribe the recipient without requiring any further interaction."
 	case "template_urls":
 		return "Check your bulk-mail template for unsubstituted variables before sending. Ensure all ESP merge tags are fully populated. Test with a real recipient address before deploying a campaign."
+	case "image_alt":
+		if status == "warn" {
+			return "Add a meaningful alt attribute to every <img> tag. Example: <img src=\"banner.jpg\" alt=\"Summer sale – 20% off all products\">. For purely decorative images use alt=\"\" (empty string) to signal to screen readers and filters that no text description is needed."
+		}
+	case "harmful_html":
+		if status == "fail" {
+			return "Remove all <script> tags from the email HTML. JavaScript is never executed in email clients and is a strong spam signal. Move any dynamic behaviour to your sending infrastructure or landing pages."
+		}
+		if status == "warn" {
+			return "Remove the <meta http-equiv=\"refresh\"> tag from the email HTML. Use a regular hyperlink if you want to direct recipients to a URL."
+		}
+	case "fake_reply":
+		if status == "warn" {
+			return "Remove the Re:/Fwd: prefix from the subject line. If this is a genuine reply, ensure the In-Reply-To and References headers are set correctly with the original message's Message-ID."
+		}
+	case "message_id_format":
+		if status == "warn" {
+			return fmt.Sprintf("Configure your mail server or sending software to generate a properly formatted Message-ID. Required format: <unique-id@%s>. The identifier before @ should be unique per message (e.g. a UUID or timestamp).", emptyFallback(ctx.FromDomain, "sending-domain.com"))
+		}
 	}
 	return ""
 }
@@ -2809,6 +2873,20 @@ func inspectBody(headers mail.Header, body []byte) ([]model.CheckResult, parsedB
 		}
 	}
 
+	if pb.HasHTMLPart {
+		total, noAlt := countImgsWithoutAlt(pb.HTML)
+		switch {
+		case total == 0:
+			out = append(out, info("image_alt", "Bild Alt-Text", 0.0, "Keine Bilder im HTML-Teil – Alt-Text-Check nicht anwendbar.", ""))
+		case noAlt == 0:
+			out = append(out, pass("image_alt", "Bild Alt-Text", 0.0, "Alle Bilder haben ein Alt-Attribut.", ""))
+		case noAlt == total:
+			out = append(out, warn("image_alt", "Bild Alt-Text", -0.4, fmt.Sprintf("Allen %d Bildern fehlt das Alt-Attribut.", total), "Jedem <img>-Tag ein sinnvolles alt-Attribut hinzufügen."))
+		default:
+			out = append(out, warn("image_alt", "Bild Alt-Text", -0.2, fmt.Sprintf("%d von %d Bildern fehlt das Alt-Attribut.", noAlt, total), "Allen <img>-Tags ein sinnvolles alt-Attribut hinzufügen."))
+		}
+	}
+
 	all := strings.TrimSpace(pb.Text + "\n" + stripHTML(pb.HTML))
 	if all != "" {
 		pb.AllText = all
@@ -2821,6 +2899,36 @@ func inspectBody(headers mail.Header, body []byte) ([]model.CheckResult, parsedB
 	}
 
 	return out, pb
+}
+
+// countImgsWithoutAlt parses an HTML string and returns the total image count
+// and how many of those are missing an alt attribute.
+func countImgsWithoutAlt(htmlStr string) (total, noAlt int) {
+	doc, err := html.Parse(strings.NewReader(htmlStr))
+	if err != nil {
+		return 0, 0
+	}
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "img" {
+			total++
+			hasAlt := false
+			for _, attr := range n.Attr {
+				if attr.Key == "alt" {
+					hasAlt = true
+					break
+				}
+			}
+			if !hasAlt {
+				noAlt++
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	return
 }
 
 func decodeBody(headers textproto.MIMEHeader, body []byte) string {
@@ -2906,6 +3014,8 @@ func evaluateURLs(links []string) ([]model.CheckResult, []string) {
 
 var templatePlaceholderRE = regexp.MustCompile(`(\{[^}\s]{1,50}\}|\*\|[^|]{1,30}\|\*|%7B[^%]{1,40}%7D|\$\{[^}\s]{1,30}\})`)
 
+var metaRefreshRE = regexp.MustCompile(`(?i)<meta[^>]+http-equiv\s*=\s*["']?refresh`)
+
 func templateURLCheck(links []string, mailType string) model.CheckResult {
 	if mailType == "personal" || mailType == "transactional" {
 		return na("template_urls", "Template-Platzhalter in Links", mailType)
@@ -2953,6 +3063,15 @@ func htmlHeuristics(htmlBody string) []model.CheckResult {
 		checks = append(checks, warn("html_validity", "HTML-Grundvalidierung", -0.4, "HTML wirkt strukturell fehlerhaft.", "HTML-Template validieren."))
 	} else {
 		checks = append(checks, pass("html_validity", "HTML-Grundvalidierung", 0.1, "HTML ist parsebar.", ""))
+	}
+	htmlLowerFull := strings.ToLower(htmlBody)
+	switch {
+	case strings.Contains(htmlLowerFull, "<script"):
+		checks = append(checks, fail("harmful_html", "Schädliche HTML-Elemente", -0.7, "Script-Tags im HTML-Body erkannt – starkes Spam-Signal und in E-Mail-Clients blockiert.", "Alle <script>-Tags aus dem E-Mail-HTML entfernen. JavaScript wird in E-Mail-Clients nicht ausgeführt und signalisiert Spam."))
+	case metaRefreshRE.MatchString(htmlBody):
+		checks = append(checks, warn("harmful_html", "Schädliche HTML-Elemente", -0.4, "Meta-Refresh-Redirect im HTML erkannt – manche Spam-Filter werten das negativ.", "Meta-Refresh aus dem E-Mail-HTML entfernen."))
+	default:
+		checks = append(checks, pass("harmful_html", "Schädliche HTML-Elemente", 0.1, "Keine offensichtlichen schädlichen HTML-Elemente erkannt.", ""))
 	}
 	return checks
 }
@@ -3003,10 +3122,34 @@ func headerHeuristics(headers mail.Header) ([]model.CheckResult, []string) {
 			checks = append(checks, pass("date", "Date-Header", 0.1, "Date-Header plausibel.", ""))
 		}
 	}
-	if headers.Get("Message-Id") == "" && headers.Get("Message-ID") == "" {
+	msgID := strings.TrimSpace(firstNonEmpty(headers.Get("Message-Id"), headers.Get("Message-ID")))
+	if msgID == "" {
 		checks = append(checks, fail("message_id", "Message-ID", -0.8, "Message-ID fehlt.", "Jede Mail mit stabiler Message-ID versenden."))
 	} else {
 		checks = append(checks, pass("message_id", "Message-ID", 0.1, "Message-ID vorhanden.", ""))
+		atIdx := strings.Index(msgID, "@")
+		validFmt := strings.HasPrefix(msgID, "<") && strings.HasSuffix(msgID, ">") && atIdx > 1 && atIdx < len(msgID)-1
+		if validFmt {
+			checks = append(checks, pass("message_id_format", "Message-ID Format", 0.0, "Message-ID hat korrektes RFC-Format (<id@domain>).", ""))
+		} else {
+			checks = append(checks, warn("message_id_format", "Message-ID Format", -0.3, fmt.Sprintf("Message-ID hat ungültiges Format: %q. Erwartet: <id@domain>.", msgID), "Message-ID im Format <unique-id@domain> erzeugen lassen."))
+			warnings = append(warnings, "Ungültiges Message-ID Format")
+		}
+	}
+	subject := strings.TrimSpace(headers.Get("Subject"))
+	if subject != "" {
+		subjectLower := strings.ToLower(subject)
+		replyPrefixes := []string{"re:", "fwd:", "fw:", "aw:", "wg:", "sv:", "vs:", "ynt:", "odp:", "res:", "tr:", "ref:", "enc:"}
+		for _, pfx := range replyPrefixes {
+			if strings.HasPrefix(subjectLower, pfx) {
+				hasThreadHeaders := headers.Get("In-Reply-To") != "" || headers.Get("References") != ""
+				if !hasThreadHeaders {
+					checks = append(checks, warn("fake_reply", "Fake-Antwort-Präfix", -0.4, fmt.Sprintf("Betreff beginnt mit Antwort-/Weiterleitungspräfix (%q), aber In-Reply-To- und References-Header fehlen.", strings.ToUpper(pfx)), "Re:/Fwd:-Präfix aus dem Betreff entfernen, oder In-Reply-To- und References-Header korrekt setzen."))
+					warnings = append(warnings, "Fake-Antwort-Präfix im Betreff")
+				}
+				break
+			}
+		}
 	}
 	return checks, warnings
 }

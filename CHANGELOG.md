@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.19.1] - 2026-06-22
+
+### Added
+- **New check `image_alt` – Image Alt Text.**
+  Parses the HTML body and counts `<img>` tags missing an `alt` attribute.
+  Pass if all images have alt; warn(-0.2) if some are missing; warn(-0.4) if all
+  are missing; info if no images. Helps with image-to-text ratio and client
+  rendering when images are blocked.
+- **New check `harmful_html` – Harmful HTML Elements.**
+  Detects `<script>` tags (fail, -0.7) and `<meta http-equiv=refresh>` redirects
+  (warn, -0.4) in the HTML body. Both are strong spam signals: no email client
+  executes JavaScript or meta-redirects, but many spam filters heavily penalise
+  their presence. Category: Format und Inhalt, Importance: Wichtig.
+- **New check `fake_reply` – Fake Reply Prefix.**
+  Detects when the Subject starts with a reply/forward prefix (Re:, Fwd:, Aw:,
+  Wg: and 10 other localisations) but neither `In-Reply-To` nor `References`
+  headers are present — the classic "fake-reply spam" trick. Warn(-0.4) when
+  detected; no check added otherwise.
+- **New check `message_id_format` – Message-ID Format.**
+  Validates that an existing Message-ID follows RFC 5322 format
+  (`<local@domain>`). Warn(-0.3) for invalid format; pass otherwise. Only
+  evaluated when a Message-ID is present (the `message_id` presence check
+  already covers the missing case).
+
 ## [1.19.0] - 2026-06-21
 
 ### Added

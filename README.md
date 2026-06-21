@@ -36,10 +36,11 @@ small VPS.
 - **Real authentication checks** — SPF, DKIM and DMARC are **cryptographically verified**
   (DKIM signature via `go-msgauth`, SPF against the sending IP, DMARC alignment), not just
   guessed from headers.
-- **55+ checks across 5 areas** — Authentication · DNS & infrastructure (PTR, HELO, MX, TLS,
-  MTA-STS, TLS-RPT, BIMI, DNSSEC, DANE, **From domain reachability**) · Spam filters
-  (SpamAssassin, Rspamd, DNSBL) · Format & content (**RFC 8058 one-click unsubscribe,
-  template placeholder detection**, image/text ratio, HTML validity) · Headers & raw data.
+- **60+ checks across 5 areas** — Authentication · DNS & infrastructure (PTR, HELO, MX, TLS,
+  MTA-STS, TLS-RPT, BIMI, DNSSEC, DANE, From domain reachability) · Spam filters
+  (SpamAssassin, Rspamd, DNSBL) · Format & content (RFC 8058 one-click unsubscribe,
+  template placeholder detection, **image alt text, harmful HTML detection**, image/text ratio,
+  HTML validity) · Headers & raw data (**fake reply prefix, Message-ID format**).
 - **Practical scoring** — importance-weighted like real filters: authentication & reputation
   dominate, cosmetics barely count. Domain age contributes dynamically. A perfect 10 is only
   awarded when the essential checks are genuinely clean.
