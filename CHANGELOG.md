@@ -4,6 +4,47 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-06-21
+
+### Added
+- **New check `from_domain_rcv` – From Domain Reachability.**
+  DNS lookup (MX → A/AAAA fallback) on the From: header domain to verify that
+  replies and bounces are actually deliverable. Pass if MX found, info if only
+  A/AAAA, warn (-0.4) if neither. Runs concurrently with other DNS checks.
+  Skipped (info) when From domain equals bounce/envelope domain to avoid
+  duplicate penalties.
+- **New check `one_click_unsub` – One-Click Unsubscribe (RFC 8058).**
+  For bulk mail with a List-Unsubscribe header: checks whether the
+  `List-Unsubscribe-Post: List-Unsubscribe=One-Click` header is present.
+  Pass (+0.1) if compliant, warn (-0.3) if missing. N/A for personal and
+  transactional mail. Google and Yahoo mandated RFC 8058 for bulk senders
+  (>5 000 mails/day) starting February 2024.
+- **New check `template_urls` – Template Placeholders in Links.**
+  Detects unreplaced ESP merge-tag placeholders in links
+  (`{var}`, `{{var}}`, `*|VAR|*`, `${var}`, `%7B…%7D`).
+  Fail (-0.6) if found (broken links for recipients), N/A for personal/
+  transactional mail, info if no links present.
+- **Enhanced ARC check.**
+  Now parses the `arc=` result from `Authentication-Results` headers.
+  `arc=pass` → info(0.0) "chain verified"; `arc=fail` → warn(-0.2)
+  "chain broken"; headers present but no result → info; no headers → info
+  (unchanged from before, only relevant in forwarding scenarios).
+
+### Changed
+- **Scoring adjustments — more realistic impact weights:**
+  - `tls_transport` (no TLS evidence): `info(0.0)` → `warn(-0.2)`.
+    TLS in transit is a baseline expectation in 2024/2025.
+  - `plain_text` (missing text part): delta -0.8 → -0.5.
+  - `hidden_html` (excessive hidden content): delta -0.6 → -0.4.
+  - `envelope_mx` (bounce domain without MX): delta -0.4 → -0.5.
+- **Improved `image_text_ratio` algorithm.**
+  Replaced the crude two-state check (`>=4 images AND <240 chars`) with a
+  graduated four-tier check:
+  - fail(-0.7): images present, virtually no text (<80 chars) — pure image mail
+  - warn(-0.4): ≥3 images, little text (<250 chars)
+  - warn(-0.3): image-to-text ratio >60 % (overweight on images)
+  - info(0.0): everything else
+
 ## [1.18.3] - 2026-06-10
 
 ### Fixed

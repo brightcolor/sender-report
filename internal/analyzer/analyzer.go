@@ -88,7 +88,8 @@ func Recheckable(id string) bool {
 	switch id {
 	case "spf", "spf_strictness", "dmarc", "dmarc_policy", "mx_records", "address_records", "dkim_keylength",
 		"envelope_mx", "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa",
-		"ptr", "ptr_pattern", "domain_age", "domain_blocklist", "link_blocklist":
+		"ptr", "ptr_pattern", "domain_age", "domain_blocklist", "link_blocklist",
+		"from_domain_rcv":
 		return true
 	}
 	return false
@@ -143,6 +144,8 @@ func (e *Engine) Recheck(ctx context.Context, id string, in RecheckInput) (res m
 		res = domainBlocklistCheck(ctx, primary, e.opts.DomainBlocklistProviders)
 	case "link_blocklist":
 		res = linkBlocklistCheck(ctx, in.Links, e.opts.DomainBlocklistProviders)
+	case "from_domain_rcv":
+		res = fromDomainReceiveCheck(ctx, in.FromDomain, firstNonEmpty(in.ReturnDomain, in.EnvelopeDomain))
 	default:
 		return model.CheckResult{}, false
 	}
@@ -436,9 +439,16 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	}
 	report.Checks = append(report.Checks, tlsTransportCheck(receivedLines))
 
-	if headers.Get("ARC-Seal") != "" || headers.Get("ARC-Message-Signature") != "" {
-		report.Checks = append(report.Checks, info("arc", "ARC", 0.0, "ARC-Header vorhanden.", ""))
-	} else {
+	arcResult := parseAuthResult(authResults, "arc")
+	hasARCHeaders := headers.Get("ARC-Seal") != "" || headers.Get("ARC-Message-Signature") != ""
+	switch {
+	case arcResult == "pass":
+		report.Checks = append(report.Checks, info("arc", "ARC", 0.0, "ARC-Kette verifiziert – weitergeleitet und korrekt authentifiziert.", ""))
+	case arcResult == "fail":
+		report.Checks = append(report.Checks, warn("arc", "ARC", -0.2, "ARC-Kette gebrochen – Weiterleitungskette möglicherweise manipuliert oder fehlerhaft konfiguriert.", "Weiterleitungs-Setup auf ARC-Signierung prüfen."))
+	case hasARCHeaders:
+		report.Checks = append(report.Checks, info("arc", "ARC", 0.0, "ARC-Header vorhanden, Ergebnis nicht auswertbar.", ""))
+	default:
 		report.Checks = append(report.Checks, info("arc", "ARC", 0.0, "Keine ARC-Header vorhanden.", "Nur relevant bei Weiterleitungs-Szenarien."))
 	}
 
@@ -450,6 +460,7 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	urlFindings, spamSignals := evaluateURLs(report.Links)
 	report.Checks = append(report.Checks, urlFindings...)
 	report.SpamSignals = append(report.SpamSignals, spamSignals...)
+	report.Checks = append(report.Checks, templateURLCheck(report.Links, mailType))
 
 	htmlFindings := htmlHeuristics(parsedBody.HTML)
 	report.Checks = append(report.Checks, htmlFindings...)
@@ -493,6 +504,9 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 			return one(ptrPlausibility(c, in.Message.RemoteIP, in.Message.HELO))
 		}},
 		{"ptr_pattern", func(c context.Context) []model.CheckResult { return one(ptrPatternCheck(c, in.Message.RemoteIP)) }},
+		{"from_domain_rcv", func(c context.Context) []model.CheckResult {
+			return one(fromDomainReceiveCheck(c, fromDomain, firstNonEmpty(returnPathDomain, envelopeDomain)))
+		}},
 	}
 	if e.opts.EnableRBLChecks {
 		netTasks = append(netTasks, checkTask{"rbl", func(c context.Context) []model.CheckResult {
@@ -880,7 +894,7 @@ func tlsTransportCheck(received []string) model.CheckResult {
 	if strings.Contains(raw, "tls") || strings.Contains(raw, "esmtps") || strings.Contains(raw, "cipher") {
 		return pass("tls_transport", "TLS Transport", 0.1, "Received-Header enthalten Hinweise auf verschlüsselten Transport.", "")
 	}
-	return info("tls_transport", "TLS Transport", 0.0, "Aus den Received-Headern ist kein TLS-Transport eindeutig erkennbar.", "TLS für SMTP aktivieren und sicherstellen, dass vorgelagerte MTAs TLS-Informationen in Received-Headern dokumentieren.")
+	return warn("tls_transport", "TLS Transport", -0.2, "Kein klarer TLS-Transport-Nachweis in den Received-Headern erkennbar.", "TLS (STARTTLS/SMTPS) für ausgehende SMTP-Verbindungen aktivieren.")
 }
 
 // ── Group A: deeper checks derived from already-available data ──────────────
@@ -1089,9 +1103,27 @@ func envelopeBounceMXCheck(ctx context.Context, bounceDomain string) model.Check
 		if ips, ierr := net.DefaultResolver.LookupIPAddr(ctx, bounceDomain); ierr == nil && len(ips) > 0 {
 			return withDetails(info("envelope_mx", "Bounce-Empfang (Envelope-MX)", 0.0, fmt.Sprintf("Bounce-Domain %s hat keinen MX, aber A/AAAA (impliziter MX) – Bounces sind grenzwertig zustellbar.", bounceDomain), "Für sauberes Bounce-Handling einen MX-Record auf der Bounce-Domain setzen."), det)
 		}
-		return withDetails(warn("envelope_mx", "Bounce-Empfang (Envelope-MX)", -0.4, fmt.Sprintf("Bounce-Domain %s hat weder MX noch A/AAAA – Unzustellbarkeits-Benachrichtigungen (Bounces) können nicht zugestellt werden.", bounceDomain), "MX-Record für die Envelope-From/Return-Path-Domain setzen, damit Bounces ankommen."), det)
+		return withDetails(warn("envelope_mx", "Bounce-Empfang (Envelope-MX)", -0.5, fmt.Sprintf("Bounce-Domain %s hat weder MX noch A/AAAA – Unzustellbarkeits-Benachrichtigungen (Bounces) können nicht zugestellt werden.", bounceDomain), "MX-Record für die Envelope-From/Return-Path-Domain setzen, damit Bounces ankommen."), det)
 	}
 	return withDetails(pass("envelope_mx", "Bounce-Empfang (Envelope-MX)", 0.1, fmt.Sprintf("Bounce-Domain %s kann Bounces empfangen (%d MX-Record(s)).", bounceDomain, len(mxs)), ""), det)
+}
+
+func fromDomainReceiveCheck(ctx context.Context, fromDomain, bounceDomain string) model.CheckResult {
+	if fromDomain == "" {
+		return info("from_domain_rcv", "From-Domain Empfangsfähigkeit", 0.0, "Keine From-Domain für Empfangs-Check ermittelbar.", "")
+	}
+	if fromDomain == bounceDomain {
+		return info("from_domain_rcv", "From-Domain Empfangsfähigkeit", 0.0, "From-Domain identisch mit Bounce-Domain – bereits durch Bounce-MX-Check abgedeckt.", "")
+	}
+	mxs, err := net.DefaultResolver.LookupMX(ctx, fromDomain)
+	if err == nil && len(mxs) > 0 {
+		return pass("from_domain_rcv", "From-Domain Empfangsfähigkeit", 0.0, "From-Domain hat MX-Record(s) – Antworten und Bounces sind zustellbar.", "")
+	}
+	addrs, err2 := net.DefaultResolver.LookupIPAddr(ctx, fromDomain)
+	if err2 == nil && len(addrs) > 0 {
+		return info("from_domain_rcv", "From-Domain Empfangsfähigkeit", 0.0, "From-Domain hat keinen MX, aber A/AAAA-Record (impliziter Fallback).", "Für sauberes Handling einen MX-Record auf der From-Domain setzen.")
+	}
+	return warn("from_domain_rcv", "From-Domain Empfangsfähigkeit", -0.4, "From-Domain kann keine E-Mails empfangen (kein MX, kein A/AAAA). Antworten an den Absender gehen verloren.", "MX-Record für die From-Domain setzen oder eine antwortfähige From-Adresse verwenden.")
 }
 
 // ── Group B: DNS maturity signals (extra lookups in the sender's own zone) ──
@@ -1649,11 +1681,13 @@ func checkCategory(id string) string {
 		"dmarc_policy", "spf_strictness", "dkim_keylength", "display_name":
 		return "Authentifizierung"
 	case "ptr", "helo", "mx_records", "address_records", "tls_transport", "received_chain", "rbl",
-		"ptr_pattern", "envelope_mx", "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa", "domain_age":
+		"ptr_pattern", "envelope_mx", "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa", "domain_age",
+		"from_domain_rcv":
 		return "DNS und Infrastruktur"
 	case "spamassassin", "rspamd", "domain_blocklist", "link_blocklist":
 		return "Spamfilter"
-	case "mime_ct", "mime_boundary", "plain_text", "multipart_alt", "attachments", "image_text_ratio", "charset", "links", "shortener", "tracking_links", "html", "hidden_html", "html_validity", "subject", "subject_exclaim", "subject_caps", "unicode", "list_unsub", "preheader":
+	case "mime_ct", "mime_boundary", "plain_text", "multipart_alt", "attachments", "image_text_ratio", "charset", "links", "shortener", "tracking_links", "html", "hidden_html", "html_validity", "subject", "subject_exclaim", "subject_caps", "unicode", "list_unsub", "preheader",
+		"one_click_unsub", "template_urls":
 		return "Format und Inhalt"
 	default:
 		return "Header und Rohdaten"
@@ -1671,10 +1705,13 @@ func checkImportance(id string) string {
 		"spf_alignment", "dkim_alignment", "dmarc_alignment", "from_alignment",
 		"helo", "mx_records", "tls_transport",
 		"spamassassin", "rspamd", "display_name",
-		"list_unsub", "mime_parse", "mime_ct", "mime_boundary", "message_id", "received_chain":
+		"list_unsub", "mime_parse", "mime_ct", "mime_boundary", "message_id", "received_chain",
+		"one_click_unsub":
 		return "Wichtig"
 	case "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa", "arc", "preheader":
 		return "Optional"
+	case "from_domain_rcv", "template_urls":
+		return "Empfohlen"
 	default:
 		return "Empfohlen"
 	}
@@ -1852,6 +1889,12 @@ func defaultExplanation(id string) string {
 		return "Der Preheader-Text ist der erste sichtbare Text im Mail-Body und wird von Mailclients (Gmail, Outlook, Apple Mail, iOS Mail) als Vorschau-Snippet neben dem Betreff angezeigt. Wichtigkeit: mittel – ohne expliziten Preheader ziehen Clients oft unpassenden Text (Links, Abmeldehinweise, HTML-Code). Tipp: Einen kurzen, ansprechenden Satz (40–90 Zeichen) als versteckten Preheader-Text einfügen, der den Betreff ergänzt und zum Öffnen animiert."
 	case "unicode":
 		return "Zero-Width-Zeichen (U+200B, U+FEFF etc.), Bidi-Override-Zeichen und Unicode-Homoglyphen-Substitutionen sind bekannte Techniken, um Spamfilter zu umgehen und Nutzer zu täuschen. Wichtigkeit: hoch wenn vorhanden – SpamAssassin, Rspamd und Gmail erkennen gängige Unicode-Obfuskationsmuster explizit. Tipp: Normale Sonderzeichen für Sprache (Umlaute, Akzente) sind unproblematisch; nur Zero-Width- und Steuerzeichen vermeiden."
+	case "from_domain_rcv":
+		return "Prüft, ob die From-Domain tatsächlich E-Mails empfangen kann (MX- oder A/AAAA-Records). Wenn Antworten und Bounces nicht zustellbar sind, wertet das viele Spamfilter als Zeichen einer No-Reply- oder Wegwerf-Absenderkonfiguration. Eine From-Domain ohne E-Mail-Infrastruktur signalisiert auch, dass der Sender keine Zwei-Wege-Kommunikation erwartet."
+	case "one_click_unsub":
+		return "RFC 8058 definiert One-Click-Abmeldung: der Header List-Unsubscribe-Post mit dem Wert 'List-Unsubscribe=One-Click' kombiniert mit einer HTTPS-URL in List-Unsubscribe, die HTTP-POST verarbeitet und den Nutzer sofort abmeldet – ohne Bestätigungsseite oder Login. Google und Yahoo haben dies ab Februar 2024 für Bulk-Sender (>5.000 Mails/Tag) verpflichtend gemacht."
+	case "template_urls":
+		return "Erkennt nicht ersetzte Merge-Tag-Platzhalter in E-Mail-Links – Muster wie {abmelde_url}, {{email}}, *|UNSUB|* oder ${tracking_id}. Dies sind Fehler in der Bulk-Mail-Template-Rendering-Pipeline: ESP oder Versandsystem haben eine Variable nicht ersetzt. Betroffene Links sind für Empfänger kaputt und können Spamfilter auslösen sowie Abmelde- und Tracking-Flows unterbrechen."
 	default:
 		return "Dieser Check bewertet ein technisches Signal, das Mailprovider für Zustellbarkeit, Missbrauchserkennung oder Nutzervertrauen heranziehen."
 	}
@@ -1903,6 +1946,9 @@ func checkNameEN(id string) string {
 		"list_unsub": "List-Unsubscribe", "preheader": "Preheader",
 		"date": "Date Header", "date_skew": "Date Plausibility",
 		"message_id": "Message-ID", "body_read": "Body Readability",
+		"from_domain_rcv": "From Domain Reachability",
+		"one_click_unsub": "One-Click Unsubscribe (RFC 8058)",
+		"template_urls":   "Template Placeholders in Links",
 	}
 	if n, ok := names[id]; ok {
 		return n
@@ -1969,6 +2015,12 @@ func explanationEN(id string) string {
 		return "DANE (TLSA records, RFC 7672) binds the mail server's TLS certificate to the domain via DNSSEC, enforcing authenticated TLS for SMTP transport — an alternative/complement to MTA-STS. Requires DNSSEC."
 	case "arc":
 		return "ARC (Authenticated Received Chain) preserves authentication results (SPF, DKIM, DMARC) across forwarding hops. Particularly relevant for mailing lists, alumni forwarding and catch-all setups where SPF/DKIM signatures can break."
+	case "from_domain_rcv":
+		return "Checks whether the From: header domain can actually receive email (has MX or A/AAAA records). If replies or bounces sent to the From address cannot be delivered — because the domain has no mail infrastructure — it signals a no-reply or disposable sender pattern that many spam filters flag. A From domain that cannot receive mail also breaks the expectation that email is a two-way communication channel."
+	case "one_click_unsub":
+		return "RFC 8058 defines one-click unsubscribe: a List-Unsubscribe-Post header with the value 'List-Unsubscribe=One-Click', combined with an HTTPS URL in the List-Unsubscribe header that processes an HTTP POST and immediately unsubscribes the user — no confirmation page, no login required. Google and Yahoo made this mandatory for bulk senders (>5,000 emails/day) in February 2024. Without it, Gmail shows a manual unsubscribe link instead of the integrated button, which hurts engagement metrics and can trigger spam classification."
+	case "template_urls":
+		return "Detects unreplaced merge-tag placeholders in email links — patterns like {unsubscribe_url}, {{email}}, *|UNSUB|*, or ${tracking_id}. These are bugs in the bulk-mail template rendering pipeline: the ESP or sending tool failed to substitute a variable before delivery. Affected links are broken (clicking them opens a 404 or a URL with literal braces), which damages sender reputation, triggers spam filters, and breaks tracking and unsubscribe flows."
 	case "list_unsub":
 		return "List-Unsubscribe is mandatory for newsletters and bulk mail (required by Gmail and Yahoo since 2024 for senders of more than 5,000 emails/day). For personal and transactional individual messages it is not required."
 	case "preheader":
@@ -2137,6 +2189,31 @@ func summaryEN(id, status, deSummary string, ctx checkContext) string {
 			return "ARC headers present."
 		}
 		return "No ARC headers present (only relevant for forwarding scenarios)."
+	case "arc:warn":
+		return "ARC chain broken – forwarding chain may be manipulated or misconfigured."
+	// From domain reachability
+	case "from_domain_rcv:pass":
+		return "From domain can receive email (MX records present)."
+	case "from_domain_rcv:warn":
+		return "From domain cannot receive email — replies and bounces will be lost."
+	case "from_domain_rcv:info":
+		return deSummary
+	// One-Click Unsubscribe
+	case "one_click_unsub:pass":
+		return "One-Click Unsubscribe present (RFC 8058 compliant) — maximum compatibility with Gmail and Yahoo."
+	case "one_click_unsub:warn":
+		return "List-Unsubscribe present but One-Click Unsubscribe (RFC 8058) missing — Gmail/Yahoo compliance gap."
+	case "one_click_unsub:na":
+		return "Not applicable for this mail type."
+	// Template URLs
+	case "template_urls:pass":
+		return "No obvious template placeholders found in links."
+	case "template_urls:fail":
+		return strings.ReplaceAll(strings.ReplaceAll(deSummary, "Nicht ersetzte Template-Variablen", "Unreplaced template variables"), "Link(s) gefunden:", "link(s) found:")
+	case "template_urls:info":
+		return "No links present — template placeholder check not applicable."
+	case "template_urls:na":
+		return "Not applicable for this mail type."
 	// Received chain
 	case "received_chain:fail":
 		return "No Received headers present."
@@ -2216,6 +2293,12 @@ func recommendationEN(id, status string, ctx checkContext) string {
 		if status == "warn" || status == "fail" {
 			return "Enable STARTTLS on your outgoing MTA and ensure the certificate and hostname are valid."
 		}
+	case "from_domain_rcv":
+		return "Set an MX record on the From domain, or use a From address on a domain that can receive email. If this is intentionally a no-reply address, consider using a Reply-To header pointing to a reachable address instead."
+	case "one_click_unsub":
+		return "Add a 'List-Unsubscribe-Post: List-Unsubscribe=One-Click' header alongside your List-Unsubscribe header. The HTTPS URL in List-Unsubscribe must handle a POST request and immediately unsubscribe the recipient without requiring any further interaction."
+	case "template_urls":
+		return "Check your bulk-mail template for unsubstituted variables before sending. Ensure all ESP merge tags are fully populated. Test with a real recipient address before deploying a campaign."
 	}
 	return ""
 }
@@ -2228,6 +2311,10 @@ func naExplanation(id string) string {
 		return "Return-Path (Bounce-Adresse) ist primär für Massen- und Newsletter-Mails relevant, damit Unzustellbarkeitsmeldungen (NDR/DSN) automatisch verarbeitet werden können. Für persönliche und transaktionale Einzelmails wird kein gesonderter Return-Path erwartet – der Absender ist über den From-Header eindeutig. Dieser Check hat keinen Einfluss auf den Score für diese Mail."
 	case "list_unsub":
 		return "List-Unsubscribe ist ein Pflichtfeld für Newsletter und Bulk-Mails (seit 2024 von Gmail und Yahoo für Versender über 5.000 Mails/Tag vorgeschrieben). Für persönliche und transaktionale Einzelmails ist er nicht erforderlich und würde im Kontext sogar befremdlich wirken. Kein Einfluss auf den Score für diese Mail."
+	case "one_click_unsub":
+		return "One-Click-Abmeldung (RFC 8058) ist nur für Bulk-/Newsletter-Mails relevant. Gmail und Yahoo verlangen dies erst ab 5.000 E-Mails/Tag. Für persönliche und transaktionale E-Mails ist es weder erwartet noch sinnvoll."
+	case "template_urls":
+		return "Template-Platzhalter-Prüfung ist nur für Bulk-Mail relevant, bei der Templates mit Merge-Tags genutzt werden."
 	default:
 		return "Dieser Check ist für den erkannten Mail-Typ nicht zutreffend und hat keinen Einfluss auf den Score."
 	}
@@ -2240,6 +2327,10 @@ func naExplanationEN(id string) string {
 		return "Return-Path (bounce address) is primarily relevant for bulk/newsletter mail so that undeliverable mail notifications (NDR/DSN) can be processed automatically. For personal and transactional individual messages no Return-Path is expected – the sender is clearly identified via the From header. This check has no impact on the score for this mail."
 	case "list_unsub":
 		return "List-Unsubscribe is mandatory for newsletters and bulk mail (required by Gmail and Yahoo since 2024 for senders of more than 5,000 emails/day). For personal and transactional individual messages it is not required and would actually be out of place. No impact on the score for this mail."
+	case "one_click_unsub":
+		return "One-Click Unsubscribe (RFC 8058) is only required for bulk/newsletter mail. Google and Yahoo mandate it for senders of more than 5,000 emails per day. For personal and transactional mail it is neither expected nor appropriate."
+	case "template_urls":
+		return "Template placeholder checks only apply to bulk mail where merge-tag templates are used."
 	default:
 		return "This check is not applicable for the detected mail type and has no impact on the score."
 	}
@@ -2389,6 +2480,13 @@ func defaultDocLinks(id string) []model.DocLink {
 		return []model.DocLink{
 			{Title: "Unicode-Zeichen prüfen – Unicode Inspector", URL: "https://apps.timwhitlock.info/unicode/inspect"},
 			{Title: "IDN Homograph Attack erklärt", URL: "https://www.xudongz.com/blog/2017/idn-phishing/"},
+		}
+	case "from_domain_rcv":
+		return []model.DocLink{{Title: "RFC 5321 – SMTP", URL: "https://www.rfc-editor.org/rfc/rfc5321"}}
+	case "one_click_unsub":
+		return []model.DocLink{
+			{Title: "RFC 8058 – One-Click Unsubscribe", URL: "https://www.rfc-editor.org/rfc/rfc8058"},
+			{Title: "Google Bulk Sender Guidelines", URL: "https://support.google.com/mail/answer/81126"},
 		}
 	default:
 		return nil
@@ -2682,7 +2780,7 @@ func inspectBody(headers mail.Header, body []byte) ([]model.CheckResult, parsedB
 	}
 
 	if pb.Text == "" && pb.HTML != "" {
-		out = append(out, warn("plain_text", "Plaintext-Part", -0.8, "Kein text/plain Part gefunden.", "Einen sauberen Plaintext-Part ergänzen."))
+		out = append(out, warn("plain_text", "Plaintext-Part", -0.5, "Kein text/plain Part gefunden.", "Einen sauberen Plaintext-Part ergänzen."))
 	} else if pb.Text != "" {
 		out = append(out, pass("plain_text", "Plaintext-Part", 0.1, "Plaintext-Part vorhanden.", ""))
 	}
@@ -2697,10 +2795,18 @@ func inspectBody(headers mail.Header, body []byte) ([]model.CheckResult, parsedB
 		out = append(out, info("attachments", "Anhänge", 0.0, fmt.Sprintf("%d Anhang/Anhänge erkannt.", pb.Attachments), "Anhänge klein und vertrauenswürdig halten."))
 	}
 
-	if pb.Images >= 4 && len(stripHTML(pb.HTML)) < 240 {
-		out = append(out, warn("image_text_ratio", "Bild/Text-Verhältnis", -0.7, "Viele Bilder bei wenig Text erkannt.", "Mehr echten Text ergänzen."))
-	} else {
-		out = append(out, info("image_text_ratio", "Bild/Text-Verhältnis", 0.0, "Bild/Text-Verhältnis ohne grobe Auffälligkeit.", ""))
+	{
+		textLen := len([]rune(stripHTML(pb.HTML)))
+		switch {
+		case pb.Images > 0 && textLen < 80:
+			out = append(out, fail("image_text_ratio", "Bild/Text-Verhältnis", -0.7, fmt.Sprintf("%d Bild(er) bei praktisch keinem Text erkannt – reine Bildmail.", pb.Images), "Relevanten Textinhalt ergänzen; Spamfilter stufen bildlastige Mails stark negativ."))
+		case pb.Images >= 3 && textLen < 250:
+			out = append(out, warn("image_text_ratio", "Bild/Text-Verhältnis", -0.4, fmt.Sprintf("%d Bilder bei wenig Text (%d Zeichen) erkannt.", pb.Images, textLen), "Mehr Text ergänzen für ein ausgewogenes Bild/Text-Verhältnis."))
+		case pb.Images > 0 && textLen > 0 && float64(pb.Images)/(float64(textLen)/100.0+float64(pb.Images)) > 0.6:
+			out = append(out, warn("image_text_ratio", "Bild/Text-Verhältnis", -0.3, fmt.Sprintf("Übergewicht bei Bildern (%d Bilder, %d Textzeichen).", pb.Images, textLen), "Textanteil erhöhen."))
+		default:
+			out = append(out, info("image_text_ratio", "Bild/Text-Verhältnis", 0.0, "Bild/Text-Verhältnis ohne grobe Auffälligkeit.", ""))
+		}
 	}
 
 	all := strings.TrimSpace(pb.Text + "\n" + stripHTML(pb.HTML))
@@ -2798,6 +2904,39 @@ func evaluateURLs(links []string) ([]model.CheckResult, []string) {
 	return checks, spamSignals
 }
 
+var templatePlaceholderRE = regexp.MustCompile(`(\{[^}\s]{1,50}\}|\*\|[^|]{1,30}\|\*|%7B[^%]{1,40}%7D|\$\{[^}\s]{1,30}\})`)
+
+func templateURLCheck(links []string, mailType string) model.CheckResult {
+	if mailType == "personal" || mailType == "transactional" {
+		return na("template_urls", "Template-Platzhalter in Links", mailType)
+	}
+	if len(links) == 0 {
+		return info("template_urls", "Template-Platzhalter in Links", 0.0, "Keine Links in der Mail – Template-Check nicht anwendbar.", "")
+	}
+	var found []string
+	affected := 0
+	seen := map[string]struct{}{}
+	for _, link := range links {
+		matches := templatePlaceholderRE.FindAllString(link, -1)
+		if len(matches) > 0 {
+			affected++
+			for _, m := range matches {
+				if _, ok := seen[m]; !ok && len(found) < 5 {
+					found = append(found, m)
+					seen[m] = struct{}{}
+				}
+			}
+		}
+	}
+	if len(found) > 0 {
+		examples := strings.Join(found, ", ")
+		return fail("template_urls", "Template-Platzhalter in Links", -0.6,
+			fmt.Sprintf("Nicht ersetzte Template-Variablen in %d Link(s) gefunden: %s. Diese Links sind für Empfänger ungültig.", affected, examples),
+			"Bulk-Mail-Template vor dem Versand auf nicht ersetzte Variablen prüfen. ESP-Merge-Tags vollständig befüllen.")
+	}
+	return pass("template_urls", "Template-Platzhalter in Links", 0.0, "Keine offensichtlichen Template-Platzhalter in Links gefunden.", "")
+}
+
 func htmlHeuristics(htmlBody string) []model.CheckResult {
 	if strings.TrimSpace(htmlBody) == "" {
 		return []model.CheckResult{info("html", "HTML-Analyse", 0.0, "Kein HTML-Body vorhanden.", "")}
@@ -2806,7 +2945,7 @@ func htmlHeuristics(htmlBody string) []model.CheckResult {
 	lower := strings.ToLower(htmlBody)
 	hiddenCount := strings.Count(lower, "display:none") + strings.Count(lower, "font-size:0") + strings.Count(lower, "visibility:hidden")
 	if hiddenCount > 3 {
-		checks = append(checks, warn("hidden_html", "Versteckte HTML-Elemente", -0.6, "Mehrere versteckte HTML-Elemente erkannt.", "Versteckte Inhalte reduzieren."))
+		checks = append(checks, warn("hidden_html", "Versteckte HTML-Elemente", -0.4, "Mehrere versteckte HTML-Elemente erkannt.", "Versteckte Inhalte reduzieren."))
 	} else {
 		checks = append(checks, pass("hidden_html", "Versteckte HTML-Elemente", 0.1, "Keine auffällige Menge versteckter Elemente.", ""))
 	}
@@ -2899,6 +3038,7 @@ func newsletterHeuristics(headers mail.Header, body parsedBody, mailType string)
 	case "personal", "transactional":
 		// List-Unsubscribe is irrelevant for these mail types.
 		checks = append(checks, na("list_unsub", "List-Unsubscribe", mailType))
+		checks = append(checks, na("one_click_unsub", "One-Click-Abmeldung (RFC 8058)", mailType))
 		return checks
 	case "bulk":
 		// Bulk mail MUST have List-Unsubscribe (Gmail/Yahoo requirement since 2024).
@@ -2906,6 +3046,19 @@ func newsletterHeuristics(headers mail.Header, body parsedBody, mailType string)
 			checks = append(checks, warn("list_unsub", "List-Unsubscribe", -0.7, "Bulk-Mail erkannt, aber List-Unsubscribe fehlt (Gmail/Yahoo-Anforderung seit 2024).", "List-Unsubscribe Header ergänzen."))
 		} else {
 			checks = append(checks, pass("list_unsub", "List-Unsubscribe", 0.2, "List-Unsubscribe Header vorhanden.", ""))
+		}
+		// One-Click Unsubscribe (RFC 8058)
+		listUnsub := headers.Get("List-Unsubscribe")
+		if listUnsub == "" {
+			// list_unsub already penalizes missing header; one_click_unsub is n/a
+			checks = append(checks, na("one_click_unsub", "One-Click-Abmeldung (RFC 8058)", "no-list-unsub"))
+		} else {
+			listUnsubPost := headers.Get("List-Unsubscribe-Post")
+			if strings.Contains(strings.ToLower(listUnsubPost), "list-unsubscribe=one-click") {
+				checks = append(checks, pass("one_click_unsub", "One-Click-Abmeldung (RFC 8058)", 0.1, "List-Unsubscribe-Post One-Click vorhanden (RFC 8058 konform) – maximale Kompatibilität mit Gmail/Yahoo.", ""))
+			} else {
+				checks = append(checks, warn("one_click_unsub", "One-Click-Abmeldung (RFC 8058)", -0.3, "List-Unsubscribe vorhanden, aber One-Click-Abmeldung (RFC 8058) fehlt. Gmail und Yahoo werten Bulk-Sender ab.", "List-Unsubscribe-Post: List-Unsubscribe=One-Click Header ergänzen und eine HTTPS-URL bereitstellen, die sofortige Abmeldung via HTTP-POST ausführt."))
+			}
 		}
 		// Fall through to preheader check below (relevant for bulk/newsletter).
 	default:
@@ -2917,8 +3070,15 @@ func newsletterHeuristics(headers mail.Header, body parsedBody, mailType string)
 		if newsletterHint {
 			if headers.Get("List-Unsubscribe") == "" {
 				checks = append(checks, warn("list_unsub", "List-Unsubscribe", -0.7, "Newsletter-Hinweise vorhanden, aber List-Unsubscribe fehlt.", "List-Unsubscribe Header ergänzen."))
+				checks = append(checks, na("one_click_unsub", "One-Click-Abmeldung (RFC 8058)", "no-list-unsub"))
 			} else {
 				checks = append(checks, pass("list_unsub", "List-Unsubscribe", 0.2, "List-Unsubscribe Header vorhanden.", ""))
+				listUnsubPost2 := headers.Get("List-Unsubscribe-Post")
+				if strings.Contains(strings.ToLower(listUnsubPost2), "list-unsubscribe=one-click") {
+					checks = append(checks, pass("one_click_unsub", "One-Click-Abmeldung (RFC 8058)", 0.1, "List-Unsubscribe-Post One-Click vorhanden (RFC 8058 konform) – maximale Kompatibilität mit Gmail/Yahoo.", ""))
+				} else {
+					checks = append(checks, warn("one_click_unsub", "One-Click-Abmeldung (RFC 8058)", -0.3, "List-Unsubscribe vorhanden, aber One-Click-Abmeldung (RFC 8058) fehlt. Gmail und Yahoo werten Bulk-Sender ab.", "List-Unsubscribe-Post: List-Unsubscribe=One-Click Header ergänzen und eine HTTPS-URL bereitstellen, die sofortige Abmeldung via HTTP-POST ausführt."))
+				}
 			}
 		}
 	}
