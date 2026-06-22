@@ -556,8 +556,9 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 			ph = enrichCheckResult(ph, enrichCtx)
 			report.Checks = append(report.Checks, ph)
 		}
-		// Group C placeholders (opt-in)
-		for _, id := range []string{"domain_age", "domain_blocklist", "broken_links"} {
+		// Group C placeholders (opt-in). Note: broken_links is handled in Group A
+		// (lines 483-487) and must NOT appear here — it would create a duplicate.
+		for _, id := range []string{"domain_age", "domain_blocklist"} {
 			ph := info(id, id, 0, simPlaceholder, "")
 			ph = enrichCheckResult(ph, enrichCtx)
 			report.Checks = append(report.Checks, ph)
