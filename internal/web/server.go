@@ -871,8 +871,8 @@ func (s *Server) reportPage(w http.ResponseWriter, r *http.Request) {
 		CheckGroups:     checkGroups,
 		LinkGroups:      linkGroups,
 		LinkTotal:       len(selected.Report.Links),
-		HeroTitle:       reportHeroTitle(selected.Report.Score),
-		HeroSubtitle:    reportHeroSubtitle(selected.Report.Score),
+		HeroTitle:       reportHeroTitle(selected.Report.Score, string(i18n.Detect(r))),
+		HeroSubtitle:    reportHeroSubtitle(selected.Report.Score, string(i18n.Detect(r))),
 		PlainTextBody:   plainText,
 		HTMLSourceBody:  htmlSource,
 		HTMLPreviewBody: htmlSource,
@@ -1851,7 +1851,19 @@ func groupLinksByDomain(links []string) []ReportLinkGroup {
 	return out
 }
 
-func reportHeroTitle(score float64) string {
+func reportHeroTitle(score float64, lang string) string {
+	if lang == "en" {
+		switch {
+		case score >= 9:
+			return "Wow, this email is very well prepared"
+		case score >= 7.5:
+			return "Solid deliverability with minor issues"
+		case score >= 5.5:
+			return "This email needs some technical work"
+		default:
+			return "High deliverability risk detected"
+		}
+	}
 	switch {
 	case score >= 9:
 		return "Wow, diese Mail ist sehr gut vorbereitet"
@@ -1864,7 +1876,19 @@ func reportHeroTitle(score float64) string {
 	}
 }
 
-func reportHeroSubtitle(score float64) string {
+func reportHeroSubtitle(score float64, lang string) string {
+	if lang == "en" {
+		switch {
+		case score >= 9:
+			return "The most important authentication and content checks look good."
+		case score >= 7.5:
+			return "The foundation is solid; individual warnings should be resolved before larger campaigns."
+		case score >= 5.5:
+			return "Several signals may negatively affect inbox placement at Gmail, Outlook, Yahoo or Apple Mail."
+		default:
+			return "Please prioritise fixing authentication, DNS and content issues before sending further."
+		}
+	}
 	switch {
 	case score >= 9:
 		return "Die wichtigsten Authentifizierungs- und Inhaltschecks sehen gut aus."
