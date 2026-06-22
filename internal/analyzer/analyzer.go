@@ -91,7 +91,7 @@ func Recheckable(id string) bool {
 	case "spf", "spf_strictness", "dmarc", "dmarc_policy", "mx_records", "address_records", "dkim_keylength",
 		"envelope_mx", "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa",
 		"ptr", "ptr_pattern", "domain_age", "domain_blocklist", "link_blocklist",
-		"from_domain_rcv":
+		"from_domain_rcv", "broken_links":
 		return true
 	}
 	return false
@@ -148,6 +148,8 @@ func (e *Engine) Recheck(ctx context.Context, id string, in RecheckInput) (res m
 		res = linkBlocklistCheck(ctx, in.Links, e.opts.DomainBlocklistProviders)
 	case "from_domain_rcv":
 		res = fromDomainReceiveCheck(ctx, in.FromDomain, firstNonEmpty(in.ReturnDomain, in.EnvelopeDomain))
+	case "broken_links":
+		res = brokenLinksCheck(ctx, in.Links)
 	default:
 		return model.CheckResult{}, false
 	}

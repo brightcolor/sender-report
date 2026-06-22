@@ -1689,6 +1689,27 @@ body,
 .mp-chk-recheck:disabled { opacity: .6; cursor: default; }
 .mp-chk-recheck.is-busy { color: var(--bs-secondary-color); }
 .mp-chk-recheck .spinner-border { width: 1.05rem; height: 1.05rem; border-width: .15em; }
+/* Activate button for disabled opt-in checks */
+.mp-chk-head:has(.mp-chk-activate) > .accordion-button { padding-right: 10rem; }
+.mp-chk-activate {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  border: 0;
+  border-left: 1px solid var(--bs-border-color);
+  background: var(--bs-body-bg);
+  color: var(--bs-primary);
+  padding: 0 .85rem;
+  font-size: .8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background-color .15s ease;
+}
+.mp-chk-activate:hover { background: rgba(var(--bs-primary-rgb), .1); }
+.mp-chk-activate:disabled { opacity: .6; cursor: default; }
+.mp-chk-activate.is-busy { color: var(--bs-secondary-color); }
 @media (max-width: 576px) {
   .mp-chk-recheck { min-width: 3.4rem; font-size: 1.2rem; } /* larger tap target on mobile */
   .mp-chk-head:has(.mp-chk-recheck) > .accordion-button { padding-right: 3.6rem; }

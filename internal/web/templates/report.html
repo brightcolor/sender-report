@@ -1631,7 +1631,27 @@ function updateGroupHeader(card){
 // analyzer.Recheckable in Go.
 var RECHECKABLE = {spf:1, spf_strictness:1, dmarc:1, dmarc_policy:1, mx_records:1, address_records:1, dkim_keylength:1,
   envelope_mx:1, mta_sts:1, tls_rpt:1, bimi:1, dnssec:1, dane_tlsa:1, ptr:1, ptr_pattern:1,
-  domain_age:1, domain_blocklist:1, link_blocklist:1};
+  domain_age:1, domain_blocklist:1, link_blocklist:1, from_domain_rcv:1, broken_links:1};
+
+// Opt-in check IDs — shown as "info/disabled" until the user activates them.
+// Activating persists the flag to the mailbox and runs the check immediately.
+var OPT_IN_CHECKS = {domain_age:1, domain_blocklist:1, broken_links:1};
+
+// Privacy notice shown in the activate-confirm modal for each opt-in check.
+var OPT_IN_PRIVACY = {
+  domain_age: {
+    de: 'Der Domain-Alters-Check fragt externe RDAP/WHOIS-Dienste ab. Dabei wird ausschließlich der Domainname übermittelt – kein Mail-Inhalt, keine Adresse.',
+    en: 'The domain age check queries external RDAP/WHOIS services. Only the domain name is transmitted – no mail content, no addresses.'
+  },
+  domain_blocklist: {
+    de: 'Der Blocklisten-Check fragt externe DNS-Reputationsdienste (z. B. Spamhaus, SURBL) ab. Dabei werden ausschließlich Domainnamen und Link-Domains übermittelt.',
+    en: 'The blocklist check queries external DNS reputation services (e.g. Spamhaus, SURBL). Only domain names and link domains are transmitted.'
+  },
+  broken_links: {
+    de: 'Der Broken-Link-Check stellt HTTP-GET-Anfragen an alle in der Mail enthaltenen URLs. Die Zielserver erhalten dabei eine Anfrage von sender.report – sie können die URL-Struktur und den Zeitpunkt sehen. Kein Mail-Inhalt wird übertragen.',
+    en: 'The broken link check makes HTTP GET requests to all URLs in the email. Destination servers will receive a request from sender.report – they can see the URL structure and the timestamp. No email content is transmitted.'
+  }
+};
 
 // renderDecCheckItem renders a single decrypted check accordion item. Used by
 // renderCheckGroup and to re-render one item in place after a live recheck.
@@ -1649,10 +1669,15 @@ function renderDecCheckItem(c, uid){
   var recommendation = (LANG==='en' && c.recommendation_en) ? c.recommendation_en : c.recommendation;
   var delta=c.status==='na'?'—':fmtDelta(c.score_delta||0);
   var open=c.status==='fail'?'show':'', col=c.status!=='fail'?'collapsed':'';
-  // N/A checks never get a recheck button.
-  var recheckBtn = (c.status!=='na') && RECHECKABLE[c.id]
-    ? '<button class="mp-chk-recheck" type="button" data-recheck="'+esc(c.id)+'" title="'+esc(lblRecheck)+'" aria-label="'+esc(lblRecheck)+'"><i class="bi bi-arrow-clockwise"></i></button>'
-    : '';
+  // Opt-in checks in "info" state (disabled) get an activate button instead of recheck.
+  var isDisabledOptIn = OPT_IN_CHECKS[c.id] && c.status === 'info';
+  var lblActivate = LANG==='en' ? 'Activate & run check' : 'Aktivieren & prüfen';
+  var recheckBtn = '';
+  if (isDisabledOptIn) {
+    recheckBtn = '<button class="mp-chk-activate" type="button" data-activate="'+esc(c.id)+'" title="'+esc(lblActivate)+'" aria-label="'+esc(lblActivate)+'"><i class="bi bi-toggle-off me-1"></i>'+esc(lblActivate)+'</button>';
+  } else if ((c.status!=='na') && RECHECKABLE[c.id]) {
+    recheckBtn = '<button class="mp-chk-recheck" type="button" data-recheck="'+esc(c.id)+'" title="'+esc(lblRecheck)+'" aria-label="'+esc(lblRecheck)+'"><i class="bi bi-arrow-clockwise"></i></button>';
+  }
   var h='<div class="accordion-item mp-check-item '+esc(c.status)+'" data-status="'+esc(c.status)+'" id="chk-'+uid+'">'+
      '<h2 class="accordion-header mp-chk-head"><button class="accordion-button '+col+'" type="button" '+
      'data-bs-toggle="collapse" data-bs-target="#cb-'+uid+'">'+
@@ -1706,6 +1731,18 @@ function renderDecCheckItem(c, uid){
 async function fetchRecheck(id) {
   var body = Object.assign({ check_id: id }, RECHECK_INPUTS);
   var res = await fetch('/api/recheck/' + TOKEN + '/' + MSGREF, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store', body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+// fetchRecheckActivate is like fetchRecheck but adds ?activate=1 so the server
+// also persists the opt-in flag to the mailbox before running the check.
+async function fetchRecheckActivate(id) {
+  var body = Object.assign({ check_id: id }, RECHECK_INPUTS);
+  var res = await fetch('/api/recheck/' + TOKEN + '/' + MSGREF + '?activate=1', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     cache: 'no-store', body: JSON.stringify(body)
   });
@@ -1773,6 +1810,64 @@ function setupRecheckButtons() {
       updateGroupHeader(card);
       sbtn.disabled = false; sbtn.classList.remove('is-busy'); sbtn.innerHTML = so;
       await persistCurrent(LANG==='en' ? (failed ? 'Section partially updated' : 'Section updated') : (failed ? 'Sektion teilweise aktualisiert' : 'Sektion aktualisiert'));
+      return;
+    }
+
+    // ── Opt-in activate button ───────────────────────────────────────────────
+    var abtn = ev.target.closest('.mp-chk-activate');
+    if (abtn) {
+      ev.preventDefault(); ev.stopPropagation();
+      var checkId = abtn.dataset.activate;
+      var privacyInfo = OPT_IN_PRIVACY[checkId] || {};
+      var privacyText = LANG === 'en' ? (privacyInfo.en || '') : (privacyInfo.de || '');
+      var modalEl = document.getElementById('mp-activate-modal');
+      if (!modalEl) return;
+      var privEl = document.getElementById('mp-activate-modal-privacy');
+      if (privEl && privacyText) privEl.textContent = privacyText;
+      var titleEl = document.getElementById('mp-activate-modal-title');
+      var checkItem = abtn.closest('.mp-check-item');
+      if (titleEl && checkItem) {
+        var nameEl = checkItem.querySelector('.mp-chk-name strong');
+        if (nameEl) titleEl.textContent = (LANG === 'en' ? 'Activate: ' : 'Aktivieren: ') + nameEl.textContent.trim();
+      }
+      var confirmBtn = document.getElementById('mp-activate-modal-confirm');
+      // Remove any previous one-time handler.
+      var newConfirm = confirmBtn.cloneNode(true);
+      confirmBtn.parentNode.replaceChild(newConfirm, confirmBtn);
+      var bsModal = new bootstrap.Modal(modalEl);
+      newConfirm.addEventListener('click', async function() {
+        bsModal.hide();
+        var item = document.getElementById(checkItem ? checkItem.id : '');
+        if (!item) return;
+        abtn = item.querySelector('.mp-chk-activate');
+        if (!abtn) return;
+        var orig = abtn.innerHTML;
+        abtn.disabled = true; abtn.classList.add('is-busy');
+        abtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>'+(LANG==='en'?'Running…':'Prüfe…');
+        var grpCard = item.closest('.mp-group-card');
+        try {
+          var fresh = await fetchRecheckActivate(checkId);
+          applyToPayload(fresh);
+          // Also update localStorage so the home modal reflects the new state.
+          try {
+            var stored = JSON.parse(localStorage.getItem('sr:advchecks') || '{}');
+            if (checkId === 'domain_age') stored.domain_age = true;
+            if (checkId === 'domain_blocklist') stored.domain_blocklist = true;
+            if (checkId === 'broken_links') stored.broken_links = true;
+            localStorage.setItem('sr:advchecks', JSON.stringify(stored));
+          } catch (_) {}
+          replaceItemInPlace(item, fresh);
+          if (typeof setupCopyButtons === 'function') setupCopyButtons();
+          if (typeof colorScoreDeltas === 'function') colorScoreDeltas();
+          updateGroupHeader(grpCard);
+          recheckToast(LANG==='en' ? 'Check activated & updated — saving …' : 'Check aktiviert & aktualisiert — speichere …');
+          await persistCurrent();
+        } catch (e) {
+          if (abtn) { abtn.disabled = false; abtn.classList.remove('is-busy'); abtn.innerHTML = orig; }
+          recheckToast(LANG==='en' ? 'Activation failed – try again later.' : 'Aktivierung fehlgeschlagen – später erneut versuchen.', true);
+        }
+      }, { once: true });
+      bsModal.show();
       return;
     }
 
@@ -2005,6 +2100,36 @@ function renderDecryptedReport(p) {
   window.addEventListener('afterprint',  collapseAll);
 })();
 </script>
+
+<!-- Opt-in activate confirmation modal -->
+<div class="modal fade" id="mp-activate-modal" tabindex="-1" aria-labelledby="mp-activate-modal-label" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header pb-2">
+        <h5 class="modal-title d-flex align-items-center gap-2" id="mp-activate-modal-label">
+          <i class="bi bi-toggle-on text-primary"></i>
+          <span id="mp-activate-modal-title">{{if eq .Lang "de"}}Check aktivieren{{else}}Activate check{{end}}</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{t .Lang "nav.close"}}"></button>
+      </div>
+      <div class="modal-body pt-1">
+        <div class="alert alert-warning d-flex gap-2 mb-3 py-2" role="alert" style="font-size:.85rem">
+          <i class="bi bi-shield-exclamation flex-shrink-0 mt-1"></i>
+          <div id="mp-activate-modal-privacy">{{if eq .Lang "de"}}Dieser Check fragt externe Dienste ab. Details werden oben angezeigt.{{else}}This check queries external services. Details are shown above.{{end}}</div>
+        </div>
+        <p class="mb-0 small text-secondary">
+          {{if eq .Lang "de"}}Der Check wird sofort ausgeführt und für diese Mailbox dauerhaft aktiviert.{{else}}The check will run immediately and be permanently enabled for this mailbox.{{end}}
+        </p>
+      </div>
+      <div class="modal-footer border-top-0 pt-0">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{if eq .Lang "de"}}Abbrechen{{else}}Cancel{{end}}</button>
+        <button type="button" class="btn btn-primary" id="mp-activate-modal-confirm">
+          <i class="bi bi-play-fill me-1"></i>{{if eq .Lang "de"}}Aktivieren & prüfen{{else}}Activate & run{{end}}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
 {{end}}

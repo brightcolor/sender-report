@@ -1097,7 +1097,8 @@ func (s *Server) recheckAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Require a valid (existing) mailbox token so this can't be used anonymously.
-	if _, err := s.store.GetMailboxByToken(r.Context(), parts[0]); err != nil {
+	mb, err := s.store.GetMailboxByToken(r.Context(), parts[0])
+	if err != nil {
 		jsonResp(w, http.StatusNotFound, map[string]string{"error": "mailbox not found"})
 		return
 	}
@@ -1118,6 +1119,17 @@ func (s *Server) recheckAPI(w http.ResponseWriter, r *http.Request) {
 	if !analyzer.Recheckable(body.CheckID) {
 		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "check not re-checkable"})
 		return
+	}
+	// If the client explicitly activates an opt-in check, persist the flag.
+	if r.URL.Query().Get("activate") == "1" {
+		switch body.CheckID {
+		case "domain_age":
+			_ = s.store.UpdateMailboxChecks(r.Context(), mb.Token, true, mb.CheckDomainBlocklist, mb.CheckBrokenLinks)
+		case "domain_blocklist":
+			_ = s.store.UpdateMailboxChecks(r.Context(), mb.Token, mb.CheckDomainAge, true, mb.CheckBrokenLinks)
+		case "broken_links":
+			_ = s.store.UpdateMailboxChecks(r.Context(), mb.Token, mb.CheckDomainAge, mb.CheckDomainBlocklist, true)
+		}
 	}
 	res, ok := s.engine.Recheck(r.Context(), body.CheckID, analyzer.RecheckInput{
 		FromDomain:     body.FromDomain,
