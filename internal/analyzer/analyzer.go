@@ -538,10 +538,13 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	//
 	// In SimulationMode all Group B/C network checks are replaced with placeholder
 	// info results; individual checks can be triggered on-demand via the recheck API.
+	// Note: "spf" and "dmarc" are Group A (parsed from Authentication-Results headers)
+	// and must NOT appear here — they already run above. Including them would add a
+	// second info-status entry that breaks essentialsAllPass and caps the score.
 	if in.SimulationMode {
 		simPlaceholder := "Im Simulator nicht ausgeführt – per ↻ einzeln abrufbar."
 		simGroupBIDs := []string{
-			"spf", "spf_strictness", "dmarc", "dmarc_policy",
+			"spf_strictness", "dmarc_policy",
 			"mx_records", "address_records", "dkim_keylength", "envelope_mx",
 			"mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa",
 			"ptr", "ptr_pattern", "link_blocklist", "rbl", "from_domain_rcv",
@@ -632,7 +635,9 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	// pass (a clean SPF, DKIM, DMARC and PTR), not merely "not fail". This closes
 	// the loophole where an unconfirmed/neutral essential (e.g. an ambiguous SPF
 	// result, score delta 0) could still leave the score at a full 10.
-	if report.Score > essentialPerfectCap && !essentialsAllPass(report.Checks) {
+	// In SimulationMode ptr is always a placeholder (info, not pass) so we skip
+	// the gate — otherwise the score would always be capped regardless of content.
+	if !in.SimulationMode && report.Score > essentialPerfectCap && !essentialsAllPass(report.Checks) {
 		report.Score = essentialPerfectCap
 	}
 	report.Suggestions = dedupeSorted(report.Suggestions)

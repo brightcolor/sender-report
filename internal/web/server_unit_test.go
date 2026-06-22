@@ -242,7 +242,7 @@ func TestReportHeroTitleThresholds(t *testing.T) {
 		{3.0, "Hohes"},
 	}
 	for _, tc := range cases {
-		got := reportHeroTitle(tc.score)
+		got := reportHeroTitle(tc.score, "de")
 		if !strings.Contains(got, tc.want) {
 			t.Errorf("score %.1f: title %q should contain %q", tc.score, got, tc.want)
 		}
@@ -250,10 +250,10 @@ func TestReportHeroTitleThresholds(t *testing.T) {
 }
 
 func TestReportHeroSubtitleThresholds(t *testing.T) {
-	if reportHeroSubtitle(9.5) == "" {
+	if reportHeroSubtitle(9.5, "de") == "" {
 		t.Fatal("expected non-empty subtitle for score 9.5")
 	}
-	if reportHeroSubtitle(0.0) == "" {
+	if reportHeroSubtitle(0.0, "de") == "" {
 		t.Fatal("expected non-empty subtitle for score 0.0")
 	}
 }
