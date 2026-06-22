@@ -4,19 +4,33 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="description" content="So funktioniert {{.AppName}}: über 50 Checks für E-Mail-Zustellbarkeit (SPF, DKIM, DMARC, Spam-Score, Blacklists, DNS) mit Wichtigkeits-Bewertung – plus Antworten auf häufige Fragen." />
+  {{if eq .Lang "de"}}
+  <meta name="description" content="So funktioniert {{.AppName}}: 68 Checks für E-Mail-Zustellbarkeit (SPF, DKIM, DMARC, Spam-Score, Blacklists, DNS) mit Wichtigkeits-Bewertung – plus Antworten auf häufige Fragen." />
+  {{else}}
+  <meta name="description" content="How {{.AppName}} works: 68 checks for email deliverability (SPF, DKIM, DMARC, spam score, blacklists, DNS) with severity ratings – plus answers to common questions." />
+  {{end}}
   <meta name="robots" content="index,follow,max-image-preview:large" />
   <meta name="theme-color" content="#0d6efd" />
   <link rel="canonical" href="{{.PublicURL}}/about" />
+  {{if eq .Lang "de"}}
   <title>Wie {{.AppName}} prüft: alle Checks &amp; FAQ – SPF, DKIM, DMARC</title>
+  {{else}}
+  <title>How {{.AppName}} checks your email: all checks &amp; FAQ – SPF, DKIM, DMARC</title>
+  {{end}}
 
   <!-- Open Graph -->
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="{{.AppName}}" />
+  {{if eq .Lang "de"}}
   <meta property="og:title" content="Wie {{.AppName}} deine E-Mail-Zustellbarkeit prüft" />
-  <meta property="og:description" content="Über 50 Checks mit Wichtigkeits-Bewertung und Erklärungen – plus FAQ rund um SPF, DKIM, DMARC und Spam-Score." />
-  <meta property="og:url" content="{{.PublicURL}}/about" />
+  <meta property="og:description" content="68 Checks mit Wichtigkeits-Bewertung und Erklärungen – plus FAQ rund um SPF, DKIM, DMARC und Spam-Score." />
   <meta property="og:locale" content="de_DE" />
+  {{else}}
+  <meta property="og:title" content="How {{.AppName}} analyses your email deliverability" />
+  <meta property="og:description" content="68 checks with severity ratings and explanations – plus FAQ covering SPF, DKIM, DMARC and spam score." />
+  <meta property="og:locale" content="en_US" />
+  {{end}}
+  <meta property="og:url" content="{{.PublicURL}}/about" />
   <meta property="og:image" content="{{.PublicURL}}/static/og-image.svg" />
   <meta name="twitter:card" content="summary_large_image" />
 
@@ -33,9 +47,11 @@
       { "@type": "Question", "name": "Wie lange ist eine Mailbox gültig?",
         "acceptedAnswer": { "@type": "Answer", "text": "Standardmäßig 24 Stunden. In der Mailbox-Ansicht lässt sich die Gültigkeit bei Bedarf verlängern." } },
       { "@type": "Question", "name": "Welche Prüfungen werden durchgeführt?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Über 50 Checks aus fünf Bereichen: Authentifizierung (SPF, DKIM, DMARC inkl. Policy, Schlüssellänge, Alignment), DNS & Infrastruktur (PTR, HELO, TLS, MX, MTA-STS, DNSSEC), Spam-Signale (SpamAssassin, Rspamd, DNSBL), Format & Inhalt sowie Header & Rohdaten. Das Ergebnis fasst ein Score von 0–10 zusammen." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "68 Checks aus fünf Bereichen: Authentifizierung (SPF, DKIM, DMARC inkl. Policy, Schlüssellänge, Alignment, ARC), DNS & Infrastruktur (PTR, HELO, TLS, MX, MTA-STS, DNSSEC, BIMI, DANE), Spam-Signale (SpamAssassin, Rspamd, DNSBL), Format & Inhalt sowie Header & Rohdaten. Das Ergebnis fasst ein Score von 0–10 zusammen." } },
       { "@type": "Question", "name": "Kann ich sender.report selbst hosten?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Ja. sender.report ist Open Source und läuft als einzelnes Docker-Image inklusive Web-UI, SMTP-Empfang und Datenbank – komplett auf eigener Infrastruktur." } }
+        "acceptedAnswer": { "@type": "Answer", "text": "Ja. sender.report ist Open Source und läuft als einzelnes Docker-Image inklusive Web-UI, SMTP-Empfang und Datenbank – komplett auf eigener Infrastruktur." } },
+      { "@type": "Question", "name": "Was kann ich mit dem Mail-Simulator tun?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Mit dem Simulator unter /simulate kannst du RFC-2822-Quelltext direkt bearbeiten und live sehen, wie Änderungen den Score beeinflussen – ohne eine neue Testmail versenden zu müssen." } }
     ]
   }
   </script>
@@ -105,7 +121,7 @@
     <section class="mp-hero-section py-5">
       <div class="container-xl px-4 mp-home-container">
         <div class="d-flex align-items-center gap-2 mb-2">
-          <a href="/" class="text-secondary text-decoration-none small"><i class="bi bi-house me-1"></i>Start</a>
+          <a href="/" class="text-secondary text-decoration-none small"><i class="bi bi-house me-1"></i>{{if eq .Lang "de"}}Start{{else}}Home{{end}}</a>
           <span class="text-secondary small opacity-50">/</span>
           <span class="text-secondary small">{{t .Lang "nav.about"}} sender.report</span>
         </div>
@@ -133,8 +149,8 @@
             <div class="mp-trust-item">
               <i class="bi bi-lightning-charge-fill text-primary"></i>
               <div>
-                <strong class="d-block">Sofort-Analyse</strong>
-                <span class="text-secondary small">Ergebnis Sekunden nach Mail-Eingang</span>
+                <strong class="d-block">{{if eq .Lang "de"}}Sofort-Analyse{{else}}Instant Analysis{{end}}</strong>
+                <span class="text-secondary small">{{if eq .Lang "de"}}Ergebnis Sekunden nach Mail-Eingang{{else}}Results seconds after the mail arrives{{end}}</span>
               </div>
             </div>
           </div>
@@ -142,8 +158,8 @@
             <div class="mp-trust-item">
               <i class="bi bi-incognito text-primary"></i>
               <div>
-                <strong class="d-block">Ohne Anmeldung</strong>
-                <span class="text-secondary small">Kein Account, keine E-Mail-Adresse nötig</span>
+                <strong class="d-block">{{if eq .Lang "de"}}Ohne Anmeldung{{else}}No Account Needed{{end}}</strong>
+                <span class="text-secondary small">{{if eq .Lang "de"}}Kein Account, keine E-Mail-Adresse nötig{{else}}No account, no email address required{{end}}</span>
               </div>
             </div>
           </div>
@@ -151,8 +167,8 @@
             <div class="mp-trust-item">
               <i class="bi bi-hourglass-split text-primary"></i>
               <div>
-                <strong class="d-block">Selbstzerstörend</strong>
-                <span class="text-secondary small">Mailboxen laufen automatisch ab</span>
+                <strong class="d-block">{{if eq .Lang "de"}}Selbstzerstörend{{else}}Self-Destructing{{end}}</strong>
+                <span class="text-secondary small">{{if eq .Lang "de"}}Mailboxen laufen automatisch ab{{else}}Mailboxes expire automatically{{end}}</span>
               </div>
             </div>
           </div>
@@ -161,7 +177,43 @@
               <i class="bi bi-git text-primary"></i>
               <div>
                 <strong class="d-block">Open Source</strong>
-                <span class="text-secondary small">Self-hosted &amp; voll transparent</span>
+                <span class="text-secondary small">{{if eq .Lang "de"}}Self-hosted &amp; voll transparent{{else}}Self-hosted &amp; fully transparent{{end}}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ Mail Simulator Feature Highlight ══════════════════════════════ -->
+    <section class="border-top">
+      <div class="container-xl px-4 py-5 mp-home-container">
+        <div class="card border-primary border-opacity-25 shadow-sm">
+          <div class="card-body p-4">
+            <div class="d-flex align-items-start gap-3">
+              <div class="flex-shrink-0">
+                <span class="mp-check-tile-icon text-bg-primary d-inline-flex align-items-center justify-content-center rounded" style="width:48px;height:48px;font-size:1.4rem">
+                  <i class="bi bi-pencil-square"></i>
+                </span>
+              </div>
+              <div>
+                {{if eq .Lang "de"}}
+                <h2 class="h5 fw-bold mb-1">Mail-Simulator – Änderungen live testen</h2>
+                <p class="text-secondary mb-2">
+                  Füge den RFC-2822-Quelltext deiner Mail in den Editor ein und sieh sofort, wie Änderungen an Headers,
+                  HTML oder Subject den Score beeinflussen. Content-Checks laufen live (600&nbsp;ms Debounce),
+                  DNS-Checks auf Anfrage per Klick.
+                </p>
+                <a href="/simulate" class="btn btn-outline-primary btn-sm">Simulator öffnen →</a>
+                {{else}}
+                <h2 class="h5 fw-bold mb-1">Mail Simulator – Test Changes Live</h2>
+                <p class="text-secondary mb-2">
+                  Paste your RFC 2822 email source into the editor and see immediately how changes to headers,
+                  HTML or subject affect the score. Content checks run live (600&nbsp;ms debounce),
+                  DNS checks available on demand with one click.
+                </p>
+                <a href="/simulate" class="btn btn-outline-primary btn-sm">Open Simulator →</a>
+                {{end}}
               </div>
             </div>
           </div>
@@ -170,14 +222,18 @@
     </section>
 
     <!-- ══ Was wird geprüft ═══════════════════════════════════════════════ -->
-    <section class="mp-checks-section" id="checks">
+    <section class="mp-checks-section border-top" id="checks">
       <div class="container-xl px-4 py-5 mp-home-container">
 
         <div class="text-center mb-5">
-          <span class="mp-section-badge mb-3"><i class="bi bi-check2-circle me-1"></i>50+ automatische Checks</span>
-          <h2 class="fw-bold mb-2" style="font-size:1.65rem">Was sender.report prüft</h2>
+          <span class="mp-section-badge mb-3"><i class="bi bi-check2-circle me-1"></i>{{if eq .Lang "de"}}68 automatische Checks{{else}}68 automated checks{{end}}</span>
+          <h2 class="fw-bold mb-2" style="font-size:1.65rem">{{if eq .Lang "de"}}Was sender.report prüft{{else}}What sender.report checks{{end}}</h2>
           <p class="text-secondary mb-0 mx-auto" style="max-width:540px">
-            Vier Dimensionen der Zustellbarkeit – vollständig automatisch, ohne dass du etwas konfigurieren musst.
+            {{if eq .Lang "de"}}
+            Fünf Dimensionen der Zustellbarkeit – vollständig automatisch, ohne dass du etwas konfigurieren musst.
+            {{else}}
+            Five dimensions of deliverability – fully automatic, no configuration needed.
+            {{end}}
           </p>
         </div>
 
@@ -187,14 +243,14 @@
               <div class="mp-check-tile-icon text-bg-success mb-3">
                 <i class="bi bi-shield-check"></i>
               </div>
-              <h6 class="fw-semibold mb-2">Authentifizierung</h6>
+              <h6 class="fw-semibold mb-2">{{if eq .Lang "de"}}Authentifizierung{{else}}Authentication{{end}}</h6>
               <p class="text-secondary small mb-3">
-                Der häufigste Grund für Spam-Einordnung: falsch konfigurierte Auth-Records.
+                {{if eq .Lang "de"}}Der häufigste Grund für Spam-Einordnung: falsch konfigurierte Auth-Records.{{else}}The most common reason for spam classification: misconfigured auth records.{{end}}
               </p>
               <ul class="mp-feat-list">
-                <li><strong>SPF</strong> – Absender-IP im DNS erlaubt?</li>
-                <li><strong>DKIM</strong> – Signatur gültig?</li>
-                <li><strong>DMARC</strong> – Policy-Alignment korrekt?</li>
+                <li><strong>SPF</strong> – {{if eq .Lang "de"}}Absender-IP im DNS erlaubt?{{else}}Sending IP permitted by DNS?{{end}}</li>
+                <li><strong>DKIM</strong> – {{if eq .Lang "de"}}Signatur gültig?{{else}}Signature valid?{{end}}</li>
+                <li><strong>DMARC</strong> – {{if eq .Lang "de"}}Policy-Alignment korrekt?{{else}}Policy alignment correct?{{end}}</li>
               </ul>
             </div>
           </div>
@@ -203,14 +259,14 @@
               <div class="mp-check-tile-icon text-bg-info mb-3">
                 <i class="bi bi-hdd-network"></i>
               </div>
-              <h6 class="fw-semibold mb-2">Server &amp; Netz</h6>
+              <h6 class="fw-semibold mb-2">{{if eq .Lang "de"}}Server &amp; Netz{{else}}Server &amp; Network{{end}}</h6>
               <p class="text-secondary small mb-3">
-                Technische Konfigurationsfehler, die Zustellbarkeit still sabotieren.
+                {{if eq .Lang "de"}}Technische Konfigurationsfehler, die Zustellbarkeit still sabotieren.{{else}}Technical configuration errors that silently sabotage deliverability.{{end}}
               </p>
               <ul class="mp-feat-list">
-                <li><strong>PTR / rDNS</strong> – Reverse-DNS korrekt?</li>
-                <li><strong>HELO</strong> – Server-Identität stimmig?</li>
-                <li><strong>TLS</strong> – Verschlüsselt übertragen?</li>
+                <li><strong>PTR / rDNS</strong> – {{if eq .Lang "de"}}Reverse-DNS korrekt?{{else}}Reverse DNS correct?{{end}}</li>
+                <li><strong>HELO</strong> – {{if eq .Lang "de"}}Server-Identität stimmig?{{else}}Server identity consistent?{{end}}</li>
+                <li><strong>TLS</strong> – {{if eq .Lang "de"}}Verschlüsselt übertragen?{{else}}Transmitted encrypted?{{end}}</li>
               </ul>
             </div>
           </div>
@@ -219,14 +275,14 @@
               <div class="mp-check-tile-icon text-bg-warning mb-3">
                 <i class="bi bi-funnel"></i>
               </div>
-              <h6 class="fw-semibold mb-2">Spam-Filter</h6>
+              <h6 class="fw-semibold mb-2">{{if eq .Lang "de"}}Spam-Filter{{else}}Spam Filters{{end}}</h6>
               <p class="text-secondary small mb-3">
-                Inhalt und IP-Reputation — was Spam-Filter wirklich entscheiden lässt.
+                {{if eq .Lang "de"}}Inhalt und IP-Reputation — was Spam-Filter wirklich entscheiden lässt.{{else}}Content and IP reputation — what spam filters actually decide on.{{end}}
               </p>
               <ul class="mp-feat-list">
-                <li><strong>SpamAssassin</strong> – Score &amp; Regeldetails</li>
-                <li><strong>Rspamd</strong> – Symbol-Analyse (optional)</li>
-                <li><strong>DNSBL / RBL</strong> – IP auf Blacklists?</li>
+                <li><strong>SpamAssassin</strong> – {{if eq .Lang "de"}}Score &amp; Regeldetails{{else}}Score &amp; rule details{{end}}</li>
+                <li><strong>Rspamd</strong> – {{if eq .Lang "de"}}Symbol-Analyse (optional){{else}}Symbol analysis (optional){{end}}</li>
+                <li><strong>DNSBL / RBL</strong> – {{if eq .Lang "de"}}IP auf Blacklists?{{else}}IP on blacklists?{{end}}</li>
               </ul>
             </div>
           </div>
@@ -235,14 +291,30 @@
               <div class="mp-check-tile-icon text-bg-secondary mb-3">
                 <i class="bi bi-bar-chart-steps"></i>
               </div>
-              <h6 class="fw-semibold mb-2">Report &amp; Score</h6>
+              <h6 class="fw-semibold mb-2">{{if eq .Lang "de"}}Report &amp; Score{{else}}Report &amp; Score{{end}}</h6>
               <p class="text-secondary small mb-3">
-                Alle Ergebnisse auf einen Blick — plus Rohdaten für die Fehlersuche.
+                {{if eq .Lang "de"}}Alle Ergebnisse auf einen Blick — plus Rohdaten für die Fehlersuche.{{else}}All results at a glance — plus raw data for debugging.{{end}}
               </p>
               <ul class="mp-feat-list">
-                <li><strong>Score 0–10</strong> – Gesamtbewertung</li>
-                <li><strong>Header-Chain</strong> – Received-Path</li>
-                <li><strong>JSON-Export</strong> – API-Zugriff</li>
+                <li><strong>Score 0–10</strong> – {{if eq .Lang "de"}}Gesamtbewertung{{else}}Overall rating{{end}}</li>
+                <li><strong>{{if eq .Lang "de"}}Header-Chain{{else}}Header Chain{{end}}</strong> – {{if eq .Lang "de"}}Received-Path{{else}}Received path{{end}}</li>
+                <li><strong>JSON-Export</strong> – {{if eq .Lang "de"}}API-Zugriff{{else}}API access{{end}}</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-12 col-sm-6 col-xl-3">
+            <div class="mp-check-tile h-100">
+              <div class="mp-check-tile-icon text-bg-primary mb-3">
+                <i class="bi bi-pencil-square"></i>
+              </div>
+              <h6 class="fw-semibold mb-2">{{if eq .Lang "de"}}Simulator &amp; Re-Check{{else}}Simulator &amp; Re-Check{{end}}</h6>
+              <p class="text-secondary small mb-3">
+                {{if eq .Lang "de"}}Änderungen live testen, ohne eine neue Testmail zu senden.{{else}}Test changes live without sending a new test email.{{end}}
+              </p>
+              <ul class="mp-feat-list">
+                <li><strong>{{if eq .Lang "de"}}Live-Editor{{else}}Live editor{{end}}</strong> – {{if eq .Lang "de"}}RFC-2822-Quelltext direkt bearbeiten{{else}}Edit RFC 2822 source directly{{end}}</li>
+                <li><strong>Re-Check</strong> – {{if eq .Lang "de"}}einzelne DNS-Checks neu ausführen{{else}}re-run individual DNS checks{{end}}</li>
+                <li><strong>{{if eq .Lang "de"}}Kein Versand{{else}}No sending{{end}}</strong> – {{if eq .Lang "de"}}rein lokal im Browser{{else}}purely local in browser{{end}}</li>
               </ul>
             </div>
           </div>
@@ -256,20 +328,25 @@
       <div class="container-xl px-4 py-5 mp-home-container" style="max-width:920px">
 
         <div class="text-center mb-4">
-          <span class="mp-section-badge mb-3"><i class="bi bi-list-check me-1"></i>Vollständige Referenz</span>
-          <h2 class="fw-bold mb-2" style="font-size:1.65rem">Alle Prüfungen im Detail</h2>
+          <span class="mp-section-badge mb-3"><i class="bi bi-list-check me-1"></i>{{if eq .Lang "de"}}Vollständige Referenz{{else}}Complete Reference{{end}}</span>
+          <h2 class="fw-bold mb-2" style="font-size:1.65rem">{{if eq .Lang "de"}}Alle Prüfungen im Detail{{else}}All checks in detail{{end}}</h2>
           <p class="text-secondary mb-0 mx-auto" style="max-width:600px">
+            {{if eq .Lang "de"}}
             Was jeder Check bedeutet, wie wichtig er für deine Zustellbarkeit ist und wo du
             tiefer einsteigen kannst.
+            {{else}}
+            What each check means, how important it is for your deliverability, and where to
+            dig deeper.
+            {{end}}
           </p>
         </div>
 
         <!-- Legende: Wichtigkeit -->
         <div class="d-flex flex-wrap justify-content-center gap-2 gap-md-3 mb-4 small">
-          <span><span class="badge text-bg-danger me-1">Kritisch</span><span class="text-secondary">Ohne das landest du fast sicher im Spam</span></span>
-          <span><span class="badge text-bg-warning me-1">Wichtig</span><span class="text-secondary">Deutlicher Einfluss auf die Zustellung</span></span>
-          <span><span class="badge text-bg-primary me-1">Empfohlen</span><span class="text-secondary">Verbessert Reputation &amp; Darstellung</span></span>
-          <span><span class="badge text-bg-secondary me-1">Optional</span><span class="text-secondary">Bonus-Signal für Fortgeschrittene</span></span>
+          <span><span class="badge text-bg-danger me-1">{{if eq .Lang "de"}}Kritisch{{else}}Critical{{end}}</span><span class="text-secondary">{{if eq .Lang "de"}}Ohne das landest du fast sicher im Spam{{else}}Without this you will almost certainly end up in spam{{end}}</span></span>
+          <span><span class="badge text-bg-warning me-1">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span><span class="text-secondary">{{if eq .Lang "de"}}Deutlicher Einfluss auf die Zustellung{{else}}Significant impact on deliverability{{end}}</span></span>
+          <span><span class="badge text-bg-primary me-1">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span><span class="text-secondary">{{if eq .Lang "de"}}Verbessert Reputation &amp; Darstellung{{else}}Improves reputation &amp; presentation{{end}}</span></span>
+          <span><span class="badge text-bg-secondary me-1">Optional</span><span class="text-secondary">{{if eq .Lang "de"}}Bonus-Signal für Fortgeschrittene{{else}}Bonus signal for advanced senders{{end}}</span></span>
         </div>
 
         <div class="accordion mp-faq" id="mp-checks-detail-acc">
@@ -278,87 +355,158 @@
           <div class="accordion-item">
             <h3 class="accordion-header">
               <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#cd-auth">
-                <i class="bi bi-shield-check text-success me-2"></i>Authentifizierung
-                <span class="badge text-bg-light text-secondary ms-2">8 Checks</span>
+                <i class="bi bi-shield-check text-success me-2"></i>{{if eq .Lang "de"}}Authentifizierung{{else}}Authentication{{end}}
+                <span class="badge text-bg-light text-secondary ms-2">13 {{if eq .Lang "de"}}Checks{{else}}checks{{end}}</span>
               </button>
             </h3>
             <div id="cd-auth" class="accordion-collapse collapse show" data-bs-parent="#mp-checks-detail-acc">
               <div class="accordion-body">
                 <p class="text-secondary small mb-3">
+                  {{if eq .Lang "de"}}
                   Der mit Abstand wichtigste Bereich. Gmail, Outlook &amp; Yahoo verlangen seit 2024
                   von allen Absendern gültige Authentifizierung – fehlt sie, wird abgelehnt oder einsortiert.
+                  {{else}}
+                  By far the most important area. Gmail, Outlook &amp; Yahoo have required valid authentication
+                  from all senders since 2024 — without it, mail is rejected or filtered.
+                  {{end}}
                 </p>
                 <ul class="mp-check-ref list-unstyled mb-0">
                   <li>
-                    <span class="badge text-bg-danger">Kritisch</span>
+                    <span class="badge text-bg-danger">{{if eq .Lang "de"}}Kritisch{{else}}Critical{{end}}</span>
                     <div>
-                      <strong>SPF</strong> – Sender Policy Framework.
+                      <strong>SPF</strong> – {{if eq .Lang "de"}}Sender Policy Framework.
                       Ein DNS-TXT-Eintrag deiner Domain legt fest, welche Server in ihrem Namen
                       versenden dürfen. Der empfangende Server prüft, ob die sendende IP erlaubt ist.
                       Ohne gültiges SPF wirkt deine Mail wie gefälscht.
+                      {{else}}Sender Policy Framework.
+                      A DNS TXT record on your domain specifies which servers are allowed to send on its behalf.
+                      The receiving server checks whether the sending IP is permitted.
+                      Without a valid SPF record your mail looks forged.
+                      {{end}}
                       <a href="https://datatracker.ietf.org/doc/html/rfc7208" target="_blank" rel="noopener">RFC 7208 ↗</a>
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>SPF-Strenge</strong> – das abschließende <code>all</code>-Tag.
+                      <strong>{{if eq .Lang "de"}}SPF-Strenge{{else}}SPF Strictness{{end}}</strong> – {{if eq .Lang "de"}}das abschließende <code>all</code>-Tag.
                       <code>-all</code> (hard fail) schützt am besten, <code>~all</code> (soft fail) ist
                       noch akzeptabel, <code>+all</code> ist gefährlich (erlaubt jeden). Geprüft wird auch
                       das RFC-Limit von max. 10 DNS-Lookups.
+                      {{else}}the trailing <code>all</code> tag.
+                      <code>-all</code> (hard fail) gives the best protection, <code>~all</code> (soft fail) is
+                      still acceptable, <code>+all</code> is dangerous (permits everyone). The RFC limit of
+                      max. 10 DNS lookups is also checked.
+                      {{end}}
                       <a href="https://dmarc.org/wiki/FAQ" target="_blank" rel="noopener">dmarc.org FAQ ↗</a>
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-danger">Kritisch</span>
+                    <span class="badge text-bg-danger">{{if eq .Lang "de"}}Kritisch{{else}}Critical{{end}}</span>
                     <div>
-                      <strong>DKIM</strong> – DomainKeys Identified Mail.
+                      <strong>DKIM</strong> – {{if eq .Lang "de"}}DomainKeys Identified Mail.
                       Deine Mail wird kryptografisch signiert; der öffentliche Schlüssel liegt im DNS.
                       Der Empfänger verifiziert, dass die Mail unterwegs nicht verändert wurde und
                       wirklich von deiner Domain stammt.
+                      {{else}}DomainKeys Identified Mail.
+                      Your mail is cryptographically signed; the public key is published in DNS.
+                      The recipient verifies the mail was not altered in transit and genuinely originates
+                      from your domain.
+                      {{end}}
                       <a href="https://datatracker.ietf.org/doc/html/rfc6376" target="_blank" rel="noopener">RFC 6376 ↗</a>
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>DKIM-Schlüssellänge</strong> – RSA-Schlüssel unter 1024 Bit gelten als
+                      <strong>{{if eq .Lang "de"}}DKIM-Schlüssellänge{{else}}DKIM Key Length{{end}}</strong> – {{if eq .Lang "de"}}RSA-Schlüssel unter 1024 Bit gelten als
                       unsicher, 2048 Bit sind heute Standard. Ed25519 wird ebenfalls erkannt. Schwache
                       Schlüssel können von Filtern abgewertet werden.
+                      {{else}}RSA keys below 1024 bits are considered insecure; 2048 bits is today's standard.
+                      Ed25519 is also recognised. Weak keys may be penalised by filters.
+                      {{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-danger">Kritisch</span>
+                    <span class="badge text-bg-danger">{{if eq .Lang "de"}}Kritisch{{else}}Critical{{end}}</span>
                     <div>
-                      <strong>DMARC</strong> – baut auf SPF und DKIM auf und sagt dem Empfänger, was bei
+                      <strong>DMARC</strong> – {{if eq .Lang "de"}}baut auf SPF und DKIM auf und sagt dem Empfänger, was bei
                       einem Fehlschlag passieren soll. Erst DMARC macht Spoofing-Schutz wirksam und
                       liefert dir Reports.
+                      {{else}}builds on SPF and DKIM and tells the receiver what to do when one fails.
+                      DMARC is what makes spoofing protection effective and provides reporting.
+                      {{end}}
                       <a href="https://datatracker.ietf.org/doc/html/rfc7489" target="_blank" rel="noopener">RFC 7489 ↗</a>
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>DMARC-Policy-Stärke</strong> – <code>p=none</code> überwacht nur,
+                      <strong>{{if eq .Lang "de"}}DMARC-Policy-Stärke{{else}}DMARC Policy Strength{{end}}</strong> – {{if eq .Lang "de"}}<code>p=none</code> überwacht nur,
                       <code>p=quarantine</code> verschiebt in den Spam, <code>p=reject</code> lehnt
                       Fälschungen ab. Für echten Schutz wird mindestens <code>quarantine</code> plus eine
                       <code>rua=</code>-Reportadresse empfohlen.
+                      {{else}}<code>p=none</code> only monitors,
+                      <code>p=quarantine</code> moves forgeries to spam, <code>p=reject</code> refuses them outright.
+                      For real protection, at least <code>quarantine</code> plus a <code>rua=</code> report address
+                      is recommended.
+                      {{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>Alignment (SPF / DKIM / DMARC / From)</strong> – die geprüften Domains
-                      müssen zur sichtbaren Absenderadresse (<code>From:</code>) passen. Nur „ausgerichtete"
-                      Bestätigungen zählen für DMARC – ein häufiger, schwer zu findender Fehler.
+                      <strong>{{if eq .Lang "de"}}SPF-Alignment{{else}}SPF Alignment{{end}}</strong> – {{if eq .Lang "de"}}die SPF-geprüfte Domain muss zur sichtbaren Absenderadresse (<code>From:</code>) passen. Nur ausgerichtetes SPF zählt für DMARC.{{else}}the SPF-authenticated domain must match the visible <code>From:</code> address. Only aligned SPF counts towards DMARC.{{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>From-Anzeigename</strong> – erkennt Markenimitation und fremde
+                      <strong>{{if eq .Lang "de"}}DKIM-Alignment{{else}}DKIM Alignment{{end}}</strong> – {{if eq .Lang "de"}}die DKIM-signierte Domain muss zur <code>From:</code>-Domain passen. Ein häufiger, schwer zu findender Fehler.{{else}}the DKIM-signed domain must match the <code>From:</code> domain. A common, hard-to-spot mistake.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}DMARC-Alignment{{else}}DMARC Alignment{{end}}</strong> – {{if eq .Lang "de"}}prüft, ob SPF oder DKIM (oder beide) für DMARC ausgerichtet bestätigt sind.{{else}}checks whether SPF or DKIM (or both) pass DMARC alignment.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}From-Anzeigename{{else}}From Display Name{{end}}</strong> – {{if eq .Lang "de"}}erkennt Markenimitation und fremde
                       E-Mail-Adressen im angezeigten Namen (z.&nbsp;B. „PayPal Service &lt;x@gmx.de&gt;").
                       Ein klassisches Phishing-Muster, das Filter misstrauisch macht.
+                      {{else}}detects brand impersonation and foreign email addresses in the display name
+                      (e.g. "PayPal Service &lt;x@gmx.de&gt;"). A classic phishing pattern that triggers
+                      filter suspicion.
+                      {{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>ARC</strong> – {{if eq .Lang "de"}}Authenticated Received Chain.
+                      Verifiziert die ARC-Kette, die Weiterleitungsserver (z.&nbsp;B. Mailinglisten) hinzufügen.
+                      Ermöglicht DMARC-Passes auch dann, wenn ein Zwischensystem SPF/DKIM-Alignment aufbricht.
+                      {{else}}Authenticated Received Chain.
+                      Verifies the ARC chain added by forwarding servers (e.g. mailing lists). Allows DMARC
+                      to pass even when an intermediary breaks SPF/DKIM alignment.
+                      {{end}}
+                      <a href="https://datatracker.ietf.org/doc/html/rfc8617" target="_blank" rel="noopener">RFC 8617 ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-secondary">Optional</span>
+                    <div>
+                      <strong>X-Google-DKIM</strong> – {{if eq .Lang "de"}}Googles internes DKIM-Verifikationssignal.
+                      Ein „fail" bedeutet, dass Googles Infrastruktur die DKIM-Signatur abgelehnt hat —
+                      kann die Gmail-Zustellbarkeit negativ beeinflussen, selbst wenn das Standard-DKIM
+                      bestanden hat.
+                      {{else}}Google's internal DKIM verification signal.
+                      A "fail" means Google's infrastructure rejected the DKIM signature — can negatively
+                      affect Gmail deliverability even if standard DKIM passed.
+                      {{end}}
                     </div>
                   </li>
                 </ul>
@@ -370,100 +518,148 @@
           <div class="accordion-item">
             <h3 class="accordion-header">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cd-dns">
-                <i class="bi bi-hdd-network text-info me-2"></i>DNS &amp; Infrastruktur
-                <span class="badge text-bg-light text-secondary ms-2">11 Checks</span>
+                <i class="bi bi-hdd-network text-info me-2"></i>{{if eq .Lang "de"}}DNS &amp; Infrastruktur{{else}}DNS &amp; Infrastructure{{end}}
+                <span class="badge text-bg-light text-secondary ms-2">13 {{if eq .Lang "de"}}Checks{{else}}checks{{end}}</span>
               </button>
             </h3>
             <div id="cd-dns" class="accordion-collapse collapse" data-bs-parent="#mp-checks-detail-acc">
               <div class="accordion-body">
                 <p class="text-secondary small mb-3">
+                  {{if eq .Lang "de"}}
                   Zeigt, ob deine sendende IP und deine Hostnamen sauber und konsistent im DNS hinterlegt
                   sind. Inkonsistenzen wirken wie ein schlecht gewarteter oder gekaperter Server.
+                  {{else}}
+                  Shows whether your sending IP and hostnames are cleanly and consistently registered in DNS.
+                  Inconsistencies make your server look poorly maintained or compromised.
+                  {{end}}
                 </p>
                 <ul class="mp-check-ref list-unstyled mb-0">
                   <li>
-                    <span class="badge text-bg-danger">Kritisch</span>
+                    <span class="badge text-bg-danger">{{if eq .Lang "de"}}Kritisch{{else}}Critical{{end}}</span>
                     <div>
-                      <strong>PTR / Reverse DNS</strong> – zu deiner sendenden IP muss ein Hostname
+                      <strong>PTR / Reverse DNS</strong> – {{if eq .Lang "de"}}zu deiner sendenden IP muss ein Hostname
                       hinterlegt sein, der wiederum auf dieselbe IP zurückzeigt (Forward-confirmed rDNS).
                       Fehlt der PTR, lehnen viele große Provider direkt ab.
+                      {{else}}your sending IP must have a hostname that in turn resolves back to the same IP
+                      (forward-confirmed rDNS). Without a PTR record many large providers reject outright.
+                      {{end}}
                       <a href="https://datatracker.ietf.org/doc/html/rfc1912" target="_blank" rel="noopener">RFC 1912 ↗</a>
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
                     <div>
-                      <strong>PTR-Muster</strong> – generische oder „dynamisch" aussehende Hostnamen
+                      <strong>{{if eq .Lang "de"}}PTR-Muster{{else}}PTR Pattern{{end}}</strong> – {{if eq .Lang "de"}}generische oder „dynamisch" aussehende Hostnamen
                       (z.&nbsp;B. <code>p5dxxxx.dip0.t-ipconnect.de</code>) gelten als Privatanschluss und
                       sind ein starkes Spam-Signal – selbst wenn der PTR technisch existiert.
+                      {{else}}generic or "dynamic-looking" hostnames (e.g. <code>p5dxxxx.dip0.t-ipconnect.de</code>)
+                      are treated as residential connections — a strong spam signal even if the PTR technically
+                      exists.
+                      {{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>HELO / EHLO</strong> – der Name, mit dem sich dein Server am Anfang der
+                      <strong>HELO / EHLO</strong> – {{if eq .Lang "de"}}der Name, mit dem sich dein Server am Anfang der
                       SMTP-Verbindung vorstellt, sollte ein gültiger, zur IP passender FQDN sein.
+                      {{else}}the name your server presents at the start of the SMTP connection should be a
+                      valid FQDN that matches the sending IP.
+                      {{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>MX-Records</strong> – prüft, ob die Domain überhaupt empfangsfähige
+                      <strong>MX-Records</strong> – {{if eq .Lang "de"}}prüft, ob die Domain überhaupt empfangsfähige
                       Mailserver veröffentlicht. Wichtig für Rückläufer (Bounces) und Glaubwürdigkeit.
+                      {{else}}checks whether the domain publishes mail servers that can receive. Important for
+                      bounces and credibility.
+                      {{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
                     <div>
-                      <strong>A / AAAA</strong> – existieren die zugrundeliegenden Host-Adressen
+                      <strong>A / AAAA</strong> – {{if eq .Lang "de"}}existieren die zugrundeliegenden Host-Adressen
                       (IPv4/IPv6)? Lücken deuten auf eine unvollständige DNS-Konfiguration hin.
+                      {{else}}do the underlying host addresses (IPv4/IPv6) exist? Gaps indicate an incomplete
+                      DNS configuration.
+                      {{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>TLS-Transport</strong> – wurde die Mail verschlüsselt übertragen
+                      <strong>{{if eq .Lang "de"}}TLS-Transport{{else}}TLS Transport{{end}}</strong> – {{if eq .Lang "de"}}wurde die Mail verschlüsselt übertragen
                       (STARTTLS)? Unverschlüsselte Übertragung ist heute ein Reputations- und
                       Datenschutzproblem.
+                      {{else}}was the mail transmitted encrypted (STARTTLS)? Unencrypted transmission is today
+                      both a reputation and a privacy issue.
+                      {{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
                     <div>
-                      <strong>Bounce-Domain (Envelope-From) MX</strong> – kann die Return-Path-Domain
+                      <strong>{{if eq .Lang "de"}}Bounce-Domain (Envelope-From) MX{{else}}Bounce Domain (Envelope-From) MX{{end}}</strong> – {{if eq .Lang "de"}}kann die Return-Path-Domain
                       überhaupt Bounces empfangen? Sonst gehen Unzustellbarkeits-Meldungen verloren.
+                      {{else}}can the Return-Path domain actually receive bounces? Otherwise non-delivery
+                      reports are lost.
+                      {{end}}
                     </div>
                   </li>
                   <li>
                     <span class="badge text-bg-secondary">Optional</span>
                     <div>
-                      <strong>MTA-STS</strong> – erzwingt verschlüsselten Transport zu deinen
+                      <strong>MTA-STS</strong> – {{if eq .Lang "de"}}erzwingt verschlüsselten Transport zu deinen
                       Mailservern und verhindert Downgrade-Angriffe.
+                      {{else}}enforces encrypted transport to your mail servers and prevents downgrade attacks.
+                      {{end}}
                       <a href="https://datatracker.ietf.org/doc/html/rfc8461" target="_blank" rel="noopener">RFC 8461 ↗</a>
                     </div>
                   </li>
                   <li>
                     <span class="badge text-bg-secondary">Optional</span>
                     <div>
-                      <strong>TLS-RPT</strong> – lässt dir Berichte über fehlgeschlagene
+                      <strong>TLS-RPT</strong> – {{if eq .Lang "de"}}lässt dir Berichte über fehlgeschlagene
                       TLS-Verbindungen zukommen.
+                      {{else}}delivers reports about failed TLS connections to your reporting address.
+                      {{end}}
                       <a href="https://datatracker.ietf.org/doc/html/rfc8460" target="_blank" rel="noopener">RFC 8460 ↗</a>
                     </div>
                   </li>
                   <li>
                     <span class="badge text-bg-secondary">Optional</span>
                     <div>
-                      <strong>DNSSEC</strong> – ist deine Zone kryptografisch signiert? Schützt deine
+                      <strong>DNSSEC</strong> – {{if eq .Lang "de"}}ist deine Zone kryptografisch signiert? Schützt deine
                       DNS-Antworten (inkl. SPF/DKIM/DMARC) vor Manipulation.
+                      {{else}}is your zone cryptographically signed? Protects your DNS responses (including
+                      SPF/DKIM/DMARC) against tampering.
+                      {{end}}
                     </div>
                   </li>
                   <li>
                     <span class="badge text-bg-secondary">Optional</span>
                     <div>
-                      <strong>BIMI &amp; DANE/TLSA</strong> – BIMI zeigt dein Markenlogo im Postfach
+                      <strong>BIMI &amp; DANE/TLSA</strong> – {{if eq .Lang "de"}}BIMI zeigt dein Markenlogo im Postfach
                       (setzt <code>p=quarantine/reject</code> voraus), DANE bindet TLS-Zertifikate per DNS.
                       Fortgeschrittene Vertrauenssignale.
+                      {{else}}BIMI displays your brand logo in the inbox (requires <code>p=quarantine/reject</code>),
+                      DANE pins TLS certificates via DNS. Advanced trust signals.
+                      {{end}}
                       <a href="https://bimigroup.org/" target="_blank" rel="noopener">bimigroup.org ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}From-Domain Empfangscheck{{else}}From-Domain Receive Check{{end}}</strong> – {{if eq .Lang "de"}}prüft, ob die MX-Records der From-Header-Domain
+                      tatsächlich eingehende Mail annehmen. Eine From-Domain, die keine Bounces empfangen kann,
+                      signalisiert eine unbeobachtete oder aufgegebene Domain.
+                      {{else}}checks whether the From header domain's MX records actually accept inbound mail.
+                      A From domain that cannot receive bounces signals an unmonitored or abandoned domain.
+                      {{end}}
                     </div>
                   </li>
                 </ul>
@@ -475,67 +671,104 @@
           <div class="accordion-item">
             <h3 class="accordion-header">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cd-spam">
-                <i class="bi bi-funnel text-warning me-2"></i>Spam-Filter &amp; Reputation
-                <span class="badge text-bg-light text-secondary ms-2">6 Checks</span>
+                <i class="bi bi-funnel text-warning me-2"></i>{{if eq .Lang "de"}}Spam-Filter &amp; Reputation{{else}}Spam Filters &amp; Reputation{{end}}
+                <span class="badge text-bg-light text-secondary ms-2">7 {{if eq .Lang "de"}}Checks{{else}}checks{{end}}</span>
               </button>
             </h3>
             <div id="cd-spam" class="accordion-collapse collapse" data-bs-parent="#mp-checks-detail-acc">
               <div class="accordion-body">
                 <p class="text-secondary small mb-3">
-                  So bewerten verbreitete Filter und Reputationsdienste deine Mail. Die letzten drei
+                  {{if eq .Lang "de"}}
+                  So bewerten verbreitete Filter und Reputationsdienste deine Mail. Die letzten vier
                   Checks sind <strong>optional</strong> und müssen auf der Startseite aktiv eingeschaltet
                   werden, da sie externe Dienste kontaktieren.
+                  {{else}}
+                  How common filters and reputation services rate your mail. The last four checks are
+                  <strong>opt-in</strong> and must be enabled on the start page because they contact
+                  external services.
+                  {{end}}
                 </p>
                 <ul class="mp-check-ref list-unstyled mb-0">
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>SpamAssassin</strong> – der De-facto-Standard-Filter vieler Mailserver.
+                      <strong>SpamAssassin</strong> – {{if eq .Lang "de"}}der De-facto-Standard-Filter vieler Mailserver.
                       Zeigt den Gesamt-Score und die einzelnen ausgelösten Regeln mit Punktwerten.
+                      {{else}}the de-facto standard filter used by many mail servers.
+                      Shows the total score and the individual triggered rules with their point values.
+                      {{end}}
                       <a href="https://spamassassin.apache.org/" target="_blank" rel="noopener">spamassassin.apache.org ↗</a>
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>Rspamd</strong> – moderner, weit verbreiteter Filter. Liefert eine
+                      <strong>Rspamd</strong> – {{if eq .Lang "de"}}moderner, weit verbreiteter Filter. Liefert eine
                       detaillierte Symbol-Analyse (welche Merkmale wie stark gewertet wurden).
+                      {{else}}modern, widely used filter. Provides a detailed symbol analysis showing which
+                      features were scored and by how much.
+                      {{end}}
                       <a href="https://rspamd.com/" target="_blank" rel="noopener">rspamd.com ↗</a>
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-danger">Kritisch</span>
+                    <span class="badge text-bg-danger">{{if eq .Lang "de"}}Kritisch{{else}}Critical{{end}}</span>
                     <div>
-                      <strong>DNSBL / RBL (IP-Reputation)</strong> – steht deine sendende IP auf bekannten
+                      <strong>DNSBL / RBL ({{if eq .Lang "de"}}IP-Reputation{{else}}IP Reputation{{end}})</strong> – {{if eq .Lang "de"}}steht deine sendende IP auf bekannten
                       Blacklists (z.&nbsp;B. Spamhaus, Spamcop)? Ein Treffer ist einer der häufigsten
                       Gründe für komplette Ablehnung. Inkl. Delisting-Hinweisen.
+                      {{else}}is your sending IP listed on known blacklists (e.g. Spamhaus, Spamcop)?
+                      A hit is one of the most common reasons for outright rejection. Includes delisting hints.
+                      {{end}}
                       <a href="https://check.spamhaus.org/" target="_blank" rel="noopener">Spamhaus Lookup ↗</a>
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
                     <span class="badge text-bg-light text-secondary border">Opt-in</span>
                     <div>
-                      <strong>Domain-Alter</strong> – wie lange ist die Absender-Domain registriert?
+                      <strong>{{if eq .Lang "de"}}Domain-Alter{{else}}Domain Age{{end}}</strong> – {{if eq .Lang "de"}}wie lange ist die Absender-Domain registriert?
                       Brandneue Domains sind ein starkes Spam-Signal. Abfrage via RDAP (rdap.org).
+                      {{else}}how long has the sender domain been registered? Brand-new domains are a strong
+                      spam signal. Queried via RDAP (rdap.org).
+                      {{end}}
                       <a href="https://about.rdap.org/" target="_blank" rel="noopener">about.rdap.org ↗</a>
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-danger">Kritisch</span>
+                    <span class="badge text-bg-danger">{{if eq .Lang "de"}}Kritisch{{else}}Critical{{end}}</span>
                     <span class="badge text-bg-light text-secondary border">Opt-in</span>
                     <div>
-                      <strong>Domain-Blocklist</strong> – steht die Absender-Domain auf einer
+                      <strong>{{if eq .Lang "de"}}Domain-Blocklist{{else}}Domain Blocklist{{end}}</strong> – {{if eq .Lang "de"}}steht die Absender-Domain auf einer
                       Domain-Blockliste (Spamhaus DBL, URIBL)? Treffer führen oft direkt zu Ablehnung.
+                      {{else}}is the sender domain listed on a domain blocklist (Spamhaus DBL, URIBL)?
+                      Hits often lead directly to rejection.
+                      {{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-danger">Kritisch</span>
+                    <span class="badge text-bg-danger">{{if eq .Lang "de"}}Kritisch{{else}}Critical{{end}}</span>
                     <span class="badge text-bg-light text-secondary border">Opt-in</span>
                     <div>
-                      <strong>Link-Blocklist</strong> – prüft die Domains aller in der Mail enthaltenen
+                      <strong>{{if eq .Lang "de"}}Link-Blocklist{{else}}Link Blocklist{{end}}</strong> – {{if eq .Lang "de"}}prüft die Domains aller in der Mail enthaltenen
                       Links gegen URI-Blocklisten. Ein einziger gelisteter Link kann die ganze Mail
                       in den Spam befördern.
+                      {{else}}checks the domains of all links in the mail against URI blocklists. A single
+                      listed link can send the entire mail to spam.
+                      {{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <span class="badge text-bg-light text-secondary border">Opt-in</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}Broken Links{{else}}Broken Links{{end}}</strong> – {{if eq .Lang "de"}}führt HTTP-GET-Anfragen an alle Links in der Mail durch,
+                      um zu prüfen, ob sie mit 2xx/3xx antworten. Defekte Links schädigen das Vertrauen der
+                      Empfänger. Opt-in, da externe Server kontaktiert werden.
+                      {{else}}makes HTTP GET requests to all links in the email to verify they respond with
+                      a 2xx/3xx status. Broken links damage recipient trust. Opt-in because it contacts the
+                      destination servers.
+                      {{end}}
                     </div>
                   </li>
                 </ul>
@@ -547,59 +780,119 @@
           <div class="accordion-item">
             <h3 class="accordion-header">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cd-content">
-                <i class="bi bi-file-richtext text-primary me-2"></i>Format &amp; Inhalt
-                <span class="badge text-bg-light text-secondary ms-2">7 Checks</span>
+                <i class="bi bi-file-richtext text-primary me-2"></i>{{if eq .Lang "de"}}Format &amp; Inhalt{{else}}Format &amp; Content{{end}}
+                <span class="badge text-bg-light text-secondary ms-2">23 {{if eq .Lang "de"}}Checks{{else}}checks{{end}}</span>
               </button>
             </h3>
             <div id="cd-content" class="accordion-collapse collapse" data-bs-parent="#mp-checks-detail-acc">
               <div class="accordion-body">
                 <p class="text-secondary small mb-3">
+                  {{if eq .Lang "de"}}
                   Der technische und inhaltliche Aufbau der Nachricht. Schlechtes Format ist ein
                   klassisches Spam-Signal und kann die Darstellung beim Empfänger zerstören.
+                  {{else}}
+                  The technical and content structure of the message. Poor formatting is a classic
+                  spam signal and can break rendering for the recipient.
+                  {{end}}
                 </p>
                 <ul class="mp-check-ref list-unstyled mb-0">
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>MIME-Struktur</strong> – ist die Nachricht RFC-konform aufgebaut
+                      <strong>{{if eq .Lang "de"}}MIME-Struktur{{else}}MIME Structure{{end}}</strong> – {{if eq .Lang "de"}}ist die Nachricht RFC-konform aufgebaut
                       (Header, Body, Boundaries, Encoding)? Kaputte Struktur wird abgewertet oder
                       gar nicht erst korrekt dargestellt.
+                      {{else}}is the message built RFC-compliantly (headers, body, boundaries, encoding)?
+                      Broken structure is penalised or simply not rendered correctly.
+                      {{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
                     <div>
-                      <strong>Text/HTML-Verhältnis</strong> – eine reine HTML-Mail ohne Text-Alternative
-                      (multipart/alternative) wirkt unprofessionell und spamverdächtig.
+                      <strong>multipart/alternative</strong> – {{if eq .Lang "de"}}eine reine HTML-Mail ohne Text-Alternative
+                      wirkt unprofessionell und spamverdächtig. Beide Varianten sollten vorhanden sein.
+                      {{else}}a pure HTML mail without a plain-text alternative looks unprofessional and
+                      suspicious. Both parts should be present.
+                      {{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
                     <div>
-                      <strong>HTML-Validität &amp; versteckter Text</strong> – unsauberes HTML und
-                      unsichtbarer Text (z.&nbsp;B. weiß auf weiß) sind typische Spammer-Tricks.
+                      <strong>{{if eq .Lang "de"}}Plain-Text-Teil{{else}}Plain Text Part{{end}}</strong> – {{if eq .Lang "de"}}der Plaintext-Anteil sollte sinnvollen Inhalt enthalten, nicht nur Leerzeichen oder einen Dummy-Text.{{else}}the plain text part should contain meaningful content, not just whitespace or a placeholder.{{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
                     <div>
-                      <strong>Betreff</strong> – Länge, übermäßige GROSSSCHREIBUNG und Ausrufezeichen-Ketten
-                      („!!!") erhöhen den Spam-Score.
+                      <strong>{{if eq .Lang "de"}}Bild/Text-Verhältnis{{else}}Image/Text Ratio{{end}}</strong> – {{if eq .Lang "de"}}zu viele Bilder und zu wenig Text sind ein klassisches Spam-Signal.{{else}}too many images and too little text is a classic spam signal.{{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
                     <div>
-                      <strong>Links, Tracking &amp; Shortener</strong> – URL-Verkürzer und auffällige
-                      Tracking-Links werden von Filtern kritisch gesehen; sie verschleiern das echte Ziel.
+                      <strong>{{if eq .Lang "de"}}HTML-Validität{{else}}HTML Validity{{end}}</strong> – {{if eq .Lang "de"}}unsauberes HTML und ungültige Tags können Darstellungsfehler verursachen und werden von Filtern abgewertet.{{else}}malformed HTML and invalid tags can cause rendering issues and are penalised by filters.{{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
                     <div>
-                      <strong>Newsletter-Header</strong> – bei Massen-/Marketing-Mails erwarten Provider
-                      einen <code>List-Unsubscribe</code>-Header (idealerweise mit One-Click). Fehlt er,
+                      <strong>{{if eq .Lang "de"}}Versteckter HTML-Text{{else}}Hidden HTML Text{{end}}</strong> – {{if eq .Lang "de"}}unsichtbarer Text (z.&nbsp;B. weiß auf weiß) ist ein typischer Spammer-Trick.{{else}}invisible text (e.g. white on white) is a typical spammer trick.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}Schädliches HTML{{else}}Harmful HTML{{end}}</strong> – {{if eq .Lang "de"}}erkennt <code>&lt;script&gt;</code>-Tags und Meta-Refresh-Weiterleitungen im E-Mail-HTML — beide werden bei Phishing eingesetzt und werden von den meisten Clients hart geblockt.{{else}}detects <code>&lt;script&gt;</code> tags and meta-refresh redirects in email HTML — both are used in phishing and are hard-blocked by most clients.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}Bild-Alt-Text{{else}}Image Alt Text{{end}}</strong> – {{if eq .Lang "de"}}Bilder ohne Alt-Attribute reduzieren die Barrierefreiheit und können einige Spam-Filter auslösen.{{else}}images missing alt attributes reduce accessibility and can trigger some spam filters.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-danger">{{if eq .Lang "de"}}Kritisch{{else}}Critical{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}Link-Domain-Mismatch{{else}}Link Domain Mismatch{{end}}</strong> – {{if eq .Lang "de"}}erkennt Anker, bei denen der sichtbare Text eine andere Domain zeigt als das href — ein klassisches Phishing-Muster.{{else}}detects anchors where the visible text shows one domain but the href points to another — a classic phishing pattern.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}Zu viele Links{{else}}Too Many Links{{end}}</strong> – {{if eq .Lang "de"}}mehr als 30 Links in einer Mail ist ein bekanntes Spam-Signal, das von SpamAssassin und Gmail genutzt wird.{{else}}>30 links in one email is a recognised spam signal used by SpamAssassin and Gmail.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}Tracking-Links &amp; URL-Shortener{{else}}Tracking Links &amp; URL Shorteners{{end}}</strong> – {{if eq .Lang "de"}}URL-Verkürzer und auffällige Tracking-Links verschleiern das echte Ziel und werden von Filtern kritisch gesehen.{{else}}URL shorteners and obvious tracking links obscure the real destination and are viewed critically by filters.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}Betreff{{else}}Subject{{end}}</strong> – {{if eq .Lang "de"}}Länge, übermäßige GROSSSCHREIBUNG und Ausrufezeichen-Ketten erhöhen den Spam-Score.{{else}}length, excessive CAPITALISATION and chains of exclamation marks raise the spam score.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
+                    <div>
+                      <strong>List-Unsubscribe</strong> – {{if eq .Lang "de"}}bei Massen-/Marketing-Mails erwarten Provider
+                      einen <code>List-Unsubscribe</code>-Header. Fehlt er,
                       drohen Spam-Einordnung und Beschwerden.
+                      {{else}}bulk/marketing mail providers expect a <code>List-Unsubscribe</code> header.
+                      Without it you risk spam classification and complaints.
+                      {{end}}
+                      <a href="https://datatracker.ietf.org/doc/html/rfc2369" target="_blank" rel="noopener">RFC 2369 ↗</a>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}One-Click Unsubscribe (RFC 8058){{else}}One-Click Unsubscribe (RFC 8058){{end}}</strong> – {{if eq .Lang "de"}}der <code>List-Unsubscribe-Post</code>-Header ermöglicht Ein-Klick-Abmeldung bei Gmail/Yahoo. Für Massenversender seit 2024 Pflicht.{{else}}the <code>List-Unsubscribe-Post</code> header enables one-click unsubscribe at Gmail/Yahoo. Required for bulk senders since 2024.{{end}}
                       <a href="https://datatracker.ietf.org/doc/html/rfc8058" target="_blank" rel="noopener">RFC 8058 ↗</a>
                     </div>
                   </li>
@@ -612,36 +905,97 @@
           <div class="accordion-item">
             <h3 class="accordion-header">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cd-headers">
-                <i class="bi bi-code-square text-secondary me-2"></i>Header &amp; Rohdaten
-                <span class="badge text-bg-light text-secondary ms-2">3 Checks</span>
+                <i class="bi bi-code-square text-secondary me-2"></i>{{if eq .Lang "de"}}Header &amp; Rohdaten{{else}}Headers &amp; Raw Data{{end}}
+                <span class="badge text-bg-light text-secondary ms-2">12 {{if eq .Lang "de"}}Checks{{else}}checks{{end}}</span>
               </button>
             </h3>
             <div id="cd-headers" class="accordion-collapse collapse" data-bs-parent="#mp-checks-detail-acc">
               <div class="accordion-body">
                 <p class="text-secondary small mb-3">
+                  {{if eq .Lang "de"}}
                   Die technischen Basis-Header. Fehlende oder unplausible Pflichtfelder deuten auf einen
                   fehlkonfigurierten Mailserver hin.
+                  {{else}}
+                  The technical base headers. Missing or implausible required fields point to a
+                  misconfigured mail server.
+                  {{end}}
                 </p>
                 <ul class="mp-check-ref list-unstyled mb-0">
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>Message-ID</strong> – jede Mail braucht eine eindeutige, gültige
+                      <strong>Message-ID</strong> – {{if eq .Lang "de"}}jede Mail braucht eine eindeutige, gültige
                       Message-ID. Fehlt sie, ist das ein deutliches Spam-Signal.
+                      {{else}}every mail needs a unique, valid Message-ID. Its absence is a clear spam signal.
+                      {{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-primary">Empfohlen</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>Date &amp; Date-Skew</strong> – das Sendedatum muss vorhanden und plausibel
+                      <strong>{{if eq .Lang "de"}}Message-ID-Format{{else}}Message-ID Format{{end}}</strong> – {{if eq .Lang "de"}}validiert das <code>&lt;id@domain&gt;</code>-Format. Eine falsch formatierte Message-ID wird von SpamAssassin markiert.{{else}}validates the <code>&lt;id@domain&gt;</code> format. An improperly formatted Message-ID is flagged by SpamAssassin.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>Date &amp; {{if eq .Lang "de"}}Date-Skew{{else}}Date Skew{{end}}</strong> – {{if eq .Lang "de"}}das Sendedatum muss vorhanden und plausibel
                       sein. Stark abweichende Zeitstempel deuten auf einen falsch konfigurierten Server hin.
+                      {{else}}the send date must be present and plausible. Significantly off timestamps point
+                      to a misconfigured server.
+                      {{end}}
                     </div>
                   </li>
                   <li>
-                    <span class="badge text-bg-warning">Wichtig</span>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
                     <div>
-                      <strong>Received-Chain</strong> – die Kette der durchlaufenen Server sollte
+                      <strong>{{if eq .Lang "de"}}Received-Chain{{else}}Received Chain{{end}}</strong> – {{if eq .Lang "de"}}die Kette der durchlaufenen Server sollte
                       lückenlos und konsistent sein und dokumentiert den Weg der Mail.
+                      {{else}}the chain of servers the mail passed through should be complete and consistent,
+                      documenting the mail's path.
+                      {{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>Reply-To</strong> – {{if eq .Lang "de"}}prüft, ob ein Reply-To-Header gesetzt ist und ob er sinnvoll ist.{{else}}checks whether a Reply-To header is set and whether it is sensible.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>Return-Path</strong> – {{if eq .Lang "de"}}prüft, ob der Return-Path gesetzt und korrekt formatiert ist.{{else}}checks whether the Return-Path is set and correctly formatted.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}No-Reply ohne Reply-To{{else}}No-Reply Without Reply-To{{end}}</strong> – {{if eq .Lang "de"}}wenn die From-Adresse eine No-Reply-Adresse ist, aber kein Reply-To gesetzt wurde, werden Antworten der Empfänger still verworfen.{{else}}when the From address is a no-reply address but no Reply-To is set, recipient replies are silently discarded.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-warning">{{if eq .Lang "de"}}Wichtig{{else}}Important{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}Fake-Reply-Prefix{{else}}Fake Reply Prefix{{end}}</strong> – {{if eq .Lang "de"}}erkennt Re:/Fwd:/Aw: im Betreff ohne entsprechenden In-Reply-To-Header — ein Manipulationstrick.{{else}}detects Re:/Fwd:/Aw: in Subject without a corresponding In-Reply-To header — a manipulation tactic.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}Body-Zeichensatz{{else}}Body Charset{{end}}</strong> – {{if eq .Lang "de"}}prüft, ob der Zeichensatz im Body-Teil korrekt deklariert und konsistent ist.{{else}}checks whether the charset in the body part is correctly declared and consistent.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>MIME Content-Type</strong> – {{if eq .Lang "de"}}prüft, ob der Content-Type-Header korrekt gesetzt ist.{{else}}checks whether the Content-Type header is correctly set.{{end}}
+                    </div>
+                  </li>
+                  <li>
+                    <span class="badge text-bg-primary">{{if eq .Lang "de"}}Empfohlen{{else}}Recommended{{end}}</span>
+                    <div>
+                      <strong>{{if eq .Lang "de"}}MIME-Boundary{{else}}MIME Boundary{{end}}</strong> – {{if eq .Lang "de"}}prüft die Korrektheit der MIME-Boundaries bei mehrteiligen Nachrichten.{{else}}checks the correctness of MIME boundaries in multipart messages.{{end}}
                     </div>
                   </li>
                 </ul>
@@ -652,8 +1006,14 @@
         </div>
 
         <p class="text-center text-secondary small mt-4 mb-0">
-          <i class="bi bi-sliders me-1"></i>Die mit <span class="badge text-bg-light text-secondary border">Opt-in</span>
+          <i class="bi bi-sliders me-1"></i>
+          {{if eq .Lang "de"}}
+          Die mit <span class="badge text-bg-light text-secondary border">Opt-in</span>
           markierten Checks aktivierst du selbst auf der <a href="/">Startseite</a> – informiert und jederzeit widerrufbar.
+          {{else}}
+          Checks marked <span class="badge text-bg-light text-secondary border">Opt-in</span>
+          are enabled by you on the <a href="/">start page</a> — informed consent, revocable at any time.
+          {{end}}
         </p>
 
       </div>
@@ -665,6 +1025,7 @@
         <div class="row align-items-center g-5">
           <div class="col-lg-6">
             <span class="mp-section-badge mb-3"><i class="bi bi-shield-lock me-1"></i>Privacy by Design</span>
+            {{if eq .Lang "de"}}
             <h2 class="fw-bold mb-3" style="font-size:1.65rem">Deine Testmails bleiben deine Sache</h2>
             <p class="text-secondary mb-4">
               sender.report ist als Wegwerf-Werkzeug gebaut: keine Konten, keine Profile,
@@ -679,23 +1040,39 @@
             <a href="/privacy" class="btn btn-outline-secondary btn-sm mt-2">
               <i class="bi bi-file-earmark-text me-1"></i>Zur Datenschutzerklärung
             </a>
+            {{else}}
+            <h2 class="fw-bold mb-3" style="font-size:1.65rem">Your test emails stay your business</h2>
+            <p class="text-secondary mb-4">
+              sender.report is built as a disposable tool: no accounts, no profiles,
+              no sharing. What you test disappears on its own.
+            </p>
+            <ul class="mp-privacy-list">
+              <li><i class="bi bi-link-45deg"></i><div><strong>The link is the key.</strong> Only someone who knows the mailbox URL can see its content — nothing is publicly discoverable.</div></li>
+              <li><i class="bi bi-trash3"></i><div><strong>Automatic deletion.</strong> Mailboxes and mails are completely removed once their validity period expires.</div></li>
+              <li><i class="bi bi-hdd-stack"></i><div><strong>No external services.</strong> All scripts, fonts and styles come from the local server — no CDNs, no trackers.</div></li>
+              <li><i class="bi bi-people"></i><div><strong>No sharing.</strong> Contents are not passed to any advertising or tracking third parties. Full stop.</div></li>
+            </ul>
+            <a href="/privacy" class="btn btn-outline-secondary btn-sm mt-2">
+              <i class="bi bi-file-earmark-text me-1"></i>{{if eq .Lang "de"}}Zur Datenschutzerklärung{{else}}Privacy Policy{{end}}
+            </a>
+            {{end}}
           </div>
           <div class="col-lg-6">
             <div class="mp-privacy-visual">
               <div class="mp-lifecycle">
                 <div class="mp-lifecycle-step">
                   <span class="mp-lifecycle-icon text-bg-primary"><i class="bi bi-envelope-arrow-down"></i></span>
-                  <div><strong>Mail empfangen</strong><span class="text-secondary small d-block">Analyse läuft sofort</span></div>
+                  <div><strong>{{if eq .Lang "de"}}Mail empfangen{{else}}Mail received{{end}}</strong><span class="text-secondary small d-block">{{if eq .Lang "de"}}Analyse läuft sofort{{else}}Analysis runs immediately{{end}}</span></div>
                 </div>
                 <div class="mp-lifecycle-line"></div>
                 <div class="mp-lifecycle-step">
                   <span class="mp-lifecycle-icon text-bg-info"><i class="bi bi-clipboard-data"></i></span>
-                  <div><strong>Report bereitgestellt</strong><span class="text-secondary small d-block">Nur über deinen Link erreichbar</span></div>
+                  <div><strong>{{if eq .Lang "de"}}Report bereitgestellt{{else}}Report ready{{end}}</strong><span class="text-secondary small d-block">{{if eq .Lang "de"}}Nur über deinen Link erreichbar{{else}}Accessible only via your link{{end}}</span></div>
                 </div>
                 <div class="mp-lifecycle-line"></div>
                 <div class="mp-lifecycle-step">
                   <span class="mp-lifecycle-icon text-bg-secondary"><i class="bi bi-fire"></i></span>
-                  <div><strong>Automatisch gelöscht</strong><span class="text-secondary small d-block">Wenn die Mailbox abläuft</span></div>
+                  <div><strong>{{if eq .Lang "de"}}Automatisch gelöscht{{else}}Automatically deleted{{end}}</strong><span class="text-secondary small d-block">{{if eq .Lang "de"}}Wenn die Mailbox abläuft{{else}}When the mailbox expires{{end}}</span></div>
                 </div>
               </div>
             </div>
@@ -708,76 +1085,122 @@
     <section class="mp-faq-section" id="faq">
       <div class="container-xl px-4 py-5 mp-home-container" style="max-width:760px">
         <div class="text-center mb-4">
-          <h2 class="fw-bold mb-2" style="font-size:1.65rem">Häufige Fragen</h2>
-          <p class="text-secondary mb-0">Kurz und ehrlich beantwortet.</p>
+          <h2 class="fw-bold mb-2" style="font-size:1.65rem">{{if eq .Lang "de"}}Häufige Fragen{{else}}Frequently Asked Questions{{end}}</h2>
+          <p class="text-secondary mb-0">{{if eq .Lang "de"}}Kurz und ehrlich beantwortet.{{else}}Short and honest answers.{{end}}</p>
         </div>
         <div class="accordion mp-faq" id="mp-faq">
           <div class="accordion-item">
             <h3 class="accordion-header">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
-                Brauche ich einen Account?
+                {{if eq .Lang "de"}}Brauche ich einen Account?{{else}}Do I need an account?{{end}}
               </button>
             </h3>
             <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
               <div class="accordion-body text-secondary">
+                {{if eq .Lang "de"}}
                 Nein. Es wird automatisch eine temporäre Mailbox erzeugt – ohne Registrierung,
                 ohne E-Mail-Adresse, ohne Passwort.
+                {{else}}
+                No. A temporary mailbox is created automatically — no registration,
+                no email address, no password.
+                {{end}}
               </div>
             </div>
           </div>
           <div class="accordion-item">
             <h3 class="accordion-header">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
-                Was passiert mit meinen Testmails?
+                {{if eq .Lang "de"}}Was passiert mit meinen Testmails?{{else}}What happens to my test emails?{{end}}
               </button>
             </h3>
             <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
               <div class="accordion-body text-secondary">
+                {{if eq .Lang "de"}}
                 Sie werden ausschließlich für die Analyse verarbeitet und nach Ablauf der
                 Mailbox automatisch und vollständig gelöscht. Es findet keine Weitergabe an
                 Dritte statt.
+                {{else}}
+                They are processed solely for analysis and automatically and completely deleted when
+                the mailbox expires. There is no sharing with third parties.
+                {{end}}
               </div>
             </div>
           </div>
           <div class="accordion-item">
             <h3 class="accordion-header">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
-                Wie lange ist eine Mailbox gültig?
+                {{if eq .Lang "de"}}Wie lange ist eine Mailbox gültig?{{else}}How long is a mailbox valid?{{end}}
               </button>
             </h3>
             <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
               <div class="accordion-body text-secondary">
+                {{if eq .Lang "de"}}
                 Standardmäßig 24 Stunden. In der Mailbox-Ansicht kannst du die Gültigkeit bei
                 Bedarf verlängern (bis zum vom Betreiber konfigurierten Maximum).
+                {{else}}
+                24 hours by default. In the mailbox view you can extend the validity period if needed
+                (up to the maximum configured by the operator).
+                {{end}}
               </div>
             </div>
           </div>
           <div class="accordion-item">
             <h3 class="accordion-header">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
-                Welche Prüfungen werden durchgeführt?
+                {{if eq .Lang "de"}}Welche Prüfungen werden durchgeführt?{{else}}What checks are performed?{{end}}
               </button>
             </h3>
             <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
               <div class="accordion-body text-secondary">
-                Über 50 Checks aus fünf Bereichen: Authentifizierung (SPF, DKIM, DMARC inkl.
-                Policy-Stärke, Schlüssellänge und Alignment), DNS &amp; Infrastruktur (PTR, HELO, TLS,
+                {{if eq .Lang "de"}}
+                68 Checks aus fünf Bereichen: Authentifizierung (SPF, DKIM, DMARC inkl.
+                Policy-Stärke, Schlüssellänge, Alignment und ARC), DNS &amp; Infrastruktur (PTR, HELO, TLS,
                 MX, MTA-STS, DNSSEC u.&nbsp;a.), Spam-Signale (SpamAssassin, Rspamd, DNSBL,
-                optional Domain-/Link-Blocklists), Format &amp; Inhalt sowie Header &amp; Rohdaten.
+                optional Domain-/Link-Blocklists und Broken Links), Format &amp; Inhalt sowie Header &amp; Rohdaten.
                 Das Ergebnis fasst ein Score von 0–10 zusammen.
+                {{else}}
+                68 checks across five areas: Authentication (SPF, DKIM, DMARC including policy
+                strength, key length, alignment and ARC), DNS &amp; Infrastructure (PTR, HELO, TLS,
+                MX, MTA-STS, DNSSEC etc.), Spam signals (SpamAssassin, Rspamd, DNSBL,
+                optional domain/link blocklists and broken links), Format &amp; Content, and Headers &amp; Raw data.
+                The result is summarised as a score from 0–10.
+                {{end}}
               </div>
             </div>
           </div>
           <div class="accordion-item">
             <h3 class="accordion-header">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
-                Kann ich sender.report selbst hosten?
+                {{if eq .Lang "de"}}Kann ich sender.report selbst hosten?{{else}}Can I self-host sender.report?{{end}}
               </button>
             </h3>
             <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
               <div class="accordion-body text-secondary">
+                {{if eq .Lang "de"}}
                 Ja. sender.report ist Open Source und läuft als einzelnes Docker-Image inklusive
                 Web-UI, SMTP-Empfang und Datenbank – komplett auf deiner eigenen Infrastruktur.
+                {{else}}
+                Yes. sender.report is open source and runs as a single Docker image including
+                Web UI, SMTP receiver and database — entirely on your own infrastructure.
+                {{end}}
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">
+                {{if eq .Lang "de"}}Was kann ich mit dem Mail-Simulator tun?{{else}}What can I do with the Mail Simulator?{{end}}
+              </button>
+            </h3>
+            <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
+              <div class="accordion-body text-secondary">
+                {{if eq .Lang "de"}}
+                Mit dem Simulator unter <a href="/simulate">/simulate</a> kannst du RFC-2822-Quelltext direkt bearbeiten
+                und live sehen, wie Änderungen den Score beeinflussen – ohne eine neue Testmail versenden zu müssen.
+                {{else}}
+                The simulator at <a href="/simulate">/simulate</a> lets you edit RFC 2822 source directly and see live how
+                changes affect the score — without having to send a new test email.
+                {{end}}
               </div>
             </div>
           </div>
@@ -785,7 +1208,7 @@
 
         <div class="text-center mt-5">
           <a href="/" class="btn btn-primary px-4">
-            <i class="bi bi-play-fill me-1"></i>Jetzt testen
+            <i class="bi bi-play-fill me-1"></i>{{if eq .Lang "de"}}Jetzt testen{{else}}Start testing now{{end}}
           </a>
         </div>
       </div>
