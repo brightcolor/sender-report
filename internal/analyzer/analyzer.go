@@ -544,7 +544,8 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	if in.SimulationMode {
 		simPlaceholder := "Im Simulator nicht ausgeführt – per ↻ einzeln abrufbar."
 		simGroupBIDs := []string{
-			"spf_strictness", "dmarc_policy",
+			// Note: spf, dmarc, spf_strictness, dmarc_policy are Group A (run above
+			// from Authentication-Results / parsed headers) — do NOT list them here.
 			"mx_records", "address_records", "dkim_keylength", "envelope_mx",
 			"mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa",
 			"ptr", "ptr_pattern", "link_blocklist", "rbl", "from_domain_rcv",
