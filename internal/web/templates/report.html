@@ -71,6 +71,11 @@
           </a>
         </li>
         <li class="nav-item">
+          <button id="mp-sim-btn" class="btn btn-sm btn-outline-secondary" style="display:none" type="button">
+            <i class="bi bi-pencil-square me-1"></i>{{if eq .Lang "de"}}Mail simulieren{{else}}Simulate mail{{end}}
+          </button>
+        </li>
+        <li class="nav-item">
           <button class="btn btn-success btn-sm" id="mp-pdf-open-btn" type="button"
                   data-bs-toggle="modal" data-bs-target="#mp-pdf-modal">
             <i class="bi bi-file-earmark-pdf me-1"></i>PDF
@@ -1294,6 +1299,18 @@ function showDecrypted(payload, secretToken) {
       window.__mpReport.score = payload.report.score;
     }
   }
+
+  // Show simulator button and wire it up once the source is available.
+  var simBtn = document.getElementById('mp-sim-btn');
+  if (simBtn && payload.raw_source && payload.raw_source !== '[encrypted]' && payload.raw_source !== '') {
+    simBtn.style.display = '';
+    simBtn.addEventListener('click', function() {
+      try { sessionStorage.setItem('sr:sim-source', payload.raw_source); } catch(_){}
+      try { sessionStorage.setItem('sr:sim-token', TOKEN); } catch(_){}
+      try { sessionStorage.setItem('sr:sim-score', String(payload.report ? payload.report.score || '' : '')); } catch(_){}
+      window.location.href = '/simulate';
+    });
+  }
 }
 
 // Kopiert den Wert eines Share-Felds und zeigt kurz ✓-Feedback.
@@ -2098,6 +2115,27 @@ function renderDecryptedReport(p) {
 
   window.addEventListener('beforeprint', expandAll);
   window.addEventListener('afterprint',  collapseAll);
+
+  // ── Simulator button for non-encrypted reports ────────────────────────────
+  // For encrypted reports the button is wired in showDecrypted() above.
+  // For non-encrypted reports the raw source is embedded in the page.
+  {{if not .Encrypted}}
+  (function() {
+    var simBtn = document.getElementById('mp-sim-btn');
+    var rawSource = {{jsonEncode .Message.RawSource}};
+    var mbToken = {{jsonEncode .Mailbox.Token}};
+    var score = {{printf "%f" .Report.Score}};
+    if (simBtn && rawSource && rawSource !== '') {
+      simBtn.style.display = '';
+      simBtn.addEventListener('click', function() {
+        try { sessionStorage.setItem('sr:sim-source', rawSource); } catch(_){}
+        try { sessionStorage.setItem('sr:sim-token', mbToken); } catch(_){}
+        try { sessionStorage.setItem('sr:sim-score', String(score)); } catch(_){}
+        window.location.href = '/simulate';
+      });
+    }
+  })();
+  {{end}}
 })();
 </script>
 

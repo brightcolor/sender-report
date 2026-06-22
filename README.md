@@ -50,6 +50,9 @@ small VPS.
   RAM during analysis.
 - **Live recheck** — fixed your DNS? Re-run individual checks or whole sections right in the
   report, without sending a new mail. The result is re-encrypted and stored.
+- **Mail Simulator (`/simulate`)** — paste RFC 2822 source into an editor and see live
+  check results on every keystroke (debounced). DNS checks run on-demand per button.
+  Open it directly from any report with one click.
 - **Client-side PDF export** — a client-presentable report, generated entirely in the browser
   (works for encrypted reports too).
 - **Opt-in reputation checks** — domain age (RDAP) and domain/link blocklists, enabled per

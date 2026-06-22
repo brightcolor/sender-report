@@ -58,6 +58,10 @@ type Input struct {
 	EnableDomainAge       bool
 	EnableDomainBlocklist bool
 	EnableBrokenLinks     bool
+	// SimulationMode skips Group B (DNS/network) and Group C (opt-in) checks,
+	// replacing them with placeholder info results. Group A content checks run
+	// as normal. Individual DNS checks can be triggered on-demand via recheck.
+	SimulationMode bool
 }
 
 type Engine struct {
@@ -502,62 +506,8 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	newsletterChecks := newsletterHeuristics(headers, parsedBody, mailType)
 	report.Checks = append(report.Checks, newsletterChecks...)
 
-	// ── Network-bound checks: executed concurrently ────────────────────────────
-	// Each does DNS / HTTP / TCP lookups and is independent of the others. Running
-	// them in parallel (each panic-isolated) keeps the report fast, and a single
-	// failing lookup can never abort the whole analysis.
-	netTasks := []checkTask{
-		{"mx_records", func(c context.Context) []model.CheckResult { return one(mxRecordCheck(c, primaryDomain)) }},
-		{"address_records", func(c context.Context) []model.CheckResult { return one(addressRecordCheck(c, primaryDomain)) }},
-		{"dkim_keylength", func(c context.Context) []model.CheckResult {
-			return one(dkimKeyLengthCheck(c, headers.Get("DKIM-Signature")))
-		}},
-		{"envelope_mx", func(c context.Context) []model.CheckResult {
-			return one(envelopeBounceMXCheck(c, firstNonEmpty(returnPathDomain, envelopeDomain)))
-		}},
-		{"mta_sts", func(c context.Context) []model.CheckResult { return one(mtaStsCheck(c, primaryDomain)) }},
-		{"tls_rpt", func(c context.Context) []model.CheckResult { return one(tlsRptCheck(c, primaryDomain)) }},
-		{"bimi", func(c context.Context) []model.CheckResult { return one(bimiCheck(c, primaryDomain)) }},
-		{"dnssec", func(c context.Context) []model.CheckResult { return one(dnssecCheck(c, primaryDomain)) }},
-		{"dane_tlsa", func(c context.Context) []model.CheckResult { return one(daneCheck(c, primaryDomain)) }},
-		{"ptr", func(c context.Context) []model.CheckResult {
-			return one(ptrPlausibility(c, in.Message.RemoteIP, in.Message.HELO))
-		}},
-		{"ptr_pattern", func(c context.Context) []model.CheckResult { return one(ptrPatternCheck(c, in.Message.RemoteIP)) }},
-		{"from_domain_rcv", func(c context.Context) []model.CheckResult {
-			return one(fromDomainReceiveCheck(c, fromDomain, firstNonEmpty(returnPathDomain, envelopeDomain)))
-		}},
-	}
-	if e.opts.EnableRBLChecks {
-		netTasks = append(netTasks, checkTask{"rbl", func(c context.Context) []model.CheckResult {
-			return rblHeuristics(c, in.Message.RemoteIP, e.opts.RBLProviders)
-		}})
-	}
-	if e.opts.EnableSpamAssassin && strings.TrimSpace(e.opts.SpamAssassinHostPort) != "" {
-		netTasks = append(netTasks, checkTask{"spamassassin", func(c context.Context) []model.CheckResult {
-			return one(spamAssassinHeuristic(c, e.opts.SpamAssassinHostPort, in.Message.RawSource))
-		}})
-	}
-	if e.opts.EnableRspamd && strings.TrimSpace(e.opts.RspamdURL) != "" {
-		netTasks = append(netTasks, checkTask{"rspamd", func(c context.Context) []model.CheckResult {
-			return one(rspamdHeuristic(c, e.opts.RspamdURL, e.opts.RspamdPassword, in.Message.RawSource))
-		}})
-	}
-	// Group C — opt-in third-party reputation checks (off by default). Enabled
-	// either globally by the operator (e.opts) or per-mailbox by the user (in.*).
-	if e.opts.EnableDomainAge || in.EnableDomainAge {
-		netTasks = append(netTasks, checkTask{"domain_age", func(c context.Context) []model.CheckResult { return one(domainAgeCheck(c, primaryDomain)) }})
-	}
-	if e.opts.EnableDomainBlocklist || in.EnableDomainBlocklist {
-		netTasks = append(netTasks, checkTask{"domain_blocklist", func(c context.Context) []model.CheckResult {
-			return one(domainBlocklistCheck(c, primaryDomain, e.opts.DomainBlocklistProviders))
-		}})
-		netTasks = append(netTasks, checkTask{"link_blocklist", func(c context.Context) []model.CheckResult {
-			return one(linkBlocklistCheck(c, report.Links, e.opts.DomainBlocklistProviders))
-		}})
-	}
-	report.Checks = append(report.Checks, runChecksConcurrently(ctx, netTasks, 8)...)
-
+	// enrichCtx is used both by the simulation placeholder path and the normal
+	// enrichment loop below, so it is declared before the network-check branch.
 	enrichCtx := checkContext{
 		Message:        in.Message,
 		SMTPDomain:     in.SMTPDomain,
@@ -580,6 +530,88 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 		ParsedBody:     parsedBody,
 		Links:          report.Links,
 	}
+
+	// ── Network-bound checks: executed concurrently ────────────────────────────
+	// Each does DNS / HTTP / TCP lookups and is independent of the others. Running
+	// them in parallel (each panic-isolated) keeps the report fast, and a single
+	// failing lookup can never abort the whole analysis.
+	//
+	// In SimulationMode all Group B/C network checks are replaced with placeholder
+	// info results; individual checks can be triggered on-demand via the recheck API.
+	if in.SimulationMode {
+		simPlaceholder := "Im Simulator nicht ausgeführt – per ↻ einzeln abrufbar."
+		simGroupBIDs := []string{
+			"spf", "spf_strictness", "dmarc", "dmarc_policy",
+			"mx_records", "address_records", "dkim_keylength", "envelope_mx",
+			"mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa",
+			"ptr", "ptr_pattern", "link_blocklist", "rbl", "from_domain_rcv",
+		}
+		// Group B placeholders (DNS/network)
+		for _, id := range simGroupBIDs {
+			ph := info(id, id, 0, simPlaceholder, "")
+			ph = enrichCheckResult(ph, enrichCtx)
+			report.Checks = append(report.Checks, ph)
+		}
+		// Group C placeholders (opt-in)
+		for _, id := range []string{"domain_age", "domain_blocklist", "broken_links"} {
+			ph := info(id, id, 0, simPlaceholder, "")
+			ph = enrichCheckResult(ph, enrichCtx)
+			report.Checks = append(report.Checks, ph)
+		}
+	} else {
+		netTasks := []checkTask{
+			{"mx_records", func(c context.Context) []model.CheckResult { return one(mxRecordCheck(c, primaryDomain)) }},
+			{"address_records", func(c context.Context) []model.CheckResult { return one(addressRecordCheck(c, primaryDomain)) }},
+			{"dkim_keylength", func(c context.Context) []model.CheckResult {
+				return one(dkimKeyLengthCheck(c, headers.Get("DKIM-Signature")))
+			}},
+			{"envelope_mx", func(c context.Context) []model.CheckResult {
+				return one(envelopeBounceMXCheck(c, firstNonEmpty(returnPathDomain, envelopeDomain)))
+			}},
+			{"mta_sts", func(c context.Context) []model.CheckResult { return one(mtaStsCheck(c, primaryDomain)) }},
+			{"tls_rpt", func(c context.Context) []model.CheckResult { return one(tlsRptCheck(c, primaryDomain)) }},
+			{"bimi", func(c context.Context) []model.CheckResult { return one(bimiCheck(c, primaryDomain)) }},
+			{"dnssec", func(c context.Context) []model.CheckResult { return one(dnssecCheck(c, primaryDomain)) }},
+			{"dane_tlsa", func(c context.Context) []model.CheckResult { return one(daneCheck(c, primaryDomain)) }},
+			{"ptr", func(c context.Context) []model.CheckResult {
+				return one(ptrPlausibility(c, in.Message.RemoteIP, in.Message.HELO))
+			}},
+			{"ptr_pattern", func(c context.Context) []model.CheckResult { return one(ptrPatternCheck(c, in.Message.RemoteIP)) }},
+			{"from_domain_rcv", func(c context.Context) []model.CheckResult {
+				return one(fromDomainReceiveCheck(c, fromDomain, firstNonEmpty(returnPathDomain, envelopeDomain)))
+			}},
+		}
+		if e.opts.EnableRBLChecks {
+			netTasks = append(netTasks, checkTask{"rbl", func(c context.Context) []model.CheckResult {
+				return rblHeuristics(c, in.Message.RemoteIP, e.opts.RBLProviders)
+			}})
+		}
+		if e.opts.EnableSpamAssassin && strings.TrimSpace(e.opts.SpamAssassinHostPort) != "" {
+			netTasks = append(netTasks, checkTask{"spamassassin", func(c context.Context) []model.CheckResult {
+				return one(spamAssassinHeuristic(c, e.opts.SpamAssassinHostPort, in.Message.RawSource))
+			}})
+		}
+		if e.opts.EnableRspamd && strings.TrimSpace(e.opts.RspamdURL) != "" {
+			netTasks = append(netTasks, checkTask{"rspamd", func(c context.Context) []model.CheckResult {
+				return one(rspamdHeuristic(c, e.opts.RspamdURL, e.opts.RspamdPassword, in.Message.RawSource))
+			}})
+		}
+		// Group C — opt-in third-party reputation checks (off by default). Enabled
+		// either globally by the operator (e.opts) or per-mailbox by the user (in.*).
+		if e.opts.EnableDomainAge || in.EnableDomainAge {
+			netTasks = append(netTasks, checkTask{"domain_age", func(c context.Context) []model.CheckResult { return one(domainAgeCheck(c, primaryDomain)) }})
+		}
+		if e.opts.EnableDomainBlocklist || in.EnableDomainBlocklist {
+			netTasks = append(netTasks, checkTask{"domain_blocklist", func(c context.Context) []model.CheckResult {
+				return one(domainBlocklistCheck(c, primaryDomain, e.opts.DomainBlocklistProviders))
+			}})
+			netTasks = append(netTasks, checkTask{"link_blocklist", func(c context.Context) []model.CheckResult {
+				return one(linkBlocklistCheck(c, report.Links, e.opts.DomainBlocklistProviders))
+			}})
+		}
+		report.Checks = append(report.Checks, runChecksConcurrently(ctx, netTasks, 8)...)
+	}
+
 	for i := range report.Checks {
 		report.Checks[i] = enrichCheckResult(report.Checks[i], enrichCtx)
 	}

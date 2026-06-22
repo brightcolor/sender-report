@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-06-22
+
+### Added
+- **Mail Simulator (`/simulate`)** — paste any RFC 2822 email source into the editor
+  and see live check results and score updates without sending a real test mail.
+  - Content/header checks (Group A) run on each keystroke, debounced 600 ms.
+  - DNS/network checks (Group B) and opt-in checks (Group C) are skipped by default
+    and shown as placeholder info results; each can be triggered individually via a
+    per-check "Jetzt prüfen / Run now" recheck button.
+  - Score bar with live progress, delta indicator vs. original report score.
+  - "Mail simulieren" button on the report page opens the simulator pre-loaded with
+    the current mail source (stored in sessionStorage).
+  - New API endpoints: `POST /api/simulate` and `POST /api/simulate/recheck/{token}`.
+  - `analyzer.Input.SimulationMode` flag skips Group B/C goroutine pool and injects
+    placeholder `info` results enriched through the normal enrichment pipeline.
+
 ## [1.20.0] - 2026-06-22
 
 ### Added

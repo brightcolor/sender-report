@@ -462,6 +462,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/payload/", s.payloadAPI)
 	mux.HandleFunc("/api/recheck/", s.recheckAPI)
 	mux.HandleFunc("/api/recheck-persist/", s.recheckPersistAPI)
+	mux.HandleFunc("/simulate", s.simulatePage)
+	mux.HandleFunc("/api/simulate", s.simulateAPI)
+	mux.HandleFunc("/api/simulate/recheck/", s.simulateRecheckAPI)
 	mux.HandleFunc("/mailbox/", s.mailboxPage)
 	mux.HandleFunc("/report/", s.reportPage)
 	mux.HandleFunc("/raw/", s.rawPage)
@@ -1228,6 +1231,110 @@ func (s *Server) recheckPersistAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, http.StatusOK, map[string]any{"status": "saved", "score": score, "score_label": label})
+}
+
+// simulatePage serves the /simulate UI page.
+func (s *Server) simulatePage(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/simulate" {
+		http.NotFound(w, r)
+		return
+	}
+	lang := string(i18n.Detect(r))
+	s.render(w, "simulate", map[string]any{
+		"Lang": lang,
+	})
+}
+
+// simulateAPI analyzes a raw RFC 2822 source in simulation mode (no persistence).
+// Route: POST /api/simulate
+func (s *Server) simulateAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonResp(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	ip := s.clientIP(r)
+	if s.payloadLimiter != nil && !s.payloadLimiter.Allow("simulate:"+ip) {
+		jsonResp(w, http.StatusTooManyRequests, map[string]string{"error": "rate limited"})
+		return
+	}
+	var body struct {
+		Token  string `json:"token"`
+		Source string `json:"source"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 512*1024)).Decode(&body); err != nil {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return
+	}
+	if _, err := s.store.GetMailboxByToken(r.Context(), body.Token); err != nil {
+		jsonResp(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+		return
+	}
+	if strings.TrimSpace(body.Source) == "" {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "source is empty"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	report := s.engine.Analyze(ctx, analyzer.Input{
+		Message:        model.Message{RawSource: body.Source},
+		SimulationMode: true,
+	})
+	jsonResp(w, http.StatusOK, report)
+}
+
+// simulateRecheckAPI re-runs a single DNS/external check for the simulator.
+// Route: POST /api/simulate/recheck/{token}
+func (s *Server) simulateRecheckAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonResp(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	ip := s.clientIP(r)
+	if s.payloadLimiter != nil && !s.payloadLimiter.Allow("recheck:"+ip) {
+		jsonResp(w, http.StatusTooManyRequests, map[string]string{"error": "rate limited"})
+		return
+	}
+	token := strings.TrimPrefix(r.URL.Path, "/api/simulate/recheck/")
+	if token == "" {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "missing token"})
+		return
+	}
+	if _, err := s.store.GetMailboxByToken(r.Context(), token); err != nil {
+		jsonResp(w, http.StatusNotFound, map[string]string{"error": "mailbox not found"})
+		return
+	}
+	var body struct {
+		CheckID        string   `json:"check_id"`
+		FromDomain     string   `json:"from_domain"`
+		EnvelopeDomain string   `json:"envelope_domain"`
+		ReturnDomain   string   `json:"return_domain"`
+		RemoteIP       string   `json:"remote_ip"`
+		HELO           string   `json:"helo"`
+		DKIMSignature  string   `json:"dkim_signature"`
+		Links          []string `json:"links"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&body); err != nil {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return
+	}
+	if !analyzer.Recheckable(body.CheckID) {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "check not re-checkable"})
+		return
+	}
+	res, ok := s.engine.Recheck(r.Context(), body.CheckID, analyzer.RecheckInput{
+		FromDomain:     body.FromDomain,
+		EnvelopeDomain: body.EnvelopeDomain,
+		ReturnDomain:   body.ReturnDomain,
+		RemoteIP:       body.RemoteIP,
+		HELO:           body.HELO,
+		DKIMSignature:  body.DKIMSignature,
+		Links:          body.Links,
+	})
+	if !ok {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "recheck failed"})
+		return
+	}
+	jsonResp(w, http.StatusOK, res)
 }
 
 // mailboxJSON returns the standard JSON payload for a newly created/found mailbox.
