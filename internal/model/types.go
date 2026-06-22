@@ -15,6 +15,7 @@ type Mailbox struct {
 	// the user on the home page; default false. See analyzer.Input.
 	CheckDomainAge       bool
 	CheckDomainBlocklist bool
+	CheckBrokenLinks     bool
 }
 
 type Message struct {

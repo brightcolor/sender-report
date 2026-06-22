@@ -80,6 +80,7 @@ func main() {
 		EnableDomainAge:          cfg.EnableDomainAge,
 		EnableDomainBlocklist:    cfg.EnableDomainBlocklist,
 		DomainBlocklistProviders: cfg.DomainBlocklistProviders,
+		EnableBrokenLinks:        cfg.EnableBrokenLinks,
 	})
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -222,6 +223,7 @@ func processInbound(ctx context.Context, st *store.Store, engine *analyzer.Engin
 		SMTPDomain:            cfg.SMTPDomain,
 		EnableDomainAge:       mb.CheckDomainAge,
 		EnableDomainBlocklist: mb.CheckDomainBlocklist,
+		EnableBrokenLinks:     mb.CheckBrokenLinks,
 	})
 
 	// Phase 3: if the mailbox has an E2E public key, encrypt all sensitive content

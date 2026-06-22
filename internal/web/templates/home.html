@@ -420,10 +420,44 @@
             </div>
           </div>
 
+          <!-- Broken-Link-Check -->
+          <div class="mp-adv-option border rounded-3 p-3 mb-2">
+            <div class="form-check form-switch d-flex align-items-start gap-2 m-0">
+              <input class="form-check-input flex-shrink-0 mt-1" type="checkbox" role="switch"
+                     id="adv-check-broken-links" style="cursor:pointer">
+              <label class="form-check-label" for="adv-check-broken-links" style="cursor:pointer">
+                <span class="fw-semibold d-block mb-1">
+                  {{if eq .Lang "de"}}Broken-Link-Check (HTTP){{else}}Broken Link Check (HTTP){{end}}
+                </span>
+                <span class="text-secondary small d-block mb-2">
+                  {{if eq .Lang "de"}}Prüft per HTTP-Anfrage, ob die Links in der Mail tatsächlich erreichbar
+                  sind (Status &lt; 400). Defekte Links schaden dem Vertrauen der Empfänger.{{else}}Checks via HTTP request whether the links in the email are actually reachable
+                  (status &lt; 400). Broken links damage recipient trust.{{end}}
+                </span>
+                <div class="alert alert-warning border d-flex gap-2 py-2 px-3 mb-2" role="alert" style="font-size:.8rem">
+                  <i class="bi bi-exclamation-triangle-fill text-warning mt-1 flex-shrink-0"></i>
+                  <div>
+                    {{if eq .Lang "de"}}<strong>Datenweitergabe:</strong> sender.report stellt HTTP-GET-Anfragen
+                    an jede in der Mail enthaltene URL. Die Zielserver erhalten dabei die Anfrage von
+                    sender.reports Server – sie können die URL-Struktur und den Zeitpunkt der Prüfung sehen.
+                    <strong>Es werden keine Mail-Inhalte übertragen.</strong> Aktiviere diesen Check nur,
+                    wenn du damit einverstanden bist.{{else}}<strong>Data disclosure:</strong> sender.report makes HTTP GET requests
+                    to every URL in the email. Destination servers will receive a request from
+                    sender.report's server — they can see the URL structure and the time of the check.
+                    <strong>No email content is transmitted.</strong> Enable this check only if you
+                    accept this.{{end}}
+                  </div>
+                </div>
+                <span class="d-flex flex-wrap gap-x-3 gap-y-1 small text-secondary">
+                  <span><i class="bi bi-hdd-network me-1"></i>{{if eq .Lang "de"}}Kontakt{{else}}Contacts{{end}}: <strong>{{if eq .Lang "de"}}alle verlinkten Server{{else}}all linked servers{{end}}</strong></span>
+                  <span><i class="bi bi-arrow-up-right me-1"></i>{{if eq .Lang "de"}}Übermittelt{{else}}Transmitted{{end}}: <strong>{{if eq .Lang "de"}}URL der jeweiligen Links{{else}}URL of each link{{end}}</strong></span>
+                </span>
+              </label>
+            </div>
+          </div>
+
           <p class="text-secondary mb-0" style="font-size:.78rem">
-            <i class="bi bi-shield-check me-1"></i>{{if eq .Lang "de"}}Es werden ausschließlich Domainnamen abgefragt –
-            keine E-Mail-Adressen, kein Mailinhalt, keine personenbezogenen Daten.{{else}}Only domain names are queried –
-            no email addresses, no mail content, no personal data.{{end}}
+            <i class="bi bi-shield-check me-1"></i>{{if eq .Lang "de"}}Domain-Alter und Blocklisten: Es werden ausschließlich Domainnamen abgefragt. Broken-Link-Check: Es werden HTTP-Anfragen an die verlinkten URLs gestellt (kein Mailinhalt). Keine E-Mail-Adressen, keine personenbezogenen Daten.{{else}}Domain Age and Blocklists: Only domain names are queried. Broken Link Check: HTTP requests are made to linked URLs (no mail content). No email addresses, no personal data.{{end}}
           </p>
 
         </div>

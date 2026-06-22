@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-06-22
+
+### Added
+- **New check `x_google_dkim`** — parses `x-google-dkim=` from Authentication-Results.
+  info if not present (only relevant for Google-routed mail); warn(-0.2) on fail.
+  Category: Authentifizierung, Importance: Optional.
+- **New check `too_many_links`** — >30 links in a mail is a recognised spam signal.
+  warn(-0.3); info for 5–30 links; silent below 5.
+  Category: Format und Inhalt, Importance: Empfohlen.
+- **New check `no_reply_reply_to`** — From is a no-reply address but Reply-To is absent.
+  warn(-0.2); recipients' replies go nowhere.
+  Category: Header und Rohdaten, Importance: Empfohlen.
+- **New check `link_domain_mismatch`** — link text shows a different domain than the
+  actual href target (phishing pattern). fail(-0.8) when detected; pass otherwise.
+  Uses the html.Node parser for accurate anchor text extraction.
+  Category: Format und Inhalt, Importance: Kritisch.
+- **Broken-Link-Check opt-in** — new optional check `broken_links` that makes HTTP GET
+  requests (max 50 unique URLs, 5 concurrent, 8 s timeout) to all links in the email.
+  Shown as info("disabled") when not enabled. Full opt-in stack:
+  - DB migration: `check_broken_links` column on mailboxes table.
+  - `model.Mailbox.CheckBrokenLinks`, `analyzer.Options/Input.EnableBrokenLinks`,
+    `config.EnableBrokenLinks` / env `ENABLE_BROKEN_LINKS`.
+  - `/api/mailboxes/{token}/checks` API accepts `check_broken_links`.
+  - Home-page advanced-checks modal: new checkbox with bilingual inline privacy
+    warning (explains that HTTP requests are made to destination servers).
+  - app.js: `broken_links` persisted in `sr:advchecks` localStorage, synced to server.
+
+### All new checks include full DE/EN enrichment (name, explanation, summary, recommendation).
+
 ## [1.19.1] - 2026-06-22
 
 ### Added

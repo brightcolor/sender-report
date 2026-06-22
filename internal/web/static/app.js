@@ -164,9 +164,9 @@ const ADV_CHECKS_KEY = 'sr:advchecks';
 function loadAdvChecks() {
   try {
     const o = JSON.parse(localStorage.getItem(ADV_CHECKS_KEY) || '{}');
-    return { domain_age: !!o.domain_age, domain_blocklist: !!o.domain_blocklist };
+    return { domain_age: !!o.domain_age, domain_blocklist: !!o.domain_blocklist, broken_links: !!o.broken_links };
   } catch (_) {
-    return { domain_age: false, domain_blocklist: false };
+    return { domain_age: false, domain_blocklist: false, broken_links: false };
   }
 }
 
@@ -178,7 +178,7 @@ function updateAdvChecksBadge() {
   const badge = document.getElementById('adv-checks-count');
   if (!badge) return;
   const prefs = loadAdvChecks();
-  const n = (prefs.domain_age ? 1 : 0) + (prefs.domain_blocklist ? 1 : 0);
+  const n = (prefs.domain_age ? 1 : 0) + (prefs.domain_blocklist ? 1 : 0) + (prefs.broken_links ? 1 : 0);
   if (n > 0) { badge.textContent = String(n); badge.classList.remove('d-none'); }
   else       { badge.classList.add('d-none'); }
 }
@@ -194,6 +194,7 @@ async function syncAdvChecks(token) {
       body: JSON.stringify({
         check_domain_age: prefs.domain_age,
         check_domain_blocklist: prefs.domain_blocklist,
+        check_broken_links: prefs.broken_links,
       }),
     });
   } catch (_) { /* best effort */ }
@@ -204,7 +205,7 @@ async function syncAdvChecks(token) {
 function applyAdvChecksOnReady(token) {
   updateAdvChecksBadge();
   const prefs = loadAdvChecks();
-  if (prefs.domain_age || prefs.domain_blocklist) {
+  if (prefs.domain_age || prefs.domain_blocklist || prefs.broken_links) {
     syncAdvChecks(token);
   }
 }
@@ -212,28 +213,31 @@ function applyAdvChecksOnReady(token) {
 function setupAdvChecksModal() {
   const modal = document.getElementById('mp-adv-checks-modal');
   if (!modal) return;
-  const ageSw   = document.getElementById('adv-check-domain-age');
-  const blSw    = document.getElementById('adv-check-domain-blocklist');
-  const saveBtn = document.getElementById('mp-adv-checks-save');
+  const ageSw     = document.getElementById('adv-check-domain-age');
+  const blSw      = document.getElementById('adv-check-domain-blocklist');
+  const blinkSw   = document.getElementById('adv-check-broken-links');
+  const saveBtn   = document.getElementById('mp-adv-checks-save');
 
   // Reflect stored prefs each time the modal opens.
   modal.addEventListener('show.bs.modal', () => {
     const prefs = loadAdvChecks();
-    if (ageSw) ageSw.checked = prefs.domain_age;
-    if (blSw)  blSw.checked  = prefs.domain_blocklist;
+    if (ageSw)   ageSw.checked   = prefs.domain_age;
+    if (blSw)    blSw.checked    = prefs.domain_blocklist;
+    if (blinkSw) blinkSw.checked = prefs.broken_links;
   });
 
   saveBtn?.addEventListener('click', async () => {
     const prefs = {
       domain_age:       !!ageSw?.checked,
       domain_blocklist: !!blSw?.checked,
+      broken_links:     !!blinkSw?.checked,
     };
     saveAdvChecks(prefs);
     updateAdvChecksBadge();
     await syncAdvChecks(document.getElementById('check-panel')?.dataset?.token);
     if (typeof bootstrap !== 'undefined') bootstrap.Modal.getInstance(modal)?.hide();
     setTransientStatus(
-      (prefs.domain_age || prefs.domain_blocklist)
+      (prefs.domain_age || prefs.domain_blocklist || prefs.broken_links)
         ? 'Erweiterte Checks für diese Mailbox aktiviert.'
         : 'Erweiterte Checks deaktiviert.',
       'ok');

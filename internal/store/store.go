@@ -72,7 +72,7 @@ func (s *Store) CountActiveMailboxes(ctx context.Context) (int, error) {
 // mailboxColumns is the canonical SELECT column list for a mailbox row; kept in
 // one place so scanMailbox always matches every query.
 const mailboxColumns = `id, token, address, COALESCE(public_key,''), created_ip, created_at, expires_at, last_seen_at,
-	COALESCE(check_domain_age,0), COALESCE(check_domain_blocklist,0)`
+	COALESCE(check_domain_age,0), COALESCE(check_domain_blocklist,0), COALESCE(check_broken_links,0)`
 
 func (s *Store) GetMailboxByToken(ctx context.Context, token string) (model.Mailbox, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT `+mailboxColumns+` FROM mailboxes WHERE token = ?`, token)
@@ -90,10 +90,10 @@ func (s *Store) GetMailboxByID(ctx context.Context, id int64) (model.Mailbox, er
 }
 
 // UpdateMailboxChecks persists the per-mailbox third-party check opt-ins.
-func (s *Store) UpdateMailboxChecks(ctx context.Context, token string, domainAge, domainBlocklist bool) error {
+func (s *Store) UpdateMailboxChecks(ctx context.Context, token string, domainAge, domainBlocklist, brokenLinks bool) error {
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE mailboxes SET check_domain_age = ?, check_domain_blocklist = ? WHERE token = ?`,
-		boolToInt(domainAge), boolToInt(domainBlocklist), token)
+		`UPDATE mailboxes SET check_domain_age = ?, check_domain_blocklist = ?, check_broken_links = ? WHERE token = ?`,
+		boolToInt(domainAge), boolToInt(domainBlocklist), boolToInt(brokenLinks), token)
 	if err != nil {
 		return err
 	}
@@ -113,8 +113,8 @@ func boolToInt(b bool) int {
 
 func scanMailbox(row *sql.Row) (model.Mailbox, error) {
 	var mb model.Mailbox
-	var checkAge, checkBlocklist int
-	if err := row.Scan(&mb.ID, &mb.Token, &mb.Address, &mb.PublicKey, &mb.CreatedIP, &mb.CreatedAt, &mb.ExpiresAt, &mb.LastSeenAt, &checkAge, &checkBlocklist); err != nil {
+	var checkAge, checkBlocklist, checkBroken int
+	if err := row.Scan(&mb.ID, &mb.Token, &mb.Address, &mb.PublicKey, &mb.CreatedIP, &mb.CreatedAt, &mb.ExpiresAt, &mb.LastSeenAt, &checkAge, &checkBlocklist, &checkBroken); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return model.Mailbox{}, ErrNotFound
 		}
@@ -122,6 +122,7 @@ func scanMailbox(row *sql.Row) (model.Mailbox, error) {
 	}
 	mb.CheckDomainAge = checkAge != 0
 	mb.CheckDomainBlocklist = checkBlocklist != 0
+	mb.CheckBrokenLinks = checkBroken != 0
 	return mb, nil
 }
 

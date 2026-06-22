@@ -695,6 +695,7 @@ func (s *Server) createMailbox(w http.ResponseWriter, r *http.Request) {
 			PublicKey            string `json:"public_key"` // hex-encoded 32-byte X25519 public key
 			CheckDomainAge       bool   `json:"check_domain_age"`
 			CheckDomainBlocklist bool   `json:"check_domain_blocklist"`
+			CheckBrokenLinks     bool   `json:"check_broken_links"`
 		}
 		if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err == nil &&
 			body.Identifier != "" && body.PublicKey != "" {
@@ -726,10 +727,11 @@ func (s *Server) createMailbox(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// Persist optional third-party check opt-ins chosen by the user.
-			if body.CheckDomainAge || body.CheckDomainBlocklist {
-				_ = s.store.UpdateMailboxChecks(ctx, mb.Token, body.CheckDomainAge, body.CheckDomainBlocklist)
+			if body.CheckDomainAge || body.CheckDomainBlocklist || body.CheckBrokenLinks {
+				_ = s.store.UpdateMailboxChecks(ctx, mb.Token, body.CheckDomainAge, body.CheckDomainBlocklist, body.CheckBrokenLinks)
 				mb.CheckDomainAge = body.CheckDomainAge
 				mb.CheckDomainBlocklist = body.CheckDomainBlocklist
+				mb.CheckBrokenLinks = body.CheckBrokenLinks
 			}
 			s.metrics.IncMailboxesCreated()
 			jsonResp(w, http.StatusCreated, s.mailboxJSON(mb, r))
@@ -1229,6 +1231,7 @@ func (s *Server) mailboxJSON(mb model.Mailbox, r *http.Request) map[string]any {
 		"events_path":            fmt.Sprintf("/api/mailboxes/%s/events", mb.Token),
 		"check_domain_age":       mb.CheckDomainAge,
 		"check_domain_blocklist": mb.CheckDomainBlocklist,
+		"check_broken_links":     mb.CheckBrokenLinks,
 	}
 }
 
@@ -1263,12 +1266,13 @@ func (s *Server) mailboxAPI(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			CheckDomainAge       bool `json:"check_domain_age"`
 			CheckDomainBlocklist bool `json:"check_domain_blocklist"`
+			CheckBrokenLinks     bool `json:"check_broken_links"`
 		}
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1024)).Decode(&body); err != nil {
 			jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
 			return
 		}
-		if err := s.store.UpdateMailboxChecks(ctx, token, body.CheckDomainAge, body.CheckDomainBlocklist); err != nil {
+		if err := s.store.UpdateMailboxChecks(ctx, token, body.CheckDomainAge, body.CheckDomainBlocklist, body.CheckBrokenLinks); err != nil {
 			status := http.StatusInternalServerError
 			if errors.Is(err, store.ErrNotFound) {
 				status = http.StatusNotFound
@@ -1280,6 +1284,7 @@ func (s *Server) mailboxAPI(w http.ResponseWriter, r *http.Request) {
 			"status":                 "updated",
 			"check_domain_age":       body.CheckDomainAge,
 			"check_domain_blocklist": body.CheckDomainBlocklist,
+			"check_broken_links":     body.CheckBrokenLinks,
 		})
 
 	case action == "delete" && r.Method == http.MethodPost:

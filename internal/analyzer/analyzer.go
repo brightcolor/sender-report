@@ -44,6 +44,7 @@ type Options struct {
 	EnableDomainAge          bool
 	EnableDomainBlocklist    bool
 	DomainBlocklistProviders []string
+	EnableBrokenLinks        bool
 }
 
 type Input struct {
@@ -56,6 +57,7 @@ type Input struct {
 	// it for their own mailbox.
 	EnableDomainAge       bool
 	EnableDomainBlocklist bool
+	EnableBrokenLinks     bool
 }
 
 type Engine struct {
@@ -452,6 +454,16 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 		report.Checks = append(report.Checks, info("arc", "ARC", 0.0, "Keine ARC-Header vorhanden.", "Nur relevant bei Weiterleitungs-Szenarien."))
 	}
 
+	xGoogleDKIM := parseAuthResult(authResults, "x-google-dkim")
+	switch xGoogleDKIM {
+	case "pass":
+		report.Checks = append(report.Checks, info("x_google_dkim", "X-Google-DKIM", 0.0, "Google-internes DKIM-Verification-Signal: pass.", ""))
+	case "fail":
+		report.Checks = append(report.Checks, warn("x_google_dkim", "X-Google-DKIM", -0.2, "Google-internes DKIM-Verification-Signal: fail – Mail könnte durch Googles Infrastruktur als verdächtig eingestuft werden.", "DKIM-Signatur korrekt konfigurieren."))
+	default:
+		report.Checks = append(report.Checks, info("x_google_dkim", "X-Google-DKIM", 0.0, "Kein X-Google-DKIM-Signal in Authentication-Results.", "Nur relevant bei Routing über Google-Infrastruktur."))
+	}
+
 	mimeFindings, parsedBody := inspectBody(headers, bodyBytes)
 	report.Checks = append(report.Checks, mimeFindings...)
 
@@ -461,6 +473,12 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	report.Checks = append(report.Checks, urlFindings...)
 	report.SpamSignals = append(report.SpamSignals, spamSignals...)
 	report.Checks = append(report.Checks, templateURLCheck(report.Links, mailType))
+	report.Checks = append(report.Checks, linkDomainMismatchCheck(parsedBody.HTML))
+	if e.opts.EnableBrokenLinks || in.EnableBrokenLinks {
+		report.Checks = append(report.Checks, brokenLinksCheck(ctx, report.Links))
+	} else {
+		report.Checks = append(report.Checks, info("broken_links", "Broken-Link-Check (HTTP)", 0.0, "Broken-Link-Check deaktiviert – Opt-in erforderlich.", ""))
+	}
 
 	htmlFindings := htmlHeuristics(parsedBody.HTML)
 	report.Checks = append(report.Checks, htmlFindings...)
@@ -1678,7 +1696,7 @@ func addBodyDetails(details map[string]string, ctx checkContext) {
 func checkCategory(id string) string {
 	switch id {
 	case "spf", "dkim", "dmarc", "spf_alignment", "dkim_alignment", "dmarc_alignment", "from_alignment", "return_path", "reply_to",
-		"dmarc_policy", "spf_strictness", "dkim_keylength", "display_name":
+		"dmarc_policy", "spf_strictness", "dkim_keylength", "display_name", "x_google_dkim":
 		return "Authentifizierung"
 	case "ptr", "helo", "mx_records", "address_records", "tls_transport", "received_chain", "rbl",
 		"ptr_pattern", "envelope_mx", "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa", "domain_age",
@@ -1687,7 +1705,7 @@ func checkCategory(id string) string {
 	case "spamassassin", "rspamd", "domain_blocklist", "link_blocklist":
 		return "Spamfilter"
 	case "mime_ct", "mime_boundary", "plain_text", "multipart_alt", "attachments", "image_text_ratio", "image_alt", "charset", "links", "shortener", "tracking_links", "html", "hidden_html", "html_validity", "harmful_html", "subject", "subject_exclaim", "subject_caps", "unicode", "list_unsub", "preheader",
-		"one_click_unsub", "template_urls":
+		"one_click_unsub", "template_urls", "too_many_links", "link_domain_mismatch", "broken_links":
 		return "Format und Inhalt"
 	default:
 		return "Header und Rohdaten"
@@ -1708,9 +1726,11 @@ func checkImportance(id string) string {
 		"list_unsub", "mime_parse", "mime_ct", "mime_boundary", "message_id", "received_chain",
 		"one_click_unsub", "harmful_html":
 		return "Wichtig"
-	case "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa", "arc", "preheader":
+	case "mta_sts", "tls_rpt", "bimi", "dnssec", "dane_tlsa", "arc", "preheader", "x_google_dkim":
 		return "Optional"
-	case "from_domain_rcv", "template_urls":
+	case "link_domain_mismatch":
+		return "Kritisch"
+	case "from_domain_rcv", "template_urls", "too_many_links", "broken_links", "no_reply_reply_to":
 		return "Empfohlen"
 	default:
 		return "Empfohlen"
@@ -1903,6 +1923,16 @@ func defaultExplanation(id string) string {
 		return "Einige Spam-Kampagnen stellen dem Betreff 'Re:' oder 'Fwd:' voran, um den Eindruck eines laufenden Gesprächs zu erwecken und Empfänger zum Öffnen zu verleiten. Eine echte Antwort oder Weiterleitung enthält immer In-Reply-To- und/oder References-Header mit der Message-ID der Originalnachricht. Fehlen diese Thread-Header, ist das Re:/Fwd:-Präfix mit hoher Wahrscheinlichkeit gefälscht – eine Technik, die viele Spamfilter explizit erkennen."
 	case "message_id_format":
 		return "Der Message-ID-Header muss dem RFC-5322-Format entsprechen: ein in spitze Klammern eingeschlossener Identifier mit einem lokalen Teil und einer Domain, getrennt durch '@', z. B. <unique-id@sending-domain.com>. Eine fehlerhafte Message-ID ist ein Spam-Signal, da seriöse Mailserver immer korrekt formatierte Message-IDs erzeugen. Manche Provider (Outlook, Gmail) nutzen das Format auch zur Erkennung von Bulk-Mail aus schlecht konfigurierten Systemen."
+	case "x_google_dkim":
+		return "X-Google-DKIM ist ein Google-internes DKIM-Verification-Signal, das in Authentication-Results eingefügt wird, wenn E-Mails über Google-Infrastruktur (Gmail, Google Workspace) geleitet werden. Ein fail-Wert bedeutet, dass Googles interne Verifikation die DKIM-Signatur abgelehnt hat – das kann die Zustellbarkeit an Gmail-Empfänger negativ beeinflussen, auch wenn der Standard-DKIM-Check bestanden wurde. Nur relevant für Mails, die über Google-Infrastruktur geroutet werden."
+	case "too_many_links":
+		return "Mehr als 30 Links in einer einzelnen E-Mail ist ein anerkanntes Spam-Signal, das von SpamAssassin, Rspamd und Googles Filtern ausgewertet wird. Legitime Mails benötigen selten Dutzende von Links. Kampagnen mit übermäßig vielen Links deuten oft auf Link-Farming, Tracker-Injection oder Template-Fehler hin."
+	case "no_reply_reply_to":
+		return "Wenn die From-Adresse eine Noreply-Adresse ist (noreply@, no-reply@, donotreply@) und kein Reply-To-Header gesetzt ist, landet jede Antwort ins Leere. Reply-To auf ein überwachtes Postfach zu setzen ist Best Practice und verbessert das Vertrauen der Empfänger. Einige Spamfilter bewerten Noreply-Absender ohne Reply-To negativer."
+	case "link_domain_mismatch":
+		return "Erkennt Links, bei denen der sichtbare Anzeigetext eine andere Domain zeigt als das tatsächliche href-Ziel – ein klassisches Phishing-Muster. Spamfilter und Anti-Phishing-Systeme prüfen dieses Muster explizit. Legitime Mails müssen Linkziele nie verschleiern."
+	case "broken_links":
+		return "Stellt HTTP-GET-Anfragen an alle Links in der Mail und prüft, ob sie mit einem Fehler-Status (4xx/5xx) antworten oder einen Timeout verursachen. Defekte Links schaden dem Vertrauen der Empfänger und können die Zustellbarkeit negativ beeinflussen. Datenschutzhinweis: Dieser Check kontaktiert externe Server. Die Zielserver erhalten eine HTTP-Anfrage von sender.reports Server. Nur aktivieren, wenn du damit einverstanden bist."
 	default:
 		return "Dieser Check bewertet ein technisches Signal, das Mailprovider für Zustellbarkeit, Missbrauchserkennung oder Nutzervertrauen heranziehen."
 	}
@@ -1954,13 +1984,18 @@ func checkNameEN(id string) string {
 		"list_unsub": "List-Unsubscribe", "preheader": "Preheader",
 		"date": "Date Header", "date_skew": "Date Plausibility",
 		"message_id": "Message-ID", "body_read": "Body Readability",
-		"from_domain_rcv":   "From Domain Reachability",
-		"one_click_unsub":   "One-Click Unsubscribe (RFC 8058)",
-		"template_urls":     "Template Placeholders in Links",
-		"image_alt":         "Image Alt Text",
-		"harmful_html":      "Harmful HTML Elements",
-		"fake_reply":        "Fake Reply Prefix",
-		"message_id_format": "Message-ID Format",
+		"from_domain_rcv":      "From Domain Reachability",
+		"one_click_unsub":      "One-Click Unsubscribe (RFC 8058)",
+		"template_urls":        "Template Placeholders in Links",
+		"image_alt":            "Image Alt Text",
+		"harmful_html":         "Harmful HTML Elements",
+		"fake_reply":           "Fake Reply Prefix",
+		"message_id_format":    "Message-ID Format",
+		"x_google_dkim":        "X-Google DKIM",
+		"too_many_links":       "Too Many Links",
+		"no_reply_reply_to":    "No-Reply Without Reply-To",
+		"link_domain_mismatch": "Link Domain Mismatch",
+		"broken_links":         "Broken Link Check (HTTP)",
 	}
 	if n, ok := names[id]; ok {
 		return n
@@ -2063,6 +2098,16 @@ func explanationEN(id string) string {
 		return "Email HTML is rendered in highly restricted environments: no JavaScript, no meta-redirects, no external CSS. Finding <script> tags or <meta http-equiv=refresh> redirects in an email body is a strong spam signal because no legitimate sender needs them — they are never executed by mail clients but are commonly used by malicious bulk mail to obscure intent. Most spam filters apply heavy penalties or reject such messages outright."
 	case "fake_reply":
 		return "Some spam campaigns prefix their subject line with 'Re:' or 'Fwd:' to make messages appear part of an existing conversation and trick recipients into opening them. A genuine reply or forward always includes In-Reply-To and/or References headers referencing the original message's Message-ID. When these thread headers are absent, the Re:/Fwd: prefix is almost certainly fabricated — a technique known as 'fake-reply spam'. Many spam filters detect this pattern."
+	case "x_google_dkim":
+		return "Google's internal DKIM verification signal added to Authentication-Results when email is routed through Google infrastructure (Gmail, Google Workspace). A 'fail' value means Google's internal verification rejected the DKIM signature, which can negatively impact deliverability to Gmail recipients even if the standard DKIM check passed."
+	case "too_many_links":
+		return "Having more than 30 links in a single email is a recognised spam signal used by SpamAssassin, Rspamd and Gmail's filters. Legitimate emails rarely need dozens of links. Bulk campaigns with excessive link counts often indicate link-farming, tracker injection or templating errors."
+	case "no_reply_reply_to":
+		return "When the From address is a no-reply address (noreply@, no-reply@, donotreply@) and no Reply-To header is set, any recipient who hits 'Reply' will compose a message that bounces or is silently discarded. Setting Reply-To to a monitored inbox is a best practice that improves recipient trust and ensures replies reach the right team. Some spam filters also rate no-reply senders without Reply-To more negatively."
+	case "link_domain_mismatch":
+		return "Detects links where the visible anchor text shows a different domain than the actual href target — a classic phishing technique. For example, showing 'paypal.com' as the link text while the href points to 'evil-example.com'. Spam filters and anti-phishing engines check for this pattern explicitly. Legitimate email never needs to disguise link destinations."
+	case "broken_links":
+		return "Makes HTTP GET requests to all links in the email and checks if they return an error status (4xx/5xx) or time out. Broken links damage recipient trust and can negatively affect deliverability — some spam filters flag emails with non-reachable links. Privacy note: this check contacts external servers. The destination servers will receive an HTTP request from sender.report's server. Enable only if you accept this."
 	default:
 		return "This check evaluates a technical signal that mail providers use for deliverability, abuse detection or user trust."
 	}
@@ -2276,6 +2321,39 @@ func summaryEN(id, status, deSummary string, ctx checkContext) string {
 		return "Message-ID has correct RFC format (<id@domain>)."
 	case "message_id_format:warn":
 		return deSummary // contains the actual value, language-neutral
+	// X-Google DKIM
+	case "x_google_dkim:pass", "x_google_dkim:info":
+		if strings.Contains(deSummary, "Kein X-Google-DKIM") {
+			return "No X-Google-DKIM signal (only relevant for Google-routed mail)."
+		}
+		return "Google internal DKIM signal: pass."
+	case "x_google_dkim:warn":
+		return "Google internal DKIM signal: fail – mail may be flagged by Google's infrastructure."
+	// Too many links
+	case "too_many_links:warn":
+		return strings.Replace(deSummary, "Links erkannt – mehr als 30 Links in einer Mail ist ein Spam-Signal.", " links detected – more than 30 links is a spam signal.", 1)
+	case "too_many_links:info":
+		return deSummary // contains count, language-neutral
+	// No-Reply without Reply-To
+	case "no_reply_reply_to:warn":
+		return "From is a no-reply address but Reply-To is missing — replies will be lost."
+	// Link domain mismatch
+	case "link_domain_mismatch:fail":
+		return strings.Replace(deSummary, "Link(s) mit irreführendem Anzeigetext erkannt: der sichtbare Domainname weicht vom tatsächlichen Ziel ab – klassisches Phishing-Muster.", " link(s) with misleading display text detected — visible domain does not match actual destination (phishing pattern).", 1)
+	case "link_domain_mismatch:pass":
+		return "No obvious link domain mismatches detected."
+	case "link_domain_mismatch:info":
+		return deSummary
+	// Broken links
+	case "broken_links:pass":
+		return strings.Replace(deSummary, "Alle ", "All ", 1)
+	case "broken_links:warn":
+		return deSummary // contains counts, language-neutral enough
+	case "broken_links:info":
+		if strings.Contains(deSummary, "deaktiviert") {
+			return "Broken link check disabled — opt-in required."
+		}
+		return deSummary
 	}
 	// For remaining dynamic summaries, return German (language-neutral content).
 	return ""
@@ -2362,6 +2440,22 @@ func recommendationEN(id, status string, ctx checkContext) string {
 	case "message_id_format":
 		if status == "warn" {
 			return fmt.Sprintf("Configure your mail server or sending software to generate a properly formatted Message-ID. Required format: <unique-id@%s>. The identifier before @ should be unique per message (e.g. a UUID or timestamp).", emptyFallback(ctx.FromDomain, "sending-domain.com"))
+		}
+	case "no_reply_reply_to":
+		if status == "warn" {
+			return "Set a Reply-To header pointing to a monitored inbox, e.g. Reply-To: support@your-domain.com. This ensures replies from recipients are routed correctly even though the From address is a no-reply address."
+		}
+	case "link_domain_mismatch":
+		if status == "fail" {
+			return "Ensure the visible link text always reflects the actual destination domain. Never display one domain while linking to another."
+		}
+	case "broken_links":
+		if status == "warn" {
+			return "Fix or remove the broken links. Test all links before sending a campaign."
+		}
+	case "too_many_links":
+		if status == "warn" {
+			return "Reduce the number of links in the email. More than 30 links is a recognised spam signal."
 		}
 	}
 	return ""
@@ -3009,6 +3103,11 @@ func evaluateURLs(links []string) ([]model.CheckResult, []string) {
 	if tracking > 0 {
 		checks = append(checks, info("tracking_links", "Tracking-Links", 0.0, fmt.Sprintf("%d Link(s) mit Tracking-Merkmalen.", tracking), "Tracking-Parameter minimieren erhöht Vertrauen."))
 	}
+	if len(links) > 30 {
+		checks = append(checks, warn("too_many_links", "Zu viele Links", -0.3, fmt.Sprintf("%d Links erkannt – mehr als 30 Links in einer Mail ist ein Spam-Signal.", len(links)), "Anzahl der Links reduzieren."))
+	} else if len(links) >= 5 {
+		checks = append(checks, info("too_many_links", "Zu viele Links", 0.0, fmt.Sprintf("%d Links vorhanden.", len(links)), ""))
+	}
 	return checks, spamSignals
 }
 
@@ -3045,6 +3144,153 @@ func templateURLCheck(links []string, mailType string) model.CheckResult {
 			"Bulk-Mail-Template vor dem Versand auf nicht ersetzte Variablen prüfen. ESP-Merge-Tags vollständig befüllen.")
 	}
 	return pass("template_urls", "Template-Platzhalter in Links", 0.0, "Keine offensichtlichen Template-Platzhalter in Links gefunden.", "")
+}
+
+func getOrgDomain(host string) string {
+	host = strings.ToLower(strings.TrimSpace(host))
+	host = strings.Split(host, ":")[0] // remove port
+	etld, err := publicsuffix.EffectiveTLDPlusOne(host)
+	if err != nil {
+		return host
+	}
+	return etld
+}
+
+func linkDomainMismatchCheck(htmlBody string) model.CheckResult {
+	if strings.TrimSpace(htmlBody) == "" {
+		return info("link_domain_mismatch", "Link-Domain-Mismatch", 0.0, "Kein HTML-Body – Mismatch-Check nicht anwendbar.", "")
+	}
+	doc, err := html.Parse(strings.NewReader(htmlBody))
+	if err != nil {
+		return info("link_domain_mismatch", "Link-Domain-Mismatch", 0.0, "HTML nicht parsebar.", "")
+	}
+	mismatches := 0
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "a" {
+			var href string
+			for _, attr := range n.Attr {
+				if attr.Key == "href" {
+					href = attr.Val
+					break
+				}
+			}
+			if href != "" && (strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://")) {
+				hrefURL, err := url.Parse(href)
+				if err == nil && hrefURL.Host != "" {
+					var textBuf strings.Builder
+					var getText func(*html.Node)
+					getText = func(tn *html.Node) {
+						if tn.Type == html.TextNode {
+							textBuf.WriteString(tn.Data)
+						}
+						for c := tn.FirstChild; c != nil; c = c.NextSibling {
+							getText(c)
+						}
+					}
+					getText(n)
+					linkText := strings.TrimSpace(textBuf.String())
+					if strings.Contains(linkText, ".") && !strings.Contains(linkText, " ") {
+						textURL, terr := url.Parse("https://" + strings.TrimPrefix(strings.TrimPrefix(linkText, "https://"), "http://"))
+						if terr == nil && textURL.Host != "" {
+							hrefOrg := getOrgDomain(hrefURL.Host)
+							textOrg := getOrgDomain(textURL.Host)
+							if hrefOrg != "" && textOrg != "" && hrefOrg != textOrg {
+								mismatches++
+							}
+						}
+					}
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	if mismatches > 0 {
+		return fail("link_domain_mismatch", "Link-Domain-Mismatch", -0.8,
+			fmt.Sprintf("%d Link(s) mit irreführendem Anzeigetext erkannt: der sichtbare Domainname weicht vom tatsächlichen Ziel ab – klassisches Phishing-Muster.", mismatches),
+			"Sicherstellen, dass der Linktext die tatsächliche Zieldomain widerspiegelt.")
+	}
+	return pass("link_domain_mismatch", "Link-Domain-Mismatch", 0.0, "Keine offensichtlichen Domain-Mismatches in Links erkannt.", "")
+}
+
+func brokenLinksCheck(ctx context.Context, links []string) model.CheckResult {
+	if len(links) == 0 {
+		return info("broken_links", "Broken-Link-Check (HTTP)", 0.0, "Keine Links in der Mail.", "")
+	}
+	client := &http.Client{
+		Timeout: 8 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
+	type result struct {
+		url    string
+		ok     bool
+		status int
+	}
+	results := make([]result, 0, len(links))
+	mu := sync.Mutex{}
+	sem := make(chan struct{}, 5)
+	var wg sync.WaitGroup
+	seen := map[string]struct{}{}
+	unique := make([]string, 0, len(links))
+	for _, l := range links {
+		if _, ok := seen[l]; !ok && (strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://")) {
+			seen[l] = struct{}{}
+			unique = append(unique, l)
+		}
+	}
+	for i, link := range unique {
+		if i >= 50 {
+			break
+		}
+		wg.Add(1)
+		go func(u string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+			if err != nil {
+				mu.Lock()
+				results = append(results, result{u, false, 0})
+				mu.Unlock()
+				return
+			}
+			req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; sender.report link-check/1.0)")
+			resp, err := client.Do(req)
+			if err != nil {
+				mu.Lock()
+				results = append(results, result{u, false, 0})
+				mu.Unlock()
+				return
+			}
+			_ = resp.Body.Close()
+			ok := resp.StatusCode < 400
+			mu.Lock()
+			results = append(results, result{u, ok, resp.StatusCode})
+			mu.Unlock()
+		}(link)
+	}
+	wg.Wait()
+	broken := 0
+	for _, r := range results {
+		if !r.ok {
+			broken++
+		}
+	}
+	total := len(results)
+	if broken == 0 {
+		return pass("broken_links", "Broken-Link-Check (HTTP)", 0.0, fmt.Sprintf("Alle %d geprüften Links erreichbar.", total), "")
+	}
+	return warn("broken_links", "Broken-Link-Check (HTTP)", -0.4*float64(broken)/float64(total+1),
+		fmt.Sprintf("%d von %d Links nicht erreichbar (HTTP-Fehler oder Timeout).", broken, total),
+		"Defekte Links aus der Mail entfernen oder korrigieren.")
 }
 
 func htmlHeuristics(htmlBody string) []model.CheckResult {
@@ -3150,6 +3396,14 @@ func headerHeuristics(headers mail.Header) ([]model.CheckResult, []string) {
 				break
 			}
 		}
+	}
+	fromAddr := strings.ToLower(headers.Get("From"))
+	isNoReply := strings.Contains(fromAddr, "noreply") || strings.Contains(fromAddr, "no-reply") ||
+		strings.Contains(fromAddr, "donotreply") || strings.Contains(fromAddr, "do-not-reply")
+	if isNoReply && strings.TrimSpace(headers.Get("Reply-To")) == "" {
+		checks = append(checks, warn("no_reply_reply_to", "Noreply ohne Reply-To", -0.2,
+			"From-Adresse ist eine Noreply-Adresse, aber Reply-To fehlt. Antworten landen ins Leere.",
+			"Reply-To-Header auf eine funktionierende Adresse setzen, z. B. support@domain.com."))
 	}
 	return checks, warnings
 }

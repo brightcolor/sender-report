@@ -37,6 +37,7 @@ type Config struct {
 	EnableDomainAge          bool
 	EnableDomainBlocklist    bool
 	DomainBlocklistProviders []string
+	EnableBrokenLinks        bool
 	EnableSpamAssassin       bool
 	SpamAssassinHostPort     string
 	EnableRspamd             bool
@@ -81,6 +82,7 @@ func Load() (Config, error) {
 		EnableDomainAge:          getEnvBool("ENABLE_DOMAIN_AGE", false),
 		EnableDomainBlocklist:    getEnvBool("ENABLE_DOMAIN_BLOCKLIST", false),
 		DomainBlocklistProviders: splitCSV(getEnv("DOMAIN_BLOCKLIST_PROVIDERS", "dbl.spamhaus.org,multi.uribl.com")),
+		EnableBrokenLinks:        getEnvBool("ENABLE_BROKEN_LINKS", false),
 		EnableSpamAssassin:       getEnvBool("ENABLE_SPAMASSASSIN", false),
 		SpamAssassinHostPort:     getEnv("SPAMASSASSIN_HOSTPORT", "spamd:783"),
 		EnableRspamd:             getEnvBool("ENABLE_RSPAMD", false),

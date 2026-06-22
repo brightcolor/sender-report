@@ -103,6 +103,7 @@ CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at);
 	// enables them explicitly and informed on the home page.
 	_, _ = db.Exec(`ALTER TABLE mailboxes ADD COLUMN check_domain_age INTEGER NOT NULL DEFAULT 0`)
 	_, _ = db.Exec(`ALTER TABLE mailboxes ADD COLUMN check_domain_blocklist INTEGER NOT NULL DEFAULT 0`)
+	_, _ = db.Exec(`ALTER TABLE mailboxes ADD COLUMN check_broken_links INTEGER NOT NULL DEFAULT 0`)
 
 	// Phase-5 migration: cumulative counters that survive cleanup and expiry.
 	// Unlike COUNT(*) over the live tables (which shrinks when rows are deleted),
