@@ -1,0 +1,47 @@
+{
+  "providers": [
+    {
+      "name": "Gmail",
+      "imap": "imap.gmail.com:993",
+      "accounts": [
+        { "user": "seedtest1@gmail.com", "pass": "app-password-here" },
+        { "user": "seedtest2@gmail.com", "pass": "app-password-here" }
+      ]
+    },
+    {
+      "name": "Outlook",
+      "imap": "outlook.office365.com:993",
+      "accounts": [
+        { "user": "seedtest@outlook.com", "pass": "app-password-here" }
+      ]
+    },
+    {
+      "name": "GMX",
+      "imap": "imap.gmx.net:993",
+      "accounts": [
+        { "user": "seedtest@gmx.de", "pass": "password-here" }
+      ]
+    },
+    {
+      "name": "web.de",
+      "imap": "imap.web.de:993",
+      "accounts": [
+        { "user": "seedtest@web.de", "pass": "password-here" }
+      ]
+    },
+    {
+      "name": "T-Online",
+      "imap": "secureimap.t-online.de:993",
+      "accounts": [
+        { "user": "seedtest@t-online.de", "pass": "password-here" }
+      ]
+    },
+    {
+      "name": "Yahoo",
+      "imap": "imap.mail.yahoo.com:993",
+      "accounts": [
+        { "user": "seedtest@yahoo.com", "pass": "app-password-here" }
+      ]
+    }
+  ]
+}

@@ -197,6 +197,18 @@
               </button>
             </div>
 
+            {{if .EnableInboxPlacement}}
+            <!-- Inbox Placement Test -->
+            <div id="ipt-row" class="text-center mb-2 d-none">
+              <button type="button" id="ipt-open-btn"
+                      class="btn btn-link btn-sm text-secondary text-decoration-none p-0"
+                      data-bs-toggle="modal" data-bs-target="#mp-ipt-modal">
+                <i class="bi bi-inbox me-1"></i>
+                {{if eq .Lang "en"}}Inbox Placement Test{{else}}Inbox Placement Test{{end}}
+              </button>
+            </div>
+            {{end}}
+
             <!-- Dezenter Einstieg zu den optionalen Reputations-Checks -->
             <div id="adv-checks-row" class="text-center mb-3">
               <button type="button" id="adv-checks-btn"
@@ -470,6 +482,254 @@
       </div>
     </div>
   </div>
+
+{{if .EnableInboxPlacement}}
+  <!-- ── Inbox Placement Test Modal ──────────────────────────────────────── -->
+  <div class="modal fade" id="mp-ipt-modal" tabindex="-1" aria-labelledby="mp-ipt-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="mp-ipt-label">
+            <i class="bi bi-inbox me-2"></i>
+            {{if eq .Lang "en"}}Inbox Placement Test{{else}}Inbox Placement Test{{end}}
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+
+          <!-- Step 1: Provider selection -->
+          <div id="ipt-step-select">
+            <p class="text-secondary small mb-3">
+              {{if eq .Lang "en"}}
+              Select which providers to test. Your mail will be sent directly to these seed accounts — no relay, no modification. A unique token must appear in the subject line.
+              {{else}}
+              Wähle die Anbieter, bei denen getestet werden soll. Deine Mail wird direkt an diese Seed-Konten gesendet – kein Relay, keine Veränderung. Ein einzigartiger Token muss im Betreff stehen.
+              {{end}}
+            </p>
+            <div class="alert alert-warning py-2 small mb-3">
+              <i class="bi bi-shield-exclamation me-1"></i>
+              {{if eq .Lang "en"}}
+              <strong>Privacy:</strong> Your mail content will be received by operator-controlled seed accounts at the selected providers.
+              {{else}}
+              <strong>Datenschutz:</strong> Dein Mail-Inhalt wird von Seed-Konten empfangen, die vom Betreiber kontrolliert werden (ausgewählte Anbieter).
+              {{end}}
+            </div>
+            <div id="ipt-provider-list" class="d-flex flex-wrap gap-2 mb-3">
+              {{range .IPTProviderNames}}
+              <div class="form-check form-check-inline">
+                <input class="form-check-input ipt-provider-cb" type="checkbox" id="ipt-cb-{{.}}" value="{{.}}" checked>
+                <label class="form-check-label" for="ipt-cb-{{.}}">{{.}}</label>
+              </div>
+              {{end}}
+            </div>
+            <button id="ipt-start-btn" class="btn btn-info text-white w-100" type="button">
+              <i class="bi bi-play-fill me-1"></i>
+              {{if eq .Lang "en"}}Start test{{else}}Test starten{{end}}
+            </button>
+          </div>
+
+          <!-- Step 2: Send instructions -->
+          <div id="ipt-step-send" class="d-none">
+            <div class="alert alert-info py-2 mb-3">
+              <strong>
+                {{if eq .Lang "en"}}Add this token to your subject line:{{else}}Füge diesen Token in den Betreff ein:{{end}}
+              </strong><br>
+              <code id="ipt-subject-tag" class="fs-6 user-select-all"></code>
+            </div>
+            <p class="small text-secondary mb-2">
+              {{if eq .Lang "en"}}Send your test mail to these addresses:{{else}}Sende deine Testmail an diese Adressen:{{end}}
+            </p>
+            <div id="ipt-seed-list"></div>
+            <div class="text-secondary small mt-3">
+              <i class="bi bi-clock me-1"></i>
+              {{if eq .Lang "en"}}Waiting for delivery (up to 10 minutes)…{{else}}Warte auf Zustellung (bis zu 10 Minuten)…{{end}}
+            </div>
+          </div>
+
+          <!-- Step 3: Results -->
+          <div id="ipt-step-results" class="d-none">
+            <div id="ipt-result-list"></div>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="ipt-close-btn">
+            {{if eq .Lang "en"}}Close{{else}}Schließen{{end}}
+          </button>
+          <button type="button" class="btn btn-outline-secondary d-none" id="ipt-reset-btn">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>
+            {{if eq .Lang "en"}}New test{{else}}Neuer Test{{end}}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    var LANG = {{.Lang | jsonEncode}};
+    var IPT_PROVIDERS = {{.IPTProviderNames | jsonEncode}};
+    var iptToken = '';
+    var iptPtToken = '';
+    var iptMailboxToken = '';
+    var iptSSE = null;
+
+    function iptMailboxTok() {
+      var panel = document.getElementById('check-panel');
+      return (panel && panel.dataset.token) ? panel.dataset.token : '';
+    }
+
+    // Show IPT button once a mailbox token is available
+    function maybeShowIptRow() {
+      var tok = iptMailboxTok();
+      var row = document.getElementById('ipt-row');
+      if (row) row.classList.toggle('d-none', !tok);
+    }
+
+    // Observe data-token attribute changes on check-panel
+    var checkPanel = document.getElementById('check-panel');
+    if (checkPanel) {
+      new MutationObserver(maybeShowIptRow).observe(checkPanel, {attributes: true, attributeFilter: ['data-token']});
+      maybeShowIptRow();
+    }
+
+    function esc(s) {
+      return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function copyText(text) {
+      try { navigator.clipboard.writeText(text); } catch(_) {}
+    }
+
+    function showStep(name) {
+      ['ipt-step-select','ipt-step-send','ipt-step-results'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.classList.toggle('d-none', id !== 'ipt-step-' + name);
+      });
+      var resetBtn = document.getElementById('ipt-reset-btn');
+      if (resetBtn) resetBtn.classList.toggle('d-none', name === 'select');
+    }
+
+    function renderSeedList(seeds) {
+      var html = '';
+      (seeds||[]).forEach(function(s) {
+        html += '<div class="d-flex align-items-center gap-2 p-2 border rounded mb-2 ipt-seed-row">' +
+          '<span class="fw-semibold">' + esc(s.provider) + '</span>' +
+          '<code class="text-secondary small flex-grow-1">' + esc(s.address) + '</code>' +
+          '<button class="btn btn-outline-secondary btn-sm py-0" onclick="(function(b){try{navigator.clipboard.writeText(b.closest(\'.ipt-seed-row\').querySelector(\'code\').textContent);}catch(_){}b.innerHTML=\'<i class=\\\"bi bi-check2\\\"></i>\';setTimeout(function(){b.innerHTML=\'<i class=\\\"bi bi-clipboard\\\"></i>\';},1200);})(this)">' +
+          '<i class="bi bi-clipboard"></i></button>' +
+          '<span class="badge bg-warning text-dark ipt-badge" data-provider="' + esc(s.provider) + '">' +
+          (LANG==='en'?'Pending':'Ausstehend') + '</span>' +
+          '</div>';
+      });
+      var el = document.getElementById('ipt-seed-list');
+      if (el) el.innerHTML = html;
+    }
+
+    function updateBadge(provider, status) {
+      var badges = document.querySelectorAll('.ipt-badge[data-provider="'+provider+'"]');
+      var label = status === 'inbox' ? (LANG==='en'?'Inbox':'Inbox') :
+                  status === 'spam'  ? 'Spam' :
+                  status === 'timeout' ? (LANG==='en'?'Not arrived':'Nicht angekommen') :
+                  (LANG==='en'?'Pending':'Ausstehend');
+      var cls = status === 'inbox'   ? 'bg-success' :
+                status === 'spam'    ? 'bg-danger' :
+                status === 'timeout' ? 'bg-secondary' : 'bg-warning text-dark';
+      badges.forEach(function(b) {
+        b.className = 'badge ipt-badge ' + cls;
+        if (status === 'inbox' || status === 'spam' || status === 'timeout') b.classList.remove('text-dark');
+        b.textContent = label;
+      });
+    }
+
+    function handleIPTEvent(data) {
+      if (!data) return;
+      (data.Results || []).forEach(function(r) {
+        updateBadge(r.provider, r.status);
+      });
+    }
+
+    function startSSE(mailboxToken, ptToken) {
+      if (iptSSE) { iptSSE.close(); iptSSE = null; }
+      iptSSE = new EventSource('/api/mailboxes/' + mailboxToken + '/ipt/' + ptToken + '/events');
+      iptSSE.addEventListener('ipt', function(e) {
+        try { handleIPTEvent(JSON.parse(e.data)); } catch(_) {}
+      });
+      iptSSE.addEventListener('done', function() {
+        if (iptSSE) { iptSSE.close(); iptSSE = null; }
+        showStep('results');
+        renderResults();
+      });
+    }
+
+    function renderResults() {
+      var html = '<p class="fw-semibold mb-2">' + (LANG==='en'?'Results:':'Ergebnis:') + '</p>';
+      var seedList = document.getElementById('ipt-seed-list');
+      if (seedList) {
+        var rows = seedList.querySelectorAll('.ipt-seed-row');
+        rows.forEach(function(row) {
+          var provider = row.querySelector('.fw-semibold')?.textContent || '';
+          var address = row.querySelector('code')?.textContent || '';
+          var badge = row.querySelector('.ipt-badge');
+          var status = badge ? badge.textContent : '?';
+          var badgeCls = badge ? badge.className.replace('ipt-badge','').trim() : 'badge bg-secondary';
+          html += '<div class="d-flex align-items-center gap-2 p-2 border rounded mb-2">' +
+            '<span class="fw-semibold">' + esc(provider) + '</span>' +
+            '<code class="text-secondary small flex-grow-1">' + esc(address) + '</code>' +
+            '<span class="badge ' + badgeCls + '">' + esc(status) + '</span></div>';
+        });
+      }
+      var el = document.getElementById('ipt-result-list');
+      if (el) el.innerHTML = html;
+    }
+
+    var startBtn = document.getElementById('ipt-start-btn');
+    if (startBtn) {
+      startBtn.addEventListener('click', async function() {
+        var mailboxToken = iptMailboxTok();
+        if (!mailboxToken) return;
+        var selected = Array.from(document.querySelectorAll('.ipt-provider-cb:checked')).map(function(cb){ return cb.value; });
+        if (!selected.length) return;
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + (LANG==='en'?'Starting…':'Startet…');
+        try {
+          var res = await fetch('/api/mailboxes/' + mailboxToken + '/ipt/start', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({selected_providers: selected})
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          var data = await res.json();
+          iptPtToken = data.placement_token;
+          iptMailboxToken = mailboxToken;
+          document.getElementById('ipt-subject-tag').textContent = data.subject_tag || '';
+          renderSeedList(data.seeds || []);
+          showStep('send');
+          startSSE(mailboxToken, iptPtToken);
+        } catch(e) {
+          startBtn.disabled = false;
+          startBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>' + (LANG==='en'?'Start test':'Test starten');
+          alert(LANG==='en'?'Error starting test. Please try again.':'Fehler beim Starten des Tests. Bitte erneut versuchen.');
+        }
+      });
+    }
+
+    var resetBtn = document.getElementById('ipt-reset-btn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function() {
+        if (iptSSE) { iptSSE.close(); iptSSE = null; }
+        showStep('select');
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>' + (LANG==='en'?'Start test':'Test starten');
+      });
+    }
+
+    document.getElementById('mp-ipt-modal')?.addEventListener('hidden.bs.modal', function() {
+      if (iptSSE) { iptSSE.close(); iptSSE = null; }
+    });
+  })();
+  </script>
+{{end}}
 
   {{template "consent-banner" .}}
   {{template "page-footer" .}}

@@ -131,5 +131,23 @@ CREATE TABLE IF NOT EXISTS counters (
 			return err
 		}
 	}
+	// Phase-IPT migration: inbox placement test records.
+	if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS inbox_placement_tests (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    mailbox_id      INTEGER NOT NULL,
+    placement_token TEXT    NOT NULL UNIQUE,
+    status          TEXT    NOT NULL DEFAULT 'waiting',
+    created_at      DATETIME NOT NULL,
+    expires_at      DATETIME NOT NULL,
+    seeds_json      TEXT    NOT NULL,
+    results_json    TEXT,
+    FOREIGN KEY(mailbox_id) REFERENCES mailboxes(id) ON DELETE CASCADE
+)`); err != nil {
+		return err
+	}
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_ipt_mailbox ON inbox_placement_tests(mailbox_id)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_ipt_expires ON inbox_placement_tests(expires_at)`)
+
 	return nil
 }

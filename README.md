@@ -36,6 +36,10 @@ small VPS.
 - **Real authentication checks** — SPF, DKIM and DMARC are **cryptographically verified**
   (DKIM signature via `go-msgauth`, SPF against the sending IP, DMARC alignment), not just
   guessed from headers.
+- **Inbox Placement Testing** — verify whether your test mail actually lands in inbox or spam
+  at real providers (Gmail, Outlook, GMX, web.de, T-Online, Yahoo, …). Operator-configured
+  seed accounts; one picked at random per test. Live results via SSE. Privacy-first: seed
+  credentials never leave the server, TLS-only IMAP, privacy notice shown before each test.
 - **65+ checks across 5 areas** — Authentication (SPF, DKIM, DMARC, ARC, X-Google-DKIM) ·
   DNS & infrastructure (PTR/FCR, HELO, MX, TLS, MTA-STS, TLS-RPT, BIMI, DNSSEC, DANE,
   From domain reachability) · Spam filters (SpamAssassin, Rspamd, DNSBL) ·
@@ -132,6 +136,7 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | `ENABLE_RBL_CHECKS`, `RBL_PROVIDERS` | DNSBL/RBL (IP reputation), optional |
 | `ENABLE_SPAMASSASSIN`, `ENABLE_RSPAMD`, … | external spam filters, optional |
 | `ENABLE_DOMAIN_AGE`, `ENABLE_DOMAIN_BLOCKLIST`, `DOMAIN_BLOCKLIST_PROVIDERS` | force third-party checks on globally (default off) |
+| `ENABLE_INBOX_PLACEMENT`, `SEED_ACCOUNTS_FILE` | inbox placement testing via operator-configured seed accounts (default off) |
 | `ALERT_WEBHOOK_URL` | webhook on processing failures |
 
 > The third-party checks (domain age, blocklists) contact external providers with

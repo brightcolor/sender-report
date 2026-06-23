@@ -18,6 +18,8 @@ services:
       - ./data:/data
       # .env read-write mounten, damit das Binary fehlende Variablen ergänzen kann.
       - ./.env:/config/.env:rw
+      # Inbox Placement Testing — Seed-Konten (optional):
+      # - ./seeds.json:/config/seeds.json:ro
       # TLS-Zertifikate für HTTPS — nur nötig wenn ENABLE_TLS=true:
       # - ./certs:/certs:ro
     restart: unless-stopped

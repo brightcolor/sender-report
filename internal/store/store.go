@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/brightcolor/sender-report/internal/ipt"
 	"github.com/brightcolor/sender-report/internal/model"
 )
 
@@ -458,4 +459,77 @@ func (s *Store) Cleanup(ctx context.Context, now time.Time, retention time.Durat
 	}
 	deletedMailboxes, _ = resBox.RowsAffected()
 	return deletedMailboxes, deletedMessages, nil
+}
+
+// ── Inbox Placement Tests ─────────────────────────────────────────────────────
+
+func (s *Store) CreatePlacementTest(ctx context.Context, mailboxID int64, token string, seeds []ipt.SeedInfo, expiresAt time.Time) error {
+	seedsJSON, err := json.Marshal(seeds)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO inbox_placement_tests(mailbox_id, placement_token, status, created_at, expires_at, seeds_json)
+		VALUES(?,?,?,?,?,?)
+	`, mailboxID, token, "waiting", time.Now().UTC(), expiresAt, string(seedsJSON))
+	return err
+}
+
+func (s *Store) GetPlacementTest(ctx context.Context, token string) (ipt.PlacementTest, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, mailbox_id, placement_token, status, created_at, expires_at, seeds_json, COALESCE(results_json,'[]')
+		FROM inbox_placement_tests WHERE placement_token = ?
+	`, token)
+	return scanPlacementTest(row)
+}
+
+func (s *Store) UpdatePlacementTestResult(ctx context.Context, token string, results []ipt.ProviderResult, status string) error {
+	resultsJSON, err := json.Marshal(results)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `
+		UPDATE inbox_placement_tests SET results_json = ?, status = ? WHERE placement_token = ?
+	`, string(resultsJSON), status, token)
+	return err
+}
+
+func (s *Store) GetMailboxPlacementTests(ctx context.Context, mailboxID int64) ([]ipt.PlacementTest, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, mailbox_id, placement_token, status, created_at, expires_at, seeds_json, COALESCE(results_json,'[]')
+		FROM inbox_placement_tests WHERE mailbox_id = ? ORDER BY created_at DESC
+	`, mailboxID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tests []ipt.PlacementTest
+	for rows.Next() {
+		t, err := scanPlacementTest(rows)
+		if err != nil {
+			return nil, err
+		}
+		tests = append(tests, t)
+	}
+	return tests, rows.Err()
+}
+
+type scannable interface {
+	Scan(dest ...any) error
+}
+
+func scanPlacementTest(row scannable) (ipt.PlacementTest, error) {
+	var t ipt.PlacementTest
+	var seedsJSON, resultsJSON string
+	err := row.Scan(&t.ID, &t.MailboxID, &t.PlacementToken, &t.Status,
+		&t.CreatedAt, &t.ExpiresAt, &seedsJSON, &resultsJSON)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return t, ErrNotFound
+		}
+		return t, err
+	}
+	_ = json.Unmarshal([]byte(seedsJSON), &t.Seeds)
+	_ = json.Unmarshal([]byte(resultsJSON), &t.Results)
+	return t, nil
 }

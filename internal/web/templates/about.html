@@ -221,6 +221,50 @@
       </div>
     </section>
 
+    {{if .EnableInboxPlacement}}
+    <!-- ══ Inbox Placement Testing Feature Highlight ═════════════════════ -->
+    <section class="border-top">
+      <div class="container-xl px-4 py-5 mp-home-container">
+        <div class="card border-info border-opacity-25 shadow-sm">
+          <div class="card-body p-4">
+            <div class="d-flex align-items-start gap-3">
+              <div class="flex-shrink-0">
+                <span class="mp-check-tile-icon text-bg-info d-inline-flex align-items-center justify-content-center rounded" style="width:48px;height:48px;font-size:1.4rem">
+                  <i class="bi bi-inbox"></i>
+                </span>
+              </div>
+              <div>
+                {{if eq .Lang "de"}}
+                <h2 class="h5 fw-bold mb-1">Inbox Placement Test – echte Zustellung prüfen</h2>
+                <p class="text-secondary mb-2">
+                  Prüfe, ob deine Testmail tatsächlich im Posteingang oder Spam landet – bei echten Konten
+                  der wichtigsten Anbieter (Gmail, Outlook, GMX, web.de u.&nbsp;a.). Die Ergebnisse kommen
+                  live per SSE innerhalb von Sekunden bis Minuten.
+                </p>
+                <p class="small text-secondary mb-0">
+                  <i class="bi bi-shield-check me-1 text-success"></i>
+                  Seed-Credentials verlassen den Server nie. TLS-only IMAP. Keine Weiterleitung deiner Mail.
+                </p>
+                {{else}}
+                <h2 class="h5 fw-bold mb-1">Inbox Placement Test – verify real delivery</h2>
+                <p class="text-secondary mb-2">
+                  Check whether your test mail actually lands in the inbox or spam folder at real accounts
+                  with major providers (Gmail, Outlook, GMX, web.de, etc.). Results arrive live via SSE
+                  within seconds to minutes.
+                </p>
+                <p class="small text-secondary mb-0">
+                  <i class="bi bi-shield-check me-1 text-success"></i>
+                  Seed credentials never leave the server. TLS-only IMAP. Your mail is not relayed.
+                </p>
+                {{end}}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    {{end}}
+
     <!-- ══ Was wird geprüft ═══════════════════════════════════════════════ -->
     <section class="mp-checks-section border-top" id="checks">
       <div class="container-xl px-4 py-5 mp-home-container">

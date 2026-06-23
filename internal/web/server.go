@@ -31,6 +31,7 @@ import (
 	"github.com/brightcolor/sender-report/internal/analyzer"
 	"github.com/brightcolor/sender-report/internal/config"
 	"github.com/brightcolor/sender-report/internal/i18n"
+	"github.com/brightcolor/sender-report/internal/ipt"
 	"github.com/brightcolor/sender-report/internal/model"
 	reportpdf "github.com/brightcolor/sender-report/internal/pdf"
 	"github.com/brightcolor/sender-report/internal/ratelimit"
@@ -52,18 +53,22 @@ type Server struct {
 	metrics        *telemetry.Counters
 	staticFS       http.Handler
 	trustedProxy   []*net.IPNet
-	engine         *analyzer.Engine // for live single-check rechecks
+	engine         *analyzer.Engine  // for live single-check rechecks
+	iptLimiter     *ratelimit.Limiter // max 3 placement tests per IP per hour
+	seeds          *ipt.SeedConfig    // nil when feature disabled
 }
 
 var errActiveMailboxLimit = errors.New("active mailbox limit reached for ip")
 var errGlobalActiveMailboxLimit = errors.New("active mailbox limit reached globally")
 
 type HomeData struct {
-	AppName   string
-	Domain    string
-	PublicURL string
-	Stats     store.GlobalStats
-	Lang      string
+	AppName              string
+	Domain               string
+	PublicURL            string
+	Stats                store.GlobalStats
+	Lang                 string
+	EnableInboxPlacement bool
+	IPTProviderNames     []string
 }
 
 type PrivacyData struct {
@@ -100,8 +105,10 @@ type ReportData struct {
 	PlainTextBody   string
 	HTMLSourceBody  string
 	HTMLPreviewBody string
-	Encrypted       bool   // true when content is E2E-encrypted (Phase 3+4)
-	MsgRef          string // reference passed to /api/payload for decryption
+	Encrypted            bool   // true when content is E2E-encrypted (Phase 3+4)
+	MsgRef               string // reference passed to /api/payload for decryption
+	EnableInboxPlacement bool
+	IPTProviderNames     []string
 }
 
 type ReportCheckGroup struct {
@@ -421,6 +428,23 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		EnableDomainBlocklist:    cfg.EnableDomainBlocklist,
 		DomainBlocklistProviders: cfg.DomainBlocklistProviders,
 	})
+	// Load optional inbox placement seed accounts. Log and continue on error —
+	// the feature stays disabled if seeds.json is missing or invalid.
+	var seeds *ipt.SeedConfig
+	if cfg.EnableInboxPlacement && cfg.SeedAccountsFile != "" {
+		sc, err := ipt.LoadSeeds(cfg.SeedAccountsFile)
+		if err != nil {
+			logger.Printf("ipt: failed to load seeds from %s: %v (feature disabled)", cfg.SeedAccountsFile, err)
+		} else if sc != nil {
+			if err := sc.Validate(); err != nil {
+				logger.Printf("ipt: seed config invalid: %v (feature disabled)", err)
+			} else {
+				seeds = sc
+				logger.Printf("ipt: loaded %d provider(s)", len(sc.Providers))
+			}
+		}
+	}
+
 	return &Server{
 		cfg:            cfg,
 		store:          st,
@@ -429,10 +453,12 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		limiter:        ratelimit.New(time.Minute, cfg.WebRateLimitPerMin),
 		burstLimiter:   ratelimit.New(10*time.Second, cfg.WebBurstPer10Sec),
 		payloadLimiter: ratelimit.New(time.Minute, 30), // max 30 payload fetches/min per IP
+		iptLimiter:     ratelimit.New(time.Hour, 3),    // max 3 placement tests per IP per hour
 		metrics:        metrics,
 		staticFS:       http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join("internal", "web", "static")))),
 		trustedProxy:   trustedProxy,
 		engine:         engine,
+		seeds:          seeds,
 	}, nil
 }
 
@@ -650,11 +676,13 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	// the X25519 key pair and calling POST /api/mailboxes with {identifier, public_key}.
 	stats, _ := s.store.GetGlobalStats(r.Context())
 	data := HomeData{
-		AppName:   s.cfg.AppName,
-		Domain:    domain,
-		PublicURL: s.publicBaseURL(r),
-		Stats:     stats,
-		Lang:      string(i18n.Detect(r)),
+		AppName:              s.cfg.AppName,
+		Domain:               domain,
+		PublicURL:            s.publicBaseURL(r),
+		Stats:                stats,
+		Lang:                 string(i18n.Detect(r)),
+		EnableInboxPlacement: s.seeds != nil,
+		IPTProviderNames:     s.iptProviderNames(),
 	}
 	s.render(w, "home", data)
 }
@@ -876,9 +904,11 @@ func (s *Server) reportPage(w http.ResponseWriter, r *http.Request) {
 		PlainTextBody:   plainText,
 		HTMLSourceBody:  htmlSource,
 		HTMLPreviewBody: htmlSource,
-		Encrypted:       encrypted,
-		MsgRef:          msgRef,
-		Lang:            string(i18n.Detect(r)),
+		Encrypted:            encrypted,
+		MsgRef:               msgRef,
+		Lang:                 string(i18n.Detect(r)),
+		EnableInboxPlacement: s.seeds != nil,
+		IPTProviderNames:     s.iptProviderNames(),
 	})
 }
 
@@ -1233,6 +1263,15 @@ func (s *Server) recheckPersistAPI(w http.ResponseWriter, r *http.Request) {
 	jsonResp(w, http.StatusOK, map[string]any{"status": "saved", "score": score, "score_label": label})
 }
 
+// iptProviderNames returns the display names of all configured seed providers,
+// or nil when the feature is disabled. Used to render provider checkboxes in templates.
+func (s *Server) iptProviderNames() []string {
+	if s.seeds == nil {
+		return nil
+	}
+	return s.seeds.ProviderNames()
+}
+
 // simulatePage serves the /simulate UI page.
 func (s *Server) simulatePage(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/simulate" {
@@ -1364,6 +1403,15 @@ func (s *Server) mailboxAPI(w http.ResponseWriter, r *http.Request) {
 	token, action := parts[0], parts[1]
 	ctx := r.Context()
 	switch {
+	// Inbox placement test routes: /api/mailboxes/{token}/ipt/start
+	// and /api/mailboxes/{token}/ipt/{pt}/events and /api/mailboxes/{token}/ipt/{pt}
+	case action == "ipt" && len(parts) == 3 && parts[2] == "start" && r.Method == http.MethodPost:
+		s.iptStartAPI(w, r, token)
+	case action == "ipt" && len(parts) == 4 && parts[3] == "events" && r.Method == http.MethodGet:
+		s.iptEventsAPI(w, r, token, parts[2])
+	case action == "ipt" && len(parts) == 3 && r.Method == http.MethodGet:
+		s.iptResultAPI(w, r, token, parts[2])
+
 	case action == "status" && r.Method == http.MethodGet:
 		mb, err := s.store.GetMailboxByToken(ctx, token)
 		if err != nil {
@@ -2329,4 +2377,169 @@ func (r *statusRecorder) Flush() {
 	if f, ok := r.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+// ── Inbox Placement Testing ───────────────────────────────────────────────────
+
+// iptStartAPI starts a new inbox placement test.
+// Route: POST /api/mailboxes/{token}/ipt/start
+func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToken string) {
+	if s.seeds == nil {
+		jsonResp(w, http.StatusServiceUnavailable, map[string]string{"error": "inbox placement testing not configured"})
+		return
+	}
+	ip := s.clientIP(r)
+	if !s.iptLimiter.Allow("ipt:" + ip) {
+		jsonResp(w, http.StatusTooManyRequests, map[string]string{"error": "rate limit: max 3 placement tests per hour"})
+		return
+	}
+	ctx := r.Context()
+	mb, err := s.store.GetMailboxByToken(ctx, mailboxToken)
+	if err != nil {
+		jsonResp(w, http.StatusNotFound, map[string]string{"error": "mailbox not found"})
+		return
+	}
+
+	var body struct {
+		SelectedProviders []string `json:"selected_providers"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err != nil {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return
+	}
+
+	providers := s.seeds.Filter(body.SelectedProviders)
+	if len(providers) == 0 {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "no valid providers selected"})
+		return
+	}
+
+	pt, err := randomToken(3) // 6 hex chars
+	if err != nil {
+		jsonResp(w, http.StatusInternalServerError, map[string]string{"error": "token error"})
+		return
+	}
+	subjectTag := "[SR-" + pt + "]"
+	infos, accounts := ipt.Pick(providers)
+	expiresAt := time.Now().UTC().Add(10 * time.Minute)
+
+	if err := s.store.CreatePlacementTest(ctx, mb.ID, pt, infos, expiresAt); err != nil {
+		jsonResp(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
+
+	// Build parallel IMAP host list matching the picked accounts.
+	imapHosts := make([]string, len(providers))
+	for i, p := range providers {
+		imapHosts[i] = p.IMAP
+	}
+
+	// Poll in background; write each result to DB immediately so SSE sees it.
+	go func() {
+		pollCtx, cancel := context.WithDeadline(context.Background(), expiresAt)
+		defer cancel()
+		since := time.Now().UTC().Add(-2 * time.Minute)
+		results := make(chan ipt.ProviderResult, len(infos))
+		go ipt.PollWithHosts(pollCtx, infos, accounts, imapHosts, pt, since, results)
+
+		var collected []ipt.ProviderResult
+		for res := range results {
+			collected = append(collected, res)
+			status := "running"
+			if len(collected) == len(infos) {
+				status = "done"
+				for _, r := range collected {
+					if r.Status == "timeout" {
+						status = "timeout"
+						break
+					}
+				}
+			}
+			_ = s.store.UpdatePlacementTestResult(context.Background(), pt, collected, status)
+		}
+	}()
+
+	jsonResp(w, http.StatusOK, map[string]any{
+		"placement_token": pt,
+		"subject_tag":     subjectTag,
+		"seeds":           infos,
+		"expires_at":      expiresAt,
+	})
+}
+
+// iptEventsAPI streams placement test progress via SSE.
+// Route: GET /api/mailboxes/{token}/ipt/{pt}/events
+func (s *Server) iptEventsAPI(w http.ResponseWriter, r *http.Request, mailboxToken, ptToken string) {
+	if _, err := s.store.GetMailboxByToken(r.Context(), mailboxToken); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	lastPayload := ""
+
+	send := func() (done bool, err error) {
+		pt, err := s.store.GetPlacementTest(r.Context(), ptToken)
+		if err != nil {
+			return false, err
+		}
+		raw, _ := json.Marshal(pt)
+		if string(raw) != lastPayload {
+			lastPayload = string(raw)
+			_, _ = fmt.Fprintf(w, "event: ipt\ndata: %s\n\n", raw)
+			flusher.Flush()
+		}
+		return pt.Status == "done" || pt.Status == "timeout", nil
+	}
+
+	if done, err := send(); err != nil || done {
+		if done {
+			_, _ = fmt.Fprintf(w, "event: done\ndata: {}\n\n")
+			flusher.Flush()
+		}
+		return
+	}
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			done, err := send()
+			if err != nil {
+				_, _ = fmt.Fprintf(w, "event: error\ndata: {\"error\":\"db error\"}\n\n")
+				flusher.Flush()
+				return
+			}
+			if done {
+				_, _ = fmt.Fprintf(w, "event: done\ndata: {}\n\n")
+				flusher.Flush()
+				return
+			}
+		}
+	}
+}
+
+// iptResultAPI returns the current state of a placement test as JSON.
+// Route: GET /api/mailboxes/{token}/ipt/{pt}
+func (s *Server) iptResultAPI(w http.ResponseWriter, r *http.Request, mailboxToken, ptToken string) {
+	if _, err := s.store.GetMailboxByToken(r.Context(), mailboxToken); err != nil {
+		jsonResp(w, http.StatusNotFound, map[string]string{"error": "mailbox not found"})
+		return
+	}
+	pt, err := s.store.GetPlacementTest(r.Context(), ptToken)
+	if err != nil {
+		jsonResp(w, http.StatusNotFound, map[string]string{"error": "test not found"})
+		return
+	}
+	jsonResp(w, http.StatusOK, pt)
 }

@@ -52,6 +52,9 @@ type Config struct {
 	PrivacyOperatorAddress  string
 	PrivacyOperatorEmail    string
 	PrivacyHideTemplateNote bool
+	// Inbox Placement Testing — operator-configured seed accounts.
+	EnableInboxPlacement bool   // ENABLE_INBOX_PLACEMENT
+	SeedAccountsFile     string // SEED_ACCOUNTS_FILE (path to seeds.json)
 }
 
 func Load() (Config, error) {
@@ -95,6 +98,8 @@ func Load() (Config, error) {
 		PrivacyOperatorAddress:   getEnv("PRIVACY_OPERATOR_ADDRESS", ""),
 		PrivacyOperatorEmail:     getEnv("PRIVACY_OPERATOR_EMAIL", ""),
 		PrivacyHideTemplateNote:  getEnvBool("PRIVACY_HIDE_TEMPLATE_NOTE", false),
+		EnableInboxPlacement:     getEnvBool("ENABLE_INBOX_PLACEMENT", false),
+		SeedAccountsFile:         getEnv("SEED_ACCOUNTS_FILE", ""),
 	}
 
 	if cfg.EnableTLS && (cfg.TLSCertFile == "" || cfg.TLSKeyFile == "") {

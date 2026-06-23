@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-06-23
+
+### Added
+- **Inbox Placement Testing** — operator-configurable seed accounts let users verify
+  whether a test mail actually lands in the inbox or spam folder at real providers.
+  - Operators configure seed accounts in `seeds.json` (multiple accounts per provider
+    pooled; one is picked at random per test to avoid overloading individual accounts).
+  - Users choose which providers to test via checkboxes in the UI; a unique subject
+    token (`[SR-xxxxxx]`) is generated per test so the system can identify the mail.
+  - Users send the mail directly from their own server to the displayed seed addresses
+    — no relay, no header modification.
+  - The system polls IMAP every 30 s (TLS-only, port 993) for up to 10 minutes and
+    delivers live results via SSE (same pattern as mailbox events).
+  - Results: `inbox`, `spam`, or `not arrived` (timeout).
+  - Available from the home page (after mailbox creation) and from the report toolbar.
+  - New environment variables: `ENABLE_INBOX_PLACEMENT`, `SEED_ACCOUNTS_FILE`.
+  - Privacy: seed credentials are never exposed to clients; TLS-only IMAP; a privacy
+    notice is shown in the UI before each test.
+
+### Fixed
+- **Simulator score parity** — `spf_strictness`, `dmarc_policy`, and `broken_links`
+  were incorrectly listed as Group B sim-placeholder checks, causing duplicate `info`
+  entries and a corrupted score when comparing simulator vs. report results.
+  All three run in Group A (synchronous header/content checks) and must not appear
+  in the Group B placeholder list.
+
 ## [1.21.0] - 2026-06-22
 
 ### Added

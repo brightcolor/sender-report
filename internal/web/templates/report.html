@@ -75,6 +75,14 @@
             <i class="bi bi-pencil-square me-1"></i>{{if eq .Lang "de"}}Mail simulieren{{else}}Simulate mail{{end}}
           </button>
         </li>
+        {{if .EnableInboxPlacement}}
+        <li class="nav-item">
+          <button id="mp-ipt-btn" class="btn btn-sm btn-outline-info" type="button"
+                  data-bs-toggle="modal" data-bs-target="#mp-ipt-report-modal">
+            <i class="bi bi-inbox me-1"></i>{{if eq .Lang "de"}}Inbox Placement{{else}}Inbox Placement{{end}}
+          </button>
+        </li>
+        {{end}}
         <li class="nav-item">
           <button class="btn btn-success btn-sm" id="mp-pdf-open-btn" type="button"
                   data-bs-toggle="modal" data-bs-target="#mp-pdf-modal">
@@ -2168,6 +2176,171 @@ function renderDecryptedReport(p) {
     </div>
   </div>
 </div>
+
+{{if .EnableInboxPlacement}}
+<div class="modal fade" id="mp-ipt-report-modal" tabindex="-1" aria-labelledby="mp-ipt-report-label" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="mp-ipt-report-label">
+          <i class="bi bi-inbox me-2"></i>Inbox Placement Test
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{t .Lang "nav.close"}}"></button>
+      </div>
+      <div class="modal-body">
+        <div id="mp-ipt-r-step-select">
+          <p class="text-secondary small mb-3">
+            {{if eq .Lang "de"}}Wähle die Anbieter aus und sende deine Testmail mit dem angezeigten Token im Betreff direkt an die Seed-Adressen.{{else}}Select providers and send your test mail with the shown token in the subject line directly to the seed addresses.{{end}}
+          </p>
+          <div class="alert alert-warning py-2 small mb-3">
+            <i class="bi bi-shield-exclamation me-1"></i>
+            {{if eq .Lang "de"}}<strong>Datenschutz:</strong> Dein Mail-Inhalt wird von Seed-Konten des Betreibers empfangen.{{else}}<strong>Privacy:</strong> Your mail content will be received by operator-controlled seed accounts.{{end}}
+          </div>
+          <div id="mp-ipt-r-providers" class="d-flex flex-wrap gap-2 mb-3">
+            {{range .IPTProviderNames}}
+            <div class="form-check form-check-inline">
+              <input class="form-check-input mp-ipt-r-cb" type="checkbox" id="mp-ipt-r-cb-{{.}}" value="{{.}}" checked>
+              <label class="form-check-label" for="mp-ipt-r-cb-{{.}}">{{.}}</label>
+            </div>
+            {{end}}
+          </div>
+          <button id="mp-ipt-r-start-btn" class="btn btn-info text-white w-100" type="button">
+            <i class="bi bi-play-fill me-1"></i>{{if eq .Lang "de"}}Test starten{{else}}Start test{{end}}
+          </button>
+        </div>
+
+        <div id="mp-ipt-r-step-send" class="d-none">
+          <div class="alert alert-info py-2 mb-3">
+            <strong>{{if eq .Lang "de"}}Betreff-Token:{{else}}Subject token:{{end}}</strong><br>
+            <code id="mp-ipt-r-subject-tag" class="fs-6 user-select-all"></code>
+          </div>
+          <p class="small text-secondary mb-2">{{if eq .Lang "de"}}Sende deine Testmail an diese Adressen:{{else}}Send your test mail to these addresses:{{end}}</p>
+          <div id="mp-ipt-r-seed-list"></div>
+          <div class="text-secondary small mt-3">
+            <i class="bi bi-clock me-1"></i>{{if eq .Lang "de"}}Warte auf Zustellung (bis zu 10 Minuten)…{{else}}Waiting for delivery (up to 10 minutes)…{{end}}
+          </div>
+        </div>
+
+        <div id="mp-ipt-r-step-results" class="d-none">
+          <div id="mp-ipt-r-result-list"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{if eq .Lang "de"}}Schließen{{else}}Close{{end}}</button>
+        <button type="button" class="btn btn-outline-secondary d-none" id="mp-ipt-r-reset-btn">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>{{if eq .Lang "de"}}Neuer Test{{else}}New test{{end}}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var LANG = {{.Lang | jsonEncode}};
+  var IPT_MB_TOKEN = TOKEN || '';
+  var iptRPtToken = '';
+  var iptRSSE = null;
+
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function iptRShowStep(name){
+    ['mp-ipt-r-step-select','mp-ipt-r-step-send','mp-ipt-r-step-results'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(el) el.classList.toggle('d-none', id!=='mp-ipt-r-step-'+name);
+    });
+    var rb=document.getElementById('mp-ipt-r-reset-btn');
+    if(rb) rb.classList.toggle('d-none', name==='select');
+  }
+
+  function iptRRenderSeeds(seeds){
+    var html='';
+    (seeds||[]).forEach(function(s){
+      html+='<div class="d-flex align-items-center gap-2 p-2 border rounded mb-2 ipt-r-seed-row">'+
+        '<span class="fw-semibold">'+esc(s.provider)+'</span>'+
+        '<code class="text-secondary small flex-grow-1">'+esc(s.address)+'</code>'+
+        '<button class="btn btn-outline-secondary btn-sm py-0" onclick="(function(b){try{navigator.clipboard.writeText(b.closest(\'.ipt-r-seed-row\').querySelector(\'code\').textContent);}catch(_){}b.innerHTML=\'<i class=\\\"bi bi-check2\\\"></i>\';setTimeout(function(){b.innerHTML=\'<i class=\\\"bi bi-clipboard\\\"></i>\';},1200);})(this)"><i class="bi bi-clipboard"></i></button>'+
+        '<span class="badge bg-warning text-dark ipt-r-badge" data-provider="'+esc(s.provider)+'">'+(LANG==='en'?'Pending':'Ausstehend')+'</span>'+
+        '</div>';
+    });
+    var el=document.getElementById('mp-ipt-r-seed-list');
+    if(el) el.innerHTML=html;
+  }
+
+  function iptRUpdateBadge(provider, status){
+    document.querySelectorAll('.ipt-r-badge[data-provider="'+provider+'"]').forEach(function(b){
+      var label=status==='inbox'?'Inbox':status==='spam'?'Spam':status==='timeout'?(LANG==='en'?'Not arrived':'Nicht angekommen'):(LANG==='en'?'Pending':'Ausstehend');
+      var cls=status==='inbox'?'bg-success':status==='spam'?'bg-danger':status==='timeout'?'bg-secondary':'bg-warning text-dark';
+      b.className='badge ipt-r-badge '+cls;
+      b.textContent=label;
+    });
+  }
+
+  function iptRHandleEvent(data){
+    (data&&data.Results||[]).forEach(function(r){ iptRUpdateBadge(r.provider, r.status); });
+  }
+
+  function iptRStartSSE(ptToken){
+    if(iptRSSE){iptRSSE.close();iptRSSE=null;}
+    iptRSSE=new EventSource('/api/mailboxes/'+IPT_MB_TOKEN+'/ipt/'+ptToken+'/events');
+    iptRSSE.addEventListener('ipt',function(e){try{iptRHandleEvent(JSON.parse(e.data));}catch(_){}});
+    iptRSSE.addEventListener('done',function(){
+      if(iptRSSE){iptRSSE.close();iptRSSE=null;}
+      iptRShowStep('results');
+      var html='<p class="fw-semibold mb-2">'+(LANG==='en'?'Results:':'Ergebnis:')+'</p>';
+      document.querySelectorAll('.ipt-r-seed-row').forEach(function(row){
+        var prov=row.querySelector('.fw-semibold')?.textContent||'';
+        var addr=row.querySelector('code')?.textContent||'';
+        var badge=row.querySelector('.ipt-r-badge');
+        var st=badge?badge.textContent:'?';
+        var bc=badge?badge.className.replace('ipt-r-badge','').trim():'badge bg-secondary';
+        html+='<div class="d-flex align-items-center gap-2 p-2 border rounded mb-2"><span class="fw-semibold">'+esc(prov)+'</span><code class="text-secondary small flex-grow-1">'+esc(addr)+'</code><span class="'+bc+'">'+esc(st)+'</span></div>';
+      });
+      var el=document.getElementById('mp-ipt-r-result-list');
+      if(el) el.innerHTML=html;
+    });
+  }
+
+  var startBtn=document.getElementById('mp-ipt-r-start-btn');
+  if(startBtn){
+    startBtn.addEventListener('click',async function(){
+      if(!IPT_MB_TOKEN) return;
+      var selected=Array.from(document.querySelectorAll('.mp-ipt-r-cb:checked')).map(function(cb){return cb.value;});
+      if(!selected.length) return;
+      startBtn.disabled=true;
+      startBtn.innerHTML='<span class="spinner-border spinner-border-sm me-2"></span>'+(LANG==='en'?'Starting…':'Startet…');
+      try{
+        var res=await fetch('/api/mailboxes/'+IPT_MB_TOKEN+'/ipt/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({selected_providers:selected})});
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        var data=await res.json();
+        iptRPtToken=data.placement_token;
+        document.getElementById('mp-ipt-r-subject-tag').textContent=data.subject_tag||'';
+        iptRRenderSeeds(data.seeds||[]);
+        iptRShowStep('send');
+        iptRStartSSE(iptRPtToken);
+      }catch(e){
+        startBtn.disabled=false;
+        startBtn.innerHTML='<i class="bi bi-play-fill me-1"></i>'+(LANG==='en'?'Start test':'Test starten');
+        alert(LANG==='en'?'Error starting test.':'Fehler beim Starten des Tests.');
+      }
+    });
+  }
+
+  var resetBtn=document.getElementById('mp-ipt-r-reset-btn');
+  if(resetBtn){
+    resetBtn.addEventListener('click',function(){
+      if(iptRSSE){iptRSSE.close();iptRSSE=null;}
+      iptRShowStep('select');
+      if(startBtn){startBtn.disabled=false;startBtn.innerHTML='<i class="bi bi-play-fill me-1"></i>'+(LANG==='en'?'Start test':'Test starten');}
+    });
+  }
+
+  document.getElementById('mp-ipt-report-modal')?.addEventListener('hidden.bs.modal',function(){
+    if(iptRSSE){iptRSSE.close();iptRSSE=null;}
+  });
+})();
+</script>
+{{end}}
 </body>
 </html>
 {{end}}
