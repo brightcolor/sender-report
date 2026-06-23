@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.22.1] - 2026-06-23
+
+### Added
+- **IPT seed account health monitoring** — the server now checks every configured
+  seed account at startup and periodically (default every 6 hours) via a TLS IMAP
+  login/logout ping.
+  - Failed accounts are marked as unavailable; the UI shows them with a grey "N/A"
+    badge and the checkbox is disabled so users cannot select broken providers.
+  - `iptStartAPI` filters out providers whose accounts are all unhealthy and returns
+    `unavailable_providers` in the response.
+  - Admin alert emails are sent when an account transitions from healthy to failed
+    (one email per event, not every check cycle). Recovery is logged server-side.
+  - Alert emails include the raw IMAP/TLS error string when
+    `IPT_ALERT_INCLUDE_RAW_ERRORS=true` (default).
+  - New environment variables: `IPT_CHECK_INTERVAL`, `IPT_ALERT_EMAIL`,
+    `IPT_ALERT_SMTP_ADDR`, `IPT_ALERT_SMTP_FROM`, `IPT_ALERT_SMTP_USER`,
+    `IPT_ALERT_SMTP_PASS`, `IPT_ALERT_INCLUDE_RAW_ERRORS`.
+  - Supports port 465 (implicit TLS) and port 587/25 (STARTTLS) for outbound SMTP.
+
 ## [1.22.0] - 2026-06-23
 
 ### Added

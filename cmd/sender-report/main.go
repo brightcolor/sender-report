@@ -93,6 +93,7 @@ func main() {
 		slogLogger.Error("web init error", "error", err)
 		os.Exit(1)
 	}
+	webServer.StartBackgroundTasks(ctx)
 
 	httpSrv := &http.Server{
 		Addr:              cfg.HTTPListenAddr,

@@ -53,8 +53,15 @@ type Config struct {
 	PrivacyOperatorEmail    string
 	PrivacyHideTemplateNote bool
 	// Inbox Placement Testing — operator-configured seed accounts.
-	EnableInboxPlacement bool   // ENABLE_INBOX_PLACEMENT
-	SeedAccountsFile     string // SEED_ACCOUNTS_FILE (path to seeds.json)
+	EnableInboxPlacement bool          // ENABLE_INBOX_PLACEMENT
+	SeedAccountsFile     string        // SEED_ACCOUNTS_FILE (path to seeds.json)
+	IPTCheckInterval     time.Duration // IPT_CHECK_INTERVAL (default 6h)
+	IPTAlertEmail        string        // IPT_ALERT_EMAIL — admin recipient
+	IPTAlertSMTPAddr     string        // IPT_ALERT_SMTP_ADDR host:port (465=TLS, else STARTTLS)
+	IPTAlertSMTPFrom     string        // IPT_ALERT_SMTP_FROM
+	IPTAlertSMTPUser     string        // IPT_ALERT_SMTP_USER (optional)
+	IPTAlertSMTPPass     string        // IPT_ALERT_SMTP_PASS (optional)
+	IPTAlertIncludeRaw   bool          // IPT_ALERT_INCLUDE_RAW_ERRORS (default true)
 }
 
 func Load() (Config, error) {
@@ -98,8 +105,15 @@ func Load() (Config, error) {
 		PrivacyOperatorAddress:   getEnv("PRIVACY_OPERATOR_ADDRESS", ""),
 		PrivacyOperatorEmail:     getEnv("PRIVACY_OPERATOR_EMAIL", ""),
 		PrivacyHideTemplateNote:  getEnvBool("PRIVACY_HIDE_TEMPLATE_NOTE", false),
-		EnableInboxPlacement:     getEnvBool("ENABLE_INBOX_PLACEMENT", false),
-		SeedAccountsFile:         getEnv("SEED_ACCOUNTS_FILE", ""),
+		EnableInboxPlacement: getEnvBool("ENABLE_INBOX_PLACEMENT", false),
+		SeedAccountsFile:     getEnv("SEED_ACCOUNTS_FILE", ""),
+		IPTCheckInterval:     getEnvDuration("IPT_CHECK_INTERVAL", 6*time.Hour),
+		IPTAlertEmail:        getEnv("IPT_ALERT_EMAIL", ""),
+		IPTAlertSMTPAddr:     getEnv("IPT_ALERT_SMTP_ADDR", ""),
+		IPTAlertSMTPFrom:     getEnv("IPT_ALERT_SMTP_FROM", ""),
+		IPTAlertSMTPUser:     getEnv("IPT_ALERT_SMTP_USER", ""),
+		IPTAlertSMTPPass:     getEnv("IPT_ALERT_SMTP_PASS", ""),
+		IPTAlertIncludeRaw:   getEnvBool("IPT_ALERT_INCLUDE_RAW_ERRORS", true),
 	}
 
 	if cfg.EnableTLS && (cfg.TLSCertFile == "" || cfg.TLSKeyFile == "") {

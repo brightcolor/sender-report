@@ -515,10 +515,14 @@
               {{end}}
             </div>
             <div id="ipt-provider-list" class="d-flex flex-wrap gap-2 mb-3">
-              {{range .IPTProviderNames}}
+              {{range .IPTProviders}}
               <div class="form-check form-check-inline">
-                <input class="form-check-input ipt-provider-cb" type="checkbox" id="ipt-cb-{{.}}" value="{{.}}" checked>
-                <label class="form-check-label" for="ipt-cb-{{.}}">{{.}}</label>
+                <input class="form-check-input ipt-provider-cb" type="checkbox"
+                       id="ipt-cb-{{.Name}}" value="{{.Name}}"
+                       {{if .Available}}checked{{else}}disabled{{end}}>
+                <label class="form-check-label{{if not .Available}} text-muted{{end}}" for="ipt-cb-{{.Name}}">
+                  {{.Name}}{{if not .Available}}&nbsp;<span class="badge bg-secondary" style="font-size:.65em">N/A</span>{{end}}
+                </label>
               </div>
               {{end}}
             </div>

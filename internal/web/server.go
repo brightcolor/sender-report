@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/brightcolor/sender-report/internal/analyzer"
@@ -56,10 +57,20 @@ type Server struct {
 	engine         *analyzer.Engine  // for live single-check rechecks
 	iptLimiter     *ratelimit.Limiter // max 3 placement tests per IP per hour
 	seeds          *ipt.SeedConfig    // nil when feature disabled
+	iptMailer      *ipt.Mailer        // nil when email alerting not configured
+	// iptHealth caches the latest AccountStatus per account (key=provider+":"+user).
+	// Written by the background health checker, read by iptStartAPI.
+	iptHealth sync.Map
 }
 
 var errActiveMailboxLimit = errors.New("active mailbox limit reached for ip")
 var errGlobalActiveMailboxLimit = errors.New("active mailbox limit reached globally")
+
+// IPTProviderInfo carries display info for one seed provider in templates.
+type IPTProviderInfo struct {
+	Name      string
+	Available bool // false = health check failed, checkbox shown disabled
+}
 
 type HomeData struct {
 	AppName              string
@@ -68,7 +79,8 @@ type HomeData struct {
 	Stats                store.GlobalStats
 	Lang                 string
 	EnableInboxPlacement bool
-	IPTProviderNames     []string
+	IPTProviderNames     []string      // kept for legacy; prefer IPTProviders
+	IPTProviders         []IPTProviderInfo
 }
 
 type PrivacyData struct {
@@ -109,6 +121,7 @@ type ReportData struct {
 	MsgRef               string // reference passed to /api/payload for decryption
 	EnableInboxPlacement bool
 	IPTProviderNames     []string
+	IPTProviders         []IPTProviderInfo
 }
 
 type ReportCheckGroup struct {
@@ -445,6 +458,18 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		}
 	}
 
+	var iptMailer *ipt.Mailer
+	if cfg.IPTAlertEmail != "" && cfg.IPTAlertSMTPAddr != "" {
+		iptMailer = ipt.NewMailer(ipt.MailerConfig{
+			Addr:           cfg.IPTAlertSMTPAddr,
+			From:           cfg.IPTAlertSMTPFrom,
+			User:           cfg.IPTAlertSMTPUser,
+			Pass:           cfg.IPTAlertSMTPPass,
+			IncludeRawErrs: cfg.IPTAlertIncludeRaw,
+		})
+		logger.Printf("ipt: alert emails enabled → %s via %s", cfg.IPTAlertEmail, cfg.IPTAlertSMTPAddr)
+	}
+
 	return &Server{
 		cfg:            cfg,
 		store:          st,
@@ -459,7 +484,71 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		trustedProxy:   trustedProxy,
 		engine:         engine,
 		seeds:          seeds,
+		iptMailer:      iptMailer,
 	}, nil
+}
+
+// StartBackgroundTasks launches long-running background goroutines.
+// Call once after New(), before serving requests.
+func (s *Server) StartBackgroundTasks(ctx context.Context) {
+	if s.seeds == nil {
+		return
+	}
+	// Run immediately at startup, then on the configured interval.
+	go func() {
+		s.runIPTHealthCheck(ctx)
+		if s.cfg.IPTCheckInterval <= 0 {
+			return
+		}
+		ticker := time.NewTicker(s.cfg.IPTCheckInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.runIPTHealthCheck(ctx)
+			}
+		}
+	}()
+}
+
+// runIPTHealthCheck checks all configured seed accounts and updates the
+// in-memory cache. Accounts that transition from OK to failed trigger an
+// alert email (if configured).
+func (s *Server) runIPTHealthCheck(ctx context.Context) {
+	if s.seeds == nil {
+		return
+	}
+	s.logger.Printf("ipt: running seed account health check (%d provider(s))", len(s.seeds.Providers))
+	statuses := ipt.CheckAll(ctx, s.seeds.Providers)
+
+	var newlyFailed []ipt.AccountStatus
+	for _, st := range statuses {
+		key := st.Provider + ":" + st.User
+		prev, hadPrev := s.iptHealth.Load(key)
+		s.iptHealth.Store(key, st)
+
+		if !st.OK {
+			s.logger.Printf("ipt: health FAIL provider=%s user=%s err=%s", st.Provider, st.User, st.ErrRaw)
+			// Only alert on newly-failed accounts (not ones that were already broken).
+			if !hadPrev || prev.(ipt.AccountStatus).OK {
+				newlyFailed = append(newlyFailed, st)
+			}
+		} else {
+			if hadPrev && !prev.(ipt.AccountStatus).OK {
+				s.logger.Printf("ipt: health RECOVERED provider=%s user=%s", st.Provider, st.User)
+			}
+		}
+	}
+
+	if len(newlyFailed) > 0 && s.iptMailer != nil && s.cfg.IPTAlertEmail != "" {
+		if err := s.iptMailer.SendIPTAlert(s.cfg.IPTAlertEmail, newlyFailed); err != nil {
+			s.logger.Printf("ipt: alert email error: %v", err)
+		} else {
+			s.logger.Printf("ipt: alert email sent to %s (%d account(s))", s.cfg.IPTAlertEmail, len(newlyFailed))
+		}
+	}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -683,6 +772,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		Lang:                 string(i18n.Detect(r)),
 		EnableInboxPlacement: s.seeds != nil,
 		IPTProviderNames:     s.iptProviderNames(),
+		IPTProviders:         s.iptProviders(),
 	}
 	s.render(w, "home", data)
 }
@@ -909,6 +999,7 @@ func (s *Server) reportPage(w http.ResponseWriter, r *http.Request) {
 		Lang:                 string(i18n.Detect(r)),
 		EnableInboxPlacement: s.seeds != nil,
 		IPTProviderNames:     s.iptProviderNames(),
+		IPTProviders:         s.iptProviders(),
 	})
 }
 
@@ -1264,12 +1355,39 @@ func (s *Server) recheckPersistAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 // iptProviderNames returns the display names of all configured seed providers,
-// or nil when the feature is disabled. Used to render provider checkboxes in templates.
+// or nil when the feature is disabled.
 func (s *Server) iptProviderNames() []string {
 	if s.seeds == nil {
 		return nil
 	}
 	return s.seeds.ProviderNames()
+}
+
+// iptProviders returns provider display info including availability from the
+// cached health check. Providers with all accounts failed are marked unavailable.
+func (s *Server) iptProviders() []IPTProviderInfo {
+	if s.seeds == nil {
+		return nil
+	}
+	out := make([]IPTProviderInfo, 0, len(s.seeds.Providers))
+	for _, p := range s.seeds.Providers {
+		available := false
+		for _, acc := range p.Accounts {
+			key := p.Name + ":" + acc.User
+			if v, ok := s.iptHealth.Load(key); ok {
+				if v.(ipt.AccountStatus).OK {
+					available = true
+					break
+				}
+			} else {
+				// No health data yet — assume available.
+				available = true
+				break
+			}
+		}
+		out = append(out, IPTProviderInfo{Name: p.Name, Available: available})
+	}
+	return out
 }
 
 // simulatePage serves the /simulate UI page.
@@ -2408,9 +2526,41 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 		return
 	}
 
-	providers := s.seeds.Filter(body.SelectedProviders)
-	if len(providers) == 0 {
+	allProviders := s.seeds.Filter(body.SelectedProviders)
+	if len(allProviders) == 0 {
 		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "no valid providers selected"})
+		return
+	}
+
+	// Filter out providers whose accounts are currently unhealthy (per cached check).
+	var providers []ipt.Provider
+	var unavailable []string
+	for _, p := range allProviders {
+		healthy := false
+		for _, acc := range p.Accounts {
+			key := p.Name + ":" + acc.User
+			if v, ok := s.iptHealth.Load(key); ok {
+				if v.(ipt.AccountStatus).OK {
+					healthy = true
+					break
+				}
+			} else {
+				// No health data yet (first run still pending) — allow the provider.
+				healthy = true
+				break
+			}
+		}
+		if healthy {
+			providers = append(providers, p)
+		} else {
+			unavailable = append(unavailable, p.Name)
+		}
+	}
+	if len(providers) == 0 {
+		jsonResp(w, http.StatusServiceUnavailable, map[string]any{
+			"error":               "all selected providers are currently unavailable",
+			"unavailable":         unavailable,
+		})
 		return
 	}
 
@@ -2459,12 +2609,16 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 		}
 	}()
 
-	jsonResp(w, http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"placement_token": pt,
 		"subject_tag":     subjectTag,
 		"seeds":           infos,
 		"expires_at":      expiresAt,
-	})
+	}
+	if len(unavailable) > 0 {
+		resp["unavailable_providers"] = unavailable
+	}
+	jsonResp(w, http.StatusOK, resp)
 }
 
 // iptEventsAPI streams placement test progress via SSE.
