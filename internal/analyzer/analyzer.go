@@ -202,7 +202,7 @@ func spfStrictnessRecheck(ctx context.Context, domain string) model.CheckResult 
 			spf = append(spf, strings.TrimSpace(r))
 		}
 	}
-	return spfStrictnessCheck(spf)
+	return spfStrictnessCheck(ctx, spf)
 }
 
 // dmarcRecordRecheck re-looks up the _dmarc TXT record (used after a DNS fix).
@@ -420,7 +420,7 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 
 	// Auth depth (Group A) — local, header-derived checks.
 	report.Checks = append(report.Checks, dmarcPolicyCheck(dmarcRecords, dmarcPolicy))
-	report.Checks = append(report.Checks, spfStrictnessCheck(spfRecords))
+	report.Checks = append(report.Checks, spfStrictnessCheck(ctx, spfRecords))
 	report.Checks = append(report.Checks, displayNameCheck(headers.Get("From"), fromDomain))
 
 	// NOTE: all network-bound checks (DNS, RBL, RDAP, SpamAssassin/Rspamd) are
@@ -1017,48 +1017,106 @@ func ruaOnlyRec(hasRUA bool) string {
 
 // spfStrictnessCheck evaluates the SPF 'all' qualifier and the top-level DNS
 // lookup count (RFC 7208 limits SPF to 10 DNS-querying mechanisms).
-func spfStrictnessCheck(records []string) model.CheckResult {
+// When the record uses redirect= without an all mechanism, the redirect target
+// is resolved (one additional DNS lookup) and its all qualifier is evaluated.
+func spfStrictnessCheck(ctx context.Context, records []string) model.CheckResult {
 	if len(records) == 0 {
 		return info("spf_strictness", "SPF-Strenge", 0.0, "Kein SPF-Record auswertbar.", "Zuerst einen SPF-Record (v=spf1 …) veröffentlichen.")
 	}
 	rec := strings.ToLower(strings.TrimSpace(records[0]))
 	lookups := 0
+	redirectTarget := ""
 	for _, tok := range strings.Fields(rec) {
 		t := strings.TrimLeft(tok, "+-~?")
 		if strings.HasPrefix(t, "include:") || t == "a" || strings.HasPrefix(t, "a:") ||
 			t == "mx" || strings.HasPrefix(t, "mx:") || strings.HasPrefix(t, "ptr") ||
-			strings.HasPrefix(t, "exists:") || strings.HasPrefix(t, "redirect=") {
+			strings.HasPrefix(t, "exists:") {
 			lookups++
 		}
+		if strings.HasPrefix(t, "redirect=") {
+			lookups++ // redirect itself counts as one lookup
+			redirectTarget = strings.TrimPrefix(t, "redirect=")
+		}
 	}
-	all := ""
-	switch {
-	case strings.Contains(rec, "-all"):
-		all = "-all"
-	case strings.Contains(rec, "~all"):
-		all = "~all"
-	case strings.Contains(rec, "?all"):
-		all = "?all"
-	case strings.Contains(rec, "+all"):
-		all = "+all"
+	all := spfAllQualifier(rec)
+
+	// RFC 7208 §6.1: when redirect= is present and there is no all mechanism,
+	// the redirect target's policy (including its all) is authoritative.
+	// Follow the redirect one level deep so we can evaluate the effective all.
+	effectiveRecord := records[0]
+	if all == "" && redirectTarget != "" {
+		targetRec := spfLookupRedirect(ctx, redirectTarget)
+		if targetRec != "" {
+			effectiveRecord = records[0] + " → redirect→ " + targetRec
+			all = spfAllQualifier(strings.ToLower(targetRec))
+		}
 	}
-	det := map[string]string{"spf_record": records[0], "all_mechanism": emptyFallback(all, "none"), "lookup_mechanisms_toplevel": strconv.Itoa(lookups)}
+
+	det := map[string]string{
+		"spf_record":                records[0],
+		"spf_effective_record":      effectiveRecord,
+		"all_mechanism":             emptyFallback(all, "none"),
+		"lookup_mechanisms_toplevel": strconv.Itoa(lookups),
+	}
 	if all == "+all" {
 		return withDetails(fail("spf_strictness", "SPF-Strenge", -1.5, "SPF endet auf +all – das erlaubt JEDEM Server, in deinem Namen zu senden (gefährlich).", "Sofort auf -all (hardfail) oder mindestens ~all (softfail) ändern."), det)
 	}
 	if lookups > 10 {
 		return withDetails(warn("spf_strictness", "SPF-Strenge", -0.6, fmt.Sprintf("SPF hat schon %d Lookup-Mechanismen auf oberster Ebene – das 10-Lookup-Limit (RFC 7208) droht überschritten zu werden (PermError).", lookups), "include-Ketten reduzieren oder per SPF-Flattening zusammenfassen."), det)
 	}
+
+	redirectNote := ""
+	if redirectTarget != "" {
+		redirectNote = fmt.Sprintf(" (via redirect=%s)", redirectTarget)
+	}
 	switch all {
 	case "-all":
-		return withDetails(pass("spf_strictness", "SPF-Strenge", 0.0, "SPF endet auf -all (hardfail) – strengste und empfohlene Einstellung.", ""), det)
+		return withDetails(pass("spf_strictness", "SPF-Strenge", 0.0, fmt.Sprintf("SPF endet auf -all (hardfail)%s – strengste und empfohlene Einstellung.", redirectNote), ""), det)
 	case "~all":
-		return withDetails(warn("spf_strictness", "SPF-Strenge", 0.0, "SPF endet auf ~all (softfail) – akzeptabel, -all bietet aber stärkeren Schutz.", "Wenn alle legitimen Sendequellen erfasst sind, auf -all umstellen."), det)
+		return withDetails(warn("spf_strictness", "SPF-Strenge", 0.0, fmt.Sprintf("SPF endet auf ~all (softfail)%s – akzeptabel, -all bietet aber stärkeren Schutz.", redirectNote), "Wenn alle legitimen Sendequellen erfasst sind, auf -all umstellen."), det)
 	case "?all":
-		return withDetails(warn("spf_strictness", "SPF-Strenge", -0.3, "SPF endet auf ?all (neutral) – bietet praktisch keinen Schutz.", "Auf -all oder ~all umstellen."), det)
+		return withDetails(warn("spf_strictness", "SPF-Strenge", -0.3, fmt.Sprintf("SPF endet auf ?all (neutral)%s – bietet praktisch keinen Schutz.", redirectNote), "Auf -all oder ~all umstellen."), det)
 	default:
+		if redirectTarget != "" {
+			return withDetails(warn("spf_strictness", "SPF-Strenge", -0.2,
+				fmt.Sprintf("SPF delegiert via redirect=%s, Redirect-Ziel hat keinen auswertbaren all-Mechanismus.", redirectTarget),
+				"Sicherstellen, dass das Redirect-Ziel einen SPF-Record mit -all oder ~all hat."), det)
+		}
 		return withDetails(warn("spf_strictness", "SPF-Strenge", -0.3, "SPF-Record hat keinen abschließenden all-Mechanismus.", "Den Record mit -all (oder ~all) abschließen."), det)
 	}
+}
+
+// spfAllQualifier extracts the all qualifier from a lowercase SPF record string.
+func spfAllQualifier(rec string) string {
+	switch {
+	case strings.Contains(rec, "-all"):
+		return "-all"
+	case strings.Contains(rec, "~all"):
+		return "~all"
+	case strings.Contains(rec, "?all"):
+		return "?all"
+	case strings.Contains(rec, "+all"):
+		return "+all"
+	}
+	return ""
+}
+
+// spfLookupRedirect fetches the SPF TXT record for the redirect target domain.
+// Returns the raw record string or "" on failure.
+func spfLookupRedirect(ctx context.Context, domain string) string {
+	if domain == "" {
+		return ""
+	}
+	recs, err := net.DefaultResolver.LookupTXT(ctx, domain)
+	if err != nil {
+		return ""
+	}
+	for _, r := range recs {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(r)), "v=spf1") {
+			return strings.TrimSpace(r)
+		}
+	}
+	return ""
 }
 
 // dkimKeyLengthCheck fetches the DKIM public key via DNS and evaluates its strength.

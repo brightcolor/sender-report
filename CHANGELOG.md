@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.22.3] - 2026-06-29
+
+### Fixed
+- **SPF redirect= not recognised in strictness check** — records like
+  `v=spf1 redirect=XXXXX.de.spf.hornetdmarc.com` have no `all` mechanism of their
+  own; per RFC 7208 §6.1 the redirect target's policy (including its `all`) is
+  authoritative. The analyser now follows the redirect one DNS level deep and
+  evaluates the target's `all` qualifier. The report shows the effective `all`
+  with a `(via redirect=...)` note, and the raw + resolved records in the detail
+  panel. Previously these records always produced a spurious "no all mechanism"
+  warning.
+
 ## [1.22.2] - 2026-06-29
 
 ### Fixed
