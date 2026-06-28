@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.22.2] - 2026-06-29
+
+### Fixed
+- **SPF false-positive on forwarded mail** — when a mail passes through a forwarding
+  MTA, SPF always fails at the final hop because the forwarder's IP is not listed in
+  the original sender's SPF record. This is expected and unavoidable, not a sender
+  misconfiguration. The analyzer now detects forwarding and adjusts the verdict:
+  - `fail/softfail` with forwarding → `warn` (−0.3) instead of `fail` (−1.4) with an
+    explanatory message pointing to DKIM as the robust alternative.
+  - DMARC alignment check similarly downgraded when SPF alignment breaks at a forwarder
+    but DKIM alignment is intact.
+  - Forwarding detected via: `arc=pass`/`arc=fail` in Authentication-Results, presence
+    of ARC-Seal / ARC-Message-Signature headers, `Resent-From`/`Resent-To`/`Resent-Sender`
+    headers, and `X-Forwarded-To` header.
+
 ## [1.22.1] - 2026-06-23
 
 ### Added

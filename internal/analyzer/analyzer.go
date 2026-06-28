@@ -320,6 +320,11 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	dkimResult := parseAuthResult(authResults, "dkim")
 	dmarcResult := parseAuthResult(authResults, "dmarc")
 
+	// Detect forwarding before evaluating SPF. When a mail is forwarded, the
+	// forwarding server's IP is not listed in the original sender's SPF record,
+	// so SPF always fails — this is not a sender misconfiguration.
+	isForwarded := isForwardedMail(headers, authResults)
+
 	// SPF
 	spfRecords := make([]string, 0)
 	if envelopeDomain != "" {
@@ -334,7 +339,15 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	case "pass":
 		report.Checks = append(report.Checks, pass("spf", "SPF", 0.4, "SPF laut Authentication-Results bestanden.", ""))
 	case "fail", "softfail":
-		report.Checks = append(report.Checks, fail("spf", "SPF", -1.4, fmt.Sprintf("SPF meldet %s.", spfResult), "Envelope-From-Domain und SPF-Record korrigieren."))
+		if isForwarded {
+			// SPF fail on forwarded mail is expected — the forwarding server's IP
+			// is not listed in the original sender's SPF record.
+			report.Checks = append(report.Checks, warn("spf", "SPF", -0.3,
+				fmt.Sprintf("SPF meldet %s, aber Weiterleitungs-Indikatoren erkannt (ARC/Resent). Bei Weiterleitungen schlägt SPF an der empfangenden IP erwartungsgemäß fehl — kein Konfigurationsfehler des Absenders.", spfResult),
+				"ARC (RFC 8617) sichert die Authentizität bei Weiterleitungen. Für maximale Kompatibilität DKIM sicherstellen — DKIM-Signaturen bleiben bei Weiterleitungen erhalten, SPF nicht."))
+		} else {
+			report.Checks = append(report.Checks, fail("spf", "SPF", -1.4, fmt.Sprintf("SPF meldet %s.", spfResult), "Envelope-From-Domain und SPF-Record korrigieren."))
+		}
 	default:
 		if len(spfRecords) > 0 {
 			report.Checks = append(report.Checks, info("spf", "SPF", 0.0, "SPF-Record vorhanden, kein eindeutiges SPF-Ergebnis im Header.", ""))
@@ -379,7 +392,20 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 		report.Checks = append(report.Checks, pass("dmarc", "DMARC", 0.4, "DMARC laut Authentication-Results bestanden.", ""))
 	} else if len(dmarcRecords) > 0 {
 		if alignedSPF || alignedDKIM {
-			report.Checks = append(report.Checks, warn("dmarc", "DMARC", -0.3, fmt.Sprintf("DMARC-Record vorhanden (p=%s), Alignment teilweise plausibel, aber kein eindeutiges pass im Header.", emptyFallback(dmarcPolicy, "none")), "DMARC-Alignment und Reporting prüfen."))
+			if isForwarded && !alignedSPF && alignedDKIM {
+				// Forwarded mail: SPF alignment breaks at the forwarder, but DKIM
+				// alignment is intact. DMARC should pass via DKIM.
+				report.Checks = append(report.Checks, warn("dmarc", "DMARC", -0.2,
+					fmt.Sprintf("DMARC-Record vorhanden (p=%s). Weiterleitung erkannt: SPF-Alignment bricht beim Forwarder, DKIM-Alignment vorhanden – DMARC sollte via DKIM passieren.", emptyFallback(dmarcPolicy, "none")),
+					"DKIM-Signatur sicherstellen; bei Weiterleitungen ist DKIM die zuverlässigere DMARC-Grundlage als SPF."))
+			} else {
+				report.Checks = append(report.Checks, warn("dmarc", "DMARC", -0.3, fmt.Sprintf("DMARC-Record vorhanden (p=%s), Alignment teilweise plausibel, aber kein eindeutiges pass im Header.", emptyFallback(dmarcPolicy, "none")), "DMARC-Alignment und Reporting prüfen."))
+			}
+		} else if isForwarded {
+			// Forwarding with no alignment at all — still less severe than a genuine misconfiguration.
+			report.Checks = append(report.Checks, warn("dmarc", "DMARC", -0.5,
+				fmt.Sprintf("DMARC-Record vorhanden (p=%s). Weiterleitung erkannt: SPF-Alignment bricht beim Forwarder, kein DKIM-Alignment gefunden.", emptyFallback(dmarcPolicy, "none")),
+				"DKIM mit korrektem d=-Alignment zur From-Domain konfigurieren — DKIM-Signaturen überleben Weiterleitungen, SPF nicht."))
 		} else {
 			report.Checks = append(report.Checks, fail("dmarc", "DMARC", -1.0, fmt.Sprintf("DMARC-Record vorhanden (p=%s), aber kein SPF/DKIM-Alignment.", emptyFallback(dmarcPolicy, "none")), "From-Domain-Alignment mit SPF oder DKIM sicherstellen."))
 		}
@@ -2840,6 +2866,33 @@ func assignLabel(r *model.AnalysisReport) {
 	default:
 		r.ScoreLabel = "High Risk"
 	}
+}
+
+// isForwardedMail returns true when the mail shows signs of having been
+// forwarded by an intermediate MTA. When true, SPF fail/softfail is expected
+// and should not be treated as a sender configuration error.
+//
+// Signals checked (in order of reliability):
+//  1. arc=pass  — clean ARC forwarding chain; most reliable
+//  2. arc=fail  — ARC attempted but broken; still indicates forwarding
+//  3. ARC-Seal or ARC-Message-Signature headers — forwarding took place
+//  4. Resent-From / Resent-To / Resent-Sender — RFC 5321 forward/redirect
+//  5. X-Forwarded-To — common in simple alias/pipe forwarding setups
+func isForwardedMail(headers mail.Header, authResults string) bool {
+	arcResult := parseAuthResult(authResults, "arc")
+	if arcResult == "pass" || arcResult == "fail" {
+		return true
+	}
+	if headers.Get("ARC-Seal") != "" || headers.Get("ARC-Message-Signature") != "" {
+		return true
+	}
+	if headers.Get("Resent-From") != "" || headers.Get("Resent-To") != "" || headers.Get("Resent-Sender") != "" {
+		return true
+	}
+	if headers.Get("X-Forwarded-To") != "" {
+		return true
+	}
+	return false
 }
 
 func parseAuthResult(s, key string) string {
