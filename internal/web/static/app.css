@@ -701,6 +701,17 @@ body,
   border: 1px solid rgba(var(--bs-success-rgb), .35);
   box-shadow: 0 8px 32px rgba(var(--bs-success-rgb), .18);
 }
+/* Leichterer Backdrop für das kurze "Adresse kopiert"-Popup — soll auffallen,
+   aber die Seite dahinter nicht komplett abdunkeln (nicht aufdringlich).
+   Direkt opacity setzen statt --bs-backdrop-opacity: bootstrap.min.css und
+   adminlte.min.css deklarieren die Custom Property beide mit derselben
+   Spezifität (0.5) auf .modal-backdrop — das bringt die var()-Auflösung in
+   .modal-backdrop.show{opacity:var(--bs-backdrop-opacity)} durcheinander,
+   sodass die eigentlich höher spezifische Override-Variable ignoriert und
+   stattdessen der CSS-Default (1) verwendet wird. !important umgeht das. */
+body.mp-light-backdrop .modal-backdrop.show {
+  opacity: .25 !important;
+}
 .mp-copied-modal-icon {
   font-size: 3rem;
   line-height: 1;

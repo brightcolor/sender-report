@@ -122,6 +122,10 @@ function showCopiedModal(address) {
   if (!modalEl || typeof bootstrap === 'undefined') return;
   const openBtn = document.getElementById('mp-copied-modal-open-btn');
   if (openBtn) openBtn.dataset.mailto = 'mailto:' + encodeURIComponent(address).replace(/%40/g, '@');
+  document.body.classList.add('mp-light-backdrop');
+  modalEl.addEventListener('hidden.bs.modal', () => {
+    document.body.classList.remove('mp-light-backdrop');
+  }, { once: true });
   bootstrap.Modal.getOrCreateInstance(modalEl).show();
 }
 

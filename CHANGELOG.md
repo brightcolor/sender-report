@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.23.2] - 2026-07-08
+
+### Changed
+- **Halbtransparenter Backdrop beim "Adresse kopiert"-Modal** — der dunkle Hintergrund
+  hinter dem Kopiert-Popup ist jetzt deutlich heller (Opacity .25 statt Bootstrap-Default
+  .5), damit die Seite dahinter sichtbar bleibt und das Popup als leichter Hinweis statt
+  als blockierender Dialog wirkt.
+
+### Fixed
+- Die Opacity-Override wurde zunächst über die CSS-Variable `--bs-backdrop-opacity`
+  gesetzt, was von einem Cascade-Konflikt zwischen den identischen Deklarationen in
+  `bootstrap.min.css` und `adminlte.min.css` (beide Spezifität 0.5) unterlaufen wurde —
+  die `var()`-Auflösung in `.modal-backdrop.show{opacity:var(...)}` ignorierte die
+  eigentlich höher spezifische Override-Variable und fiel auf den CSS-Default (1)
+  zurück. Jetzt wird `opacity` direkt mit `!important` gesetzt.
+
 ## [1.23.1] - 2026-07-08
 
 ### Fixed
