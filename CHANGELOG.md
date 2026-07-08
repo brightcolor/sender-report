@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-07-08
+
+### Added
+- **"Adresse kopiert" Modal auf der Startseite** — beim Klick auf die Mailbox-Adresse
+  wird die Adresse wie bisher in die Zwischenablage kopiert, zusätzlich erscheint jetzt
+  ein kompaktes Modal mit der Frage, ob direkt eine neue Mail im Mailprogramm geöffnet
+  werden soll (`mailto:`-Link). Auffällig durch grünes Bounce-Icon, aber unaufdringlich
+  durch kleine Größe und klaren "Später"-Ausweg.
+
 ## [1.22.3] - 2026-06-29
 
 ### Fixed

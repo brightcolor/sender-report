@@ -691,6 +691,23 @@ body,
 .mp-addr-box:hover .mp-addr-copy-hint { color: var(--bs-primary); }
 .mp-addr-box.mp-copied .mp-addr-copy-hint { color: var(--bs-success); }
 
+/* ── "Adresse kopiert" Modal ─────────────────────────────────────────────── */
+@keyframes mp-copied-icon-pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  55%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.mp-copied-modal-content {
+  border: 1px solid rgba(var(--bs-success-rgb), .35);
+  box-shadow: 0 8px 32px rgba(var(--bs-success-rgb), .18);
+}
+.mp-copied-modal-icon {
+  font-size: 3rem;
+  line-height: 1;
+  color: var(--bs-success);
+  animation: mp-copied-icon-pop .45s cubic-bezier(.34,1.56,.64,1);
+}
+
 /* Inline address chip (mailbox waiting area) */
 .mp-addr-inline {
   cursor: pointer;

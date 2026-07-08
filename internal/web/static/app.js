@@ -106,6 +106,18 @@ async function copyAddress() {
   }
 
   setTransientStatus(ok ? 'Adresse kopiert.' : 'Kopieren fehlgeschlagen – bitte manuell markieren.', ok ? 'ok' : 'warn');
+
+  if (ok && box) showCopiedModal(text);
+}
+
+// Zeigt das "Adresse kopiert" Modal mit der Option, direkt eine Mail im
+// Mailprogramm zu öffnen (mailto:). Nur auf der Startseite relevant (box vorhanden).
+function showCopiedModal(address) {
+  const modalEl = document.getElementById('mp-copied-modal');
+  if (!modalEl || typeof bootstrap === 'undefined') return;
+  const openBtn = document.getElementById('mp-copied-modal-open-btn');
+  if (openBtn) openBtn.href = 'mailto:' + encodeURIComponent(address).replace(/%40/g, '@');
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
 }
 
 // ── API helpers ───────────────────────────────────────────────────────────────
