@@ -746,9 +746,9 @@
           <h5 class="modal-title mb-2" id="mp-copied-modal-label">{{t .Lang "home.copied_modal_title"}}</h5>
           <p class="text-secondary small mb-4">{{t .Lang "home.copied_modal_body"}}</p>
           <div class="d-flex flex-column gap-2">
-            <a href="#" id="mp-copied-modal-open-btn" class="btn btn-primary" data-bs-dismiss="modal">
+            <button type="button" id="mp-copied-modal-open-btn" class="btn btn-primary" data-mailto="">
               <i class="bi bi-envelope-plus me-1"></i>{{t .Lang "home.copied_modal_open"}}
-            </a>
+            </button>
             <button type="button" class="btn btn-link text-secondary btn-sm text-decoration-none" data-bs-dismiss="modal">
               {{t .Lang "home.copied_modal_dismiss"}}
             </button>

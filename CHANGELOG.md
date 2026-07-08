@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.23.1] - 2026-07-08
+
+### Fixed
+- **"Mail-Programm öffnen"-Button im Kopiert-Modal reagierte nicht auf normalen Klick** —
+  der Button war ein `<a href="mailto:...">` mit `data-bs-dismiss="modal"`. Bootstrap
+  ruft bei `<a>`/`<area>`-Elementen mit `data-bs-dismiss` immer `preventDefault()` auf
+  (verhindert z.B. das Springen zu `#`), was auch die `mailto:`-Navigation blockierte.
+  Nur "Link in neuem Fenster öffnen" (Rechtsklick) umging den JS-Handler und
+  funktionierte deshalb. Jetzt: `<button>` ohne `href`, Navigation und Modal-Schließen
+  laufen über einen manuellen Klick-Handler in `app.js`.
+
 ## [1.23.0] - 2026-07-08
 
 ### Added

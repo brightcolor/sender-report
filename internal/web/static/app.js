@@ -112,13 +112,27 @@ async function copyAddress() {
 
 // Zeigt das "Adresse kopiert" Modal mit der Option, direkt eine Mail im
 // Mailprogramm zu öffnen (mailto:). Nur auf der Startseite relevant (box vorhanden).
+//
+// Der Button ist bewusst kein <a href="mailto:..."> mit data-bs-dismiss="modal":
+// Bootstraps Dismiss-Handler ruft bei <a>/<area>-Elementen immer preventDefault()
+// auf (verhindert z.B. das Springen zu "#"), was auch die mailto:-Navigation
+// verhindert hätte. Stattdessen: Button + manuelle Navigation per JS.
 function showCopiedModal(address) {
   const modalEl = document.getElementById('mp-copied-modal');
   if (!modalEl || typeof bootstrap === 'undefined') return;
   const openBtn = document.getElementById('mp-copied-modal-open-btn');
-  if (openBtn) openBtn.href = 'mailto:' + encodeURIComponent(address).replace(/%40/g, '@');
+  if (openBtn) openBtn.dataset.mailto = 'mailto:' + encodeURIComponent(address).replace(/%40/g, '@');
   bootstrap.Modal.getOrCreateInstance(modalEl).show();
 }
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('#mp-copied-modal-open-btn');
+  if (!btn) return;
+  const mailto = btn.dataset.mailto;
+  const modalEl = document.getElementById('mp-copied-modal');
+  if (modalEl && typeof bootstrap !== 'undefined') bootstrap.Modal.getInstance(modalEl)?.hide();
+  if (mailto) window.location.href = mailto;
+});
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
