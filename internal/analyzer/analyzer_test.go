@@ -29,20 +29,35 @@ func TestParseAuthResult(t *testing.T) {
 }
 
 func TestClassifyDKIMFailure(t *testing.T) {
+	beforeCutover := time.Date(2026, 12, 31, 23, 59, 0, 0, time.UTC)
+	afterCutover := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+
 	cases := []struct {
 		name        string
 		result      string
 		detail      string
+		now         time.Time
 		wantStatus  string
 		wantMsgSub  string // substring the German summary must contain
 		wantMsgENub string // substring the English summary must contain
 		wantSuggest string // substring the German suggestion must contain
 	}{
 		{
-			name:        "rsa-sha1 deprecated is a warning, not a fail",
+			name:        "rsa-sha1 is a warning before 2027-01-01",
 			result:      "permerror",
 			detail:      "example.com=dkim: hash algorithm too weak: sha1",
+			now:         beforeCutover,
 			wantStatus:  "warn",
+			wantMsgSub:  "01.01.2027",
+			wantMsgENub: "2027-01-01",
+			wantSuggest: "rsa-sha256",
+		},
+		{
+			name:        "rsa-sha1 becomes a fail from 2027-01-01",
+			result:      "permerror",
+			detail:      "example.com=dkim: hash algorithm too weak: sha1",
+			now:         afterCutover,
+			wantStatus:  "fail",
 			wantMsgSub:  "rsa-sha1",
 			wantMsgENub: "rsa-sha1",
 			wantSuggest: "rsa-sha256",
@@ -51,6 +66,7 @@ func TestClassifyDKIMFailure(t *testing.T) {
 			name:       "insecure body length tag is a warning",
 			result:     "fail",
 			detail:     "example.com=dkim: message contains an insecure body length tag",
+			now:        afterCutover, // date-independent
 			wantStatus: "warn",
 			wantMsgSub: "l=-Tag",
 		},
@@ -58,6 +74,7 @@ func TestClassifyDKIMFailure(t *testing.T) {
 			name:       "body hash mismatch stays a hard fail",
 			result:     "fail",
 			detail:     "example.com=dkim: body hash did not verify",
+			now:        beforeCutover,
 			wantStatus: "fail",
 			wantMsgSub: "nach dem Signieren verändert",
 		},
@@ -65,6 +82,7 @@ func TestClassifyDKIMFailure(t *testing.T) {
 			name:       "key too short stays a hard fail",
 			result:     "permerror",
 			detail:     "example.com=dkim: key is too short: want 1024 bits, has 768 bits",
+			now:        beforeCutover,
 			wantStatus: "fail",
 			wantMsgSub: "zu kurz",
 		},
@@ -72,6 +90,7 @@ func TestClassifyDKIMFailure(t *testing.T) {
 			name:       "unknown reason still surfaces raw detail",
 			result:     "fail",
 			detail:     "example.com=dkim: something entirely new",
+			now:        beforeCutover,
 			wantStatus: "fail",
 			wantMsgSub: "something entirely new",
 		},
@@ -79,13 +98,14 @@ func TestClassifyDKIMFailure(t *testing.T) {
 			name:       "no detail falls back to generic",
 			result:     "permerror",
 			detail:     "",
+			now:        beforeCutover,
 			wantStatus: "fail",
 			wantMsgSub: "DKIM meldet permerror",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := classifyDKIMFailure(tc.result, tc.detail)
+			f := classifyDKIMFailure(tc.result, tc.detail, tc.now)
 			if f.status != tc.wantStatus {
 				t.Fatalf("status: got %q, want %q", f.status, tc.wantStatus)
 			}

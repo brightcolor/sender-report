@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-07-14
+
+### Changed
+- **rsa-sha1-DKIM: Stichtag 01.01.2027** — bis dahin bleibt eine rsa-sha1-signierte
+  (aber kryptografisch gültige) DKIM-Signatur eine gelbe Warnung (−0.6) mit Hinweis
+  „Ab dem 01.01.2027 wird das als Fehler gewertet". Ab dem 01.01.2027 wird sie
+  automatisch als roter Fehler (−1.0) bewertet. Der Stichtag wird gegen den
+  Analyse-Zeitpunkt (report.CreatedAt) geprüft — kein manuelles Umschalten nötig.
+  Das l=-Tag bleibt unabhängig davon eine Warnung.
+
 ## [1.24.1] - 2026-07-13
 
 ### Changed

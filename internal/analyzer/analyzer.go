@@ -368,7 +368,7 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	case "pass":
 		report.Checks = append(report.Checks, pass("dkim", "DKIM", 0.4, "DKIM laut Authentication-Results bestanden.", ""))
 	case "fail", "temperror", "permerror":
-		f := classifyDKIMFailure(dkimResult, dkimDetail)
+		f := classifyDKIMFailure(dkimResult, dkimDetail, report.CreatedAt)
 		var c model.CheckResult
 		if f.status == "warn" {
 			c = warn("dkim", "DKIM", f.delta, f.summaryDE, f.suggestDE)
@@ -555,6 +555,7 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	// enrichCtx is used both by the simulation placeholder path and the normal
 	// enrichment loop below, so it is declared before the network-check branch.
 	enrichCtx := checkContext{
+		Now:            report.CreatedAt,
 		Message:        in.Message,
 		SMTPDomain:     in.SMTPDomain,
 		Headers:        headers,
@@ -902,6 +903,7 @@ func runChecksConcurrently(ctx context.Context, tasks []checkTask, limit int) []
 }
 
 type checkContext struct {
+	Now            time.Time
 	Message        model.Message
 	SMTPDomain     string
 	Headers        mail.Header
@@ -1626,6 +1628,12 @@ type dkimFinding struct {
 	specific             bool // matched a known reason (vs. generic fallback)
 }
 
+// dkimSHA1HardFailFrom is the cutover after which rsa-sha1 DKIM is scored as a
+// hard failure instead of a warning. RFC 8301 already forbids verifiers from
+// accepting rsa-sha1; this grace period gives senders time to migrate to
+// rsa-sha256 before it costs them the full DKIM penalty here.
+var dkimSHA1HardFailFrom = time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+
 // classifyDKIMFailure turns the raw verifier detail (produced at SMTP ingest by
 // go-msgauth and carried in X-Sender-Report-DKIM-Detail) into an accurate,
 // actionable finding. sender.report verifies DKIM strictly per RFC 8301/6376 —
@@ -1637,14 +1645,23 @@ type dkimFinding struct {
 // Cases where the signature is cryptographically valid and only trips a policy
 // rule (rsa-sha1, insecure l= tag) are reported as a warning, not a hard fail —
 // they are a deliverability risk to flag, not broken DKIM.
-func classifyDKIMFailure(result, detail string) dkimFinding {
+func classifyDKIMFailure(result, detail string, now time.Time) dkimFinding {
 	d := strings.ToLower(detail)
 	switch {
 	case strings.Contains(d, "hash algorithm too weak") || strings.Contains(d, "sha1"):
+		if now.Before(dkimSHA1HardFailFrom) {
+			return dkimFinding{
+				status: "warn", delta: -0.6, specific: true,
+				summaryDE: "DKIM ist mit dem veralteten Algorithmus rsa-sha1 signiert. Die Signatur ist kryptografisch gültig, aber rsa-sha1 ist laut RFC 8301 unzulässig — Gmail, Yahoo und Outlook lehnen es zunehmend ab. Ab dem 01.01.2027 wird das hier als Fehler gewertet.",
+				summaryEN: "DKIM is signed with the deprecated rsa-sha1 algorithm. The signature is cryptographically valid, but RFC 8301 disallows rsa-sha1 — Gmail, Yahoo and Outlook increasingly reject it. From 2027-01-01 this will be scored as an error here.",
+				suggestDE: "Beim Signieren auf rsa-sha256 umstellen (a=rsa-sha256). Bei OpenDKIM: SignatureAlgorithm rsa-sha256; ggf. neuen Schlüssel veröffentlichen.",
+				suggestEN: "Switch signing to rsa-sha256 (a=rsa-sha256). OpenDKIM: SignatureAlgorithm rsa-sha256; republish the key if needed.",
+			}
+		}
 		return dkimFinding{
-			status: "warn", delta: -0.6, specific: true,
-			summaryDE: "DKIM ist mit dem veralteten Algorithmus rsa-sha1 signiert. Die Signatur ist kryptografisch gültig, aber rsa-sha1 ist laut RFC 8301 unzulässig — Gmail, Yahoo und Outlook lehnen es zunehmend ab. Tolerantere Prüftools zeigen es teils noch als grün.",
-			summaryEN: "DKIM is signed with the deprecated rsa-sha1 algorithm. The signature is cryptographically valid, but RFC 8301 disallows rsa-sha1 — Gmail, Yahoo and Outlook increasingly reject it; more lenient checkers may still show it as green.",
+			status: "fail", delta: -1.0, specific: true,
+			summaryDE: "DKIM ist mit dem veralteten Algorithmus rsa-sha1 signiert, der laut RFC 8301 unzulässig ist. Gmail, Yahoo und Outlook lehnen rsa-sha1 ab — die Signatur zählt dort nicht.",
+			summaryEN: "DKIM is signed with the deprecated rsa-sha1 algorithm, which RFC 8301 disallows. Gmail, Yahoo and Outlook reject rsa-sha1 — the signature does not count there.",
 			suggestDE: "Beim Signieren auf rsa-sha256 umstellen (a=rsa-sha256). Bei OpenDKIM: SignatureAlgorithm rsa-sha256; ggf. neuen Schlüssel veröffentlichen.",
 			suggestEN: "Switch signing to rsa-sha256 (a=rsa-sha256). OpenDKIM: SignatureAlgorithm rsa-sha256; republish the key if needed.",
 		}
@@ -2389,7 +2406,7 @@ func summaryEN(id, status, deSummary string, ctx checkContext) string {
 	case "dkim:pass":
 		return "DKIM passed according to Authentication-Results."
 	case "dkim:fail", "dkim:warn":
-		if f := classifyDKIMFailure(ctx.DKIMResult, ctx.DKIMDetail); f.specific {
+		if f := classifyDKIMFailure(ctx.DKIMResult, ctx.DKIMDetail, ctx.Now); f.specific {
 			return f.summaryEN
 		}
 		if status == "warn" {
@@ -2630,7 +2647,7 @@ func recommendationEN(id, status string, ctx checkContext) string {
 		}
 	case "dkim":
 		if status == "fail" || status == "warn" {
-			if f := classifyDKIMFailure(ctx.DKIMResult, ctx.DKIMDetail); f.specific {
+			if f := classifyDKIMFailure(ctx.DKIMResult, ctx.DKIMDetail, ctx.Now); f.specific {
 				return f.suggestEN
 			}
 			return fmt.Sprintf("Generate a 2048-bit RSA or Ed25519 DKIM key pair, publish the public key as a TXT record at <selector>._domainkey.%s, and configure your MTA to sign all outgoing mail.", emptyFallback(ctx.FromDomain, "example.org"))
@@ -2959,7 +2976,7 @@ func dkimRecommendation(ctx checkContext) string {
 	// A specific verifier reason (rsa-sha1, l= tag, expired, …) gets targeted
 	// advice — the sender already has DKIM, so the generic "generate a new key
 	// pair" text below would be wrong for them.
-	if f := classifyDKIMFailure(ctx.DKIMResult, ctx.DKIMDetail); f.specific {
+	if f := classifyDKIMFailure(ctx.DKIMResult, ctx.DKIMDetail, ctx.Now); f.specific {
 		return f.suggestDE
 	}
 	domain := emptyFallback(ctx.FromDomain, "example.org")
