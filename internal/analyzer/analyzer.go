@@ -358,14 +358,29 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 
 	// DKIM
 	hasDKIMSig := headers.Get("DKIM-Signature") != ""
+	// The receiver-side verification (go-msgauth, done at SMTP ingest) records the
+	// precise reason here — e.g. "…=dkim: hash algorithm too weak: sha1". Without
+	// it, a strict-but-explainable rejection would surface as a generic
+	// "DKIM meldet permerror", which looks like broken DKIM even though the
+	// signature is cryptographically fine and only trips a policy rule.
+	dkimDetail := strings.TrimSpace(headers.Get("X-Sender-Report-DKIM-Detail"))
 	switch dkimResult {
 	case "pass":
 		report.Checks = append(report.Checks, pass("dkim", "DKIM", 0.4, "DKIM laut Authentication-Results bestanden.", ""))
 	case "fail", "temperror", "permerror":
-		report.Checks = append(report.Checks, fail("dkim", "DKIM", -1.4, fmt.Sprintf("DKIM meldet %s.", dkimResult), "Selector, Canonicalization und Signatur prüfen."))
+		delta, summary, suggestion := classifyDKIMFailure(dkimResult, dkimDetail)
+		c := fail("dkim", "DKIM", delta, summary, suggestion)
+		if dkimDetail != "" && dkimDetail != "none" {
+			c = withDetails(c, map[string]string{"verifier_detail": dkimDetail, "dkim_result": dkimResult})
+		}
+		report.Checks = append(report.Checks, c)
 	default:
 		if hasDKIMSig {
-			report.Checks = append(report.Checks, warn("dkim", "DKIM", -0.5, "DKIM-Signatur vorhanden, aber kein valides Ergebnis erkennbar.", "Verifizierbarkeit der DKIM-Signatur sicherstellen."))
+			msg := "DKIM-Signatur vorhanden, aber kein valides Ergebnis erkennbar."
+			if dkimDetail != "" && dkimDetail != "none" {
+				msg = "DKIM-Signatur vorhanden, aber nicht verifizierbar: " + dkimDetail
+			}
+			report.Checks = append(report.Checks, warn("dkim", "DKIM", -0.5, msg, "Verifizierbarkeit der DKIM-Signatur sicherstellen."))
 		} else {
 			report.Checks = append(report.Checks, fail("dkim", "DKIM", -1.0, "Keine DKIM-Signatur gefunden.", "Ausgehenden MTA so konfigurieren, dass DKIM signiert wird."))
 		}
@@ -1593,6 +1608,58 @@ func linkBlocklistCheck(ctx context.Context, links []string, providers []string)
 func withDetails(c model.CheckResult, details map[string]string) model.CheckResult {
 	c.TechnicalDetails = details
 	return c
+}
+
+// classifyDKIMFailure turns the raw verifier detail (produced at SMTP ingest by
+// go-msgauth and carried in X-Sender-Report-DKIM-Detail) into an accurate,
+// actionable finding. sender.report verifies DKIM strictly per RFC 8301/6376 —
+// stricter than many lenient online checkers (mail-tester & co.). A signature
+// those tools show as green can therefore still be rejected here; the job of
+// this mapping is to say *precisely why*, instead of a generic
+// "DKIM meldet permerror" that reads like the DKIM is broken or missing.
+func classifyDKIMFailure(result, detail string) (float64, string, string) {
+	d := strings.ToLower(detail)
+	switch {
+	case strings.Contains(d, "hash algorithm too weak") || strings.Contains(d, "sha1"):
+		return -1.0,
+			"DKIM ist mit dem veralteten Algorithmus rsa-sha1 signiert. Die Signatur ist kryptografisch gültig, aber rsa-sha1 ist laut RFC 8301 unzulässig — Gmail, Yahoo und Outlook lehnen es zunehmend ab. Tolerantere Prüftools zeigen es teils noch als grün.",
+			"Beim Signieren auf rsa-sha256 umstellen (a=rsa-sha256). Bei OpenDKIM: SignatureAlgorithm rsa-sha256; ggf. neuen Schlüssel veröffentlichen."
+	case strings.Contains(d, "body length"):
+		return -1.0,
+			"Die DKIM-Signatur nutzt das unsichere l=-Tag (Body-Length). Damit lässt sich Inhalt anhängen, ohne die Signatur zu brechen — deshalb wird es strikt abgelehnt.",
+			"Das l=-Tag in der Signer-Konfiguration entfernen."
+	case strings.Contains(d, "too short"):
+		return -1.2,
+			"Der DKIM-Schlüssel ist zu kurz (< 1024 Bit) und wird laut RFC 8301 nicht als gültig akzeptiert.",
+			"Neuen DKIM-Schlüssel mit mindestens 2048 Bit erzeugen und im Selector veröffentlichen."
+	case strings.Contains(d, "expired"):
+		return -1.0,
+			"Die DKIM-Signatur ist abgelaufen (x=-Tag liegt in der Vergangenheit).",
+			"Signatur-Lebensdauer (x=) verlängern oder x= weglassen; Systemuhr des Signers prüfen."
+	case strings.Contains(d, "body hash did not verify"):
+		return -1.4,
+			"Der DKIM-Body-Hash stimmt nicht — der Mail-Inhalt wurde nach dem Signieren verändert (z. B. durch eine Mailingliste, einen Footer-/Disclaimer-Injektor oder ein Gateway).",
+			"Signierung als letzten Schritt vor dem Versand ausführen; nachgelagerte Content-Änderungen vermeiden oder danach neu signieren."
+	case strings.Contains(d, "no key for signature"), strings.Contains(d, "no valid key"),
+		strings.Contains(d, "key syntax"), strings.Contains(d, "key revoked"):
+		return -1.2,
+			"Der öffentliche DKIM-Schlüssel konnte nicht gefunden oder gelesen werden (Selector-DNS-Record fehlt, ist leer oder fehlerhaft).",
+			"TXT-Record <selector>._domainkey.<domain> prüfen: v=DKIM1; k=rsa; p=<base64-Key>."
+	case strings.Contains(d, "multiple txt"):
+		return -1.2,
+			"Für den DKIM-Selector existieren mehrere TXT-Records — das Ergebnis ist damit undefiniert (RFC 6376) und wird abgelehnt.",
+			"Pro Selector genau einen TXT-Record veröffentlichen."
+	case strings.Contains(d, "domain mismatch"), strings.Contains(d, "from field not signed"):
+		return -1.2,
+			"Die DKIM-Signatur ist formal ungültig (From-Feld nicht signiert oder i=/d=-Domain passt nicht).",
+			"Signer so konfigurieren, dass das From-Feld signiert wird und i= zur d=-Domain passt."
+	}
+	// Unknown reason — still surface the raw detail so it stays diagnosable.
+	if strings.TrimSpace(detail) != "" && detail != "none" {
+		return -1.4, fmt.Sprintf("DKIM-Prüfung fehlgeschlagen (%s): %s", result, detail),
+			"Selector, Canonicalization und Signatur prüfen."
+	}
+	return -1.4, fmt.Sprintf("DKIM meldet %s.", result), "Selector, Canonicalization und Signatur prüfen."
 }
 
 func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult {

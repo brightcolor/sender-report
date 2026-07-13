@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-07-13
+
+### Fixed
+- **DKIM wurde bei sauberen Signaturen fälschlich als „fehlerhaft" oder „nicht
+  existent" dargestellt** — sender.report verifiziert DKIM beim SMTP-Empfang
+  kryptografisch echt (go-msgauth, RFC 8301/6376) und damit deutlich strenger als
+  mail-tester.com & viele andere Online-Checker. Eine dort grün angezeigte Signatur
+  konnte hier abgelehnt werden. Der eigentliche Grund lag zwar bereits im internen
+  Header `X-Sender-Report-DKIM-Detail` vor, wurde vom Report aber verworfen und durch
+  ein generisches „DKIM meldet permerror" ersetzt — das las sich wie kaputtes/fehlendes
+  DKIM.
+  - Der Report zeigt jetzt den **konkreten Grund** und eine passende Handlungsempfehlung.
+    Erkannt werden u. a.:
+    - **rsa-sha1** (RFC 8301 „hash algorithm too weak") — häufigster Fall: Signatur ist
+      kryptografisch gültig, nutzt aber den veralteten sha1-Algorithmus, den tolerante
+      Tools noch akzeptieren. → Empfehlung: auf rsa-sha256 umstellen.
+    - unsicheres **l=-Tag** (Body-Length),
+    - **Schlüssel < 1024 Bit**,
+    - **abgelaufene Signatur** (x=),
+    - **Body-Hash-Mismatch** (Inhalt nach dem Signieren verändert, z. B. Footer-Injektor),
+    - **Selector-DNS-Record fehlt/leer/mehrfach**,
+    - From-Feld nicht signiert / Domain-Mismatch.
+  - Unbekannte Fehlergründe werden nun ebenfalls im Klartext durchgereicht statt
+    verschluckt; der Rohgrund steht zusätzlich in den technischen Details
+    (`verifier_detail`).
+
 ## [1.23.2] - 2026-07-08
 
 ### Changed

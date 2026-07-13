@@ -28,6 +28,65 @@ func TestParseAuthResult(t *testing.T) {
 	}
 }
 
+func TestClassifyDKIMFailure(t *testing.T) {
+	cases := []struct {
+		name        string
+		result      string
+		detail      string
+		wantMsgSub  string // substring the summary must contain
+		wantSuggest string // substring the suggestion must contain
+	}{
+		{
+			name:        "rsa-sha1 deprecated",
+			result:      "permerror",
+			detail:      "example.com=dkim: hash algorithm too weak: sha1",
+			wantMsgSub:  "rsa-sha1",
+			wantSuggest: "rsa-sha256",
+		},
+		{
+			name:       "insecure body length tag",
+			result:     "fail",
+			detail:     "example.com=dkim: message contains an insecure body length tag",
+			wantMsgSub: "l=-Tag",
+		},
+		{
+			name:       "body hash mismatch (content modified)",
+			result:     "fail",
+			detail:     "example.com=dkim: body hash did not verify",
+			wantMsgSub: "nach dem Signieren verändert",
+		},
+		{
+			name:       "key too short",
+			result:     "permerror",
+			detail:     "example.com=dkim: key is too short: want 1024 bits, has 768 bits",
+			wantMsgSub: "zu kurz",
+		},
+		{
+			name:       "unknown reason still surfaces raw detail",
+			result:     "fail",
+			detail:     "example.com=dkim: something entirely new",
+			wantMsgSub: "something entirely new",
+		},
+		{
+			name:       "no detail falls back to generic",
+			result:     "permerror",
+			detail:     "",
+			wantMsgSub: "DKIM meldet permerror",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, summary, suggestion := classifyDKIMFailure(tc.result, tc.detail)
+			if !strings.Contains(summary, tc.wantMsgSub) {
+				t.Fatalf("summary %q does not contain %q", summary, tc.wantMsgSub)
+			}
+			if tc.wantSuggest != "" && !strings.Contains(suggestion, tc.wantSuggest) {
+				t.Fatalf("suggestion %q does not contain %q", suggestion, tc.wantSuggest)
+			}
+		})
+	}
+}
+
 func TestHeaderValues(t *testing.T) {
 	h := mail.Header{}
 	h["Received"] = []string{"hop1", "hop2"}
