@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.24.1] - 2026-07-13
+
+### Changed
+- **rsa-sha1 und das unsichere l=-Tag werden jetzt als Warnung statt als harter
+  Fehler dargestellt** — in diesen Fällen ist die DKIM-Signatur kryptografisch
+  gültig und nur die Krypto/Policy ist schwach. Der Report zeigt das nun gelb
+  („Signatur gültig, aber …") statt rot, mit reduziertem Score-Abzug (rsa-sha1 −0.6,
+  l=-Tag −0.5). Echte Fehler (Body-Hash-Mismatch, fehlender/zu kurzer Schlüssel,
+  abgelaufene Signatur, mehrere/fehlende Selector-Records) bleiben rot.
+- Die **Handlungsempfehlung ist jetzt grundgenau**: Bei rsa-sha1 wird „auf rsa-sha256
+  umstellen" empfohlen statt fälschlich „neues Schlüsselpaar erzeugen" — der Absender
+  hat ja bereits DKIM. Englische Zusammenfassung und Empfehlung sind entsprechend
+  angepasst (kein generisches „DKIM reports a failure" mehr für erkannte Gründe).
+
 ## [1.24.0] - 2026-07-13
 
 ### Fixed

@@ -33,55 +33,70 @@ func TestClassifyDKIMFailure(t *testing.T) {
 		name        string
 		result      string
 		detail      string
-		wantMsgSub  string // substring the summary must contain
-		wantSuggest string // substring the suggestion must contain
+		wantStatus  string
+		wantMsgSub  string // substring the German summary must contain
+		wantMsgENub string // substring the English summary must contain
+		wantSuggest string // substring the German suggestion must contain
 	}{
 		{
-			name:        "rsa-sha1 deprecated",
+			name:        "rsa-sha1 deprecated is a warning, not a fail",
 			result:      "permerror",
 			detail:      "example.com=dkim: hash algorithm too weak: sha1",
+			wantStatus:  "warn",
 			wantMsgSub:  "rsa-sha1",
+			wantMsgENub: "rsa-sha1",
 			wantSuggest: "rsa-sha256",
 		},
 		{
-			name:       "insecure body length tag",
+			name:       "insecure body length tag is a warning",
 			result:     "fail",
 			detail:     "example.com=dkim: message contains an insecure body length tag",
+			wantStatus: "warn",
 			wantMsgSub: "l=-Tag",
 		},
 		{
-			name:       "body hash mismatch (content modified)",
+			name:       "body hash mismatch stays a hard fail",
 			result:     "fail",
 			detail:     "example.com=dkim: body hash did not verify",
+			wantStatus: "fail",
 			wantMsgSub: "nach dem Signieren verändert",
 		},
 		{
-			name:       "key too short",
+			name:       "key too short stays a hard fail",
 			result:     "permerror",
 			detail:     "example.com=dkim: key is too short: want 1024 bits, has 768 bits",
+			wantStatus: "fail",
 			wantMsgSub: "zu kurz",
 		},
 		{
 			name:       "unknown reason still surfaces raw detail",
 			result:     "fail",
 			detail:     "example.com=dkim: something entirely new",
+			wantStatus: "fail",
 			wantMsgSub: "something entirely new",
 		},
 		{
 			name:       "no detail falls back to generic",
 			result:     "permerror",
 			detail:     "",
+			wantStatus: "fail",
 			wantMsgSub: "DKIM meldet permerror",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, summary, suggestion := classifyDKIMFailure(tc.result, tc.detail)
-			if !strings.Contains(summary, tc.wantMsgSub) {
-				t.Fatalf("summary %q does not contain %q", summary, tc.wantMsgSub)
+			f := classifyDKIMFailure(tc.result, tc.detail)
+			if f.status != tc.wantStatus {
+				t.Fatalf("status: got %q, want %q", f.status, tc.wantStatus)
 			}
-			if tc.wantSuggest != "" && !strings.Contains(suggestion, tc.wantSuggest) {
-				t.Fatalf("suggestion %q does not contain %q", suggestion, tc.wantSuggest)
+			if !strings.Contains(f.summaryDE, tc.wantMsgSub) {
+				t.Fatalf("summaryDE %q does not contain %q", f.summaryDE, tc.wantMsgSub)
+			}
+			if tc.wantMsgENub != "" && !strings.Contains(f.summaryEN, tc.wantMsgENub) {
+				t.Fatalf("summaryEN %q does not contain %q", f.summaryEN, tc.wantMsgENub)
+			}
+			if tc.wantSuggest != "" && !strings.Contains(f.suggestDE, tc.wantSuggest) {
+				t.Fatalf("suggestDE %q does not contain %q", f.suggestDE, tc.wantSuggest)
 			}
 		})
 	}
