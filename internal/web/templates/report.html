@@ -1194,6 +1194,7 @@ function showDecrypted(payload, secretToken) {
     if (typeof colorScoreDeltas    === 'function') colorScoreDeltas();
     if (typeof setupCheckFilter    === 'function') setupCheckFilter();
     if (typeof localizeStaticTimes === 'function') localizeStaticTimes();
+    if (typeof setupDownloadButtons === 'function') setupDownloadButtons();
     setupRecheckButtons();
   }
 
@@ -1998,6 +1999,31 @@ function updateHeroScore(score, label) {
   if (window.__mpReport) window.__mpReport.score = score;
 }
 
+// Client-side file download from an in-memory string (E2E: the server never
+// sees the plaintext, so exports are generated in the browser from DEC_PAYLOAD).
+function srDownloadText(filename, text, mime) {
+  try {
+    var blob = new Blob([text != null ? text : ''], { type: (mime || 'text/plain') + ';charset=utf-8' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  } catch (e) {}
+}
+function setupDownloadButtons() {
+  var base = 'sender-report';
+  document.querySelectorAll('[data-dl]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      if (!DEC_PAYLOAD) return;
+      var kind = btn.getAttribute('data-dl');
+      if (kind === 'headers')      srDownloadText(base + '-headers.txt', DEC_PAYLOAD.header_block || '', 'text/plain');
+      else if (kind === 'source')  srDownloadText(base + '-raw.eml',     DEC_PAYLOAD.raw_source  || '', 'message/rfc822');
+      else if (kind === 'json')    srDownloadText(base + '-report.json', JSON.stringify(DEC_PAYLOAD, null, 2), 'application/json');
+    });
+  });
+}
+
 function renderDecryptedReport(p) {
   var r=p.report||{}, checks=r.checks||[];
   var order=[], grpMap={};
@@ -2026,12 +2052,15 @@ function renderDecryptedReport(p) {
     r.spam_signals.forEach(function(s){sideHtml+='<li>'+esc(s)+'</li>';});
     sideHtml+='</ul></div></div>';
   }
+  // E2E: the server only holds "[encrypted]" for raw source / headers and a
+  // stripped report, so the /raw and /api/reports endpoints cannot serve the
+  // real content. Build the downloads client-side from the decrypted payload.
   sideHtml+='<div class="card mb-3"><div class="card-header"><h3 class="card-title mb-0">'+
             '<i class="bi bi-download me-1"></i>Export &amp; Rohdaten</h3></div>'+
             '<div class="card-body d-flex flex-column gap-2">'+
-            '<a class="btn btn-outline-secondary btn-sm" href="/raw/'+esc(TOKEN)+'/'+esc(MSGREF)+'/headers" target="_blank" rel="noopener noreferrer"><i class="bi bi-file-text me-1"></i>Header herunterladen</a>'+
-            '<a class="btn btn-outline-secondary btn-sm" href="/raw/'+esc(TOKEN)+'/'+esc(MSGREF)+'/source" target="_blank" rel="noopener noreferrer"><i class="bi bi-file-earmark-code me-1"></i>Raw herunterladen</a>'+
-            '<a class="btn btn-outline-secondary btn-sm" href="/api/reports/'+esc(TOKEN)+'/'+esc(MSGREF)+'" target="_blank" rel="noopener noreferrer"><i class="bi bi-braces me-1"></i>JSON Export</a>'+
+            '<button class="btn btn-outline-secondary btn-sm" type="button" data-dl="headers"><i class="bi bi-file-text me-1"></i>Header herunterladen</button>'+
+            '<button class="btn btn-outline-secondary btn-sm" type="button" data-dl="source"><i class="bi bi-file-earmark-code me-1"></i>Raw herunterladen</button>'+
+            '<button class="btn btn-outline-secondary btn-sm" type="button" data-dl="json"><i class="bi bi-braces me-1"></i>JSON Export</button>'+
             '</div></div>';
 
   var rawHtml='';

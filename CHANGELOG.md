@@ -4,7 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.25.0] - 2026-07-14
+## [1.25.1] - 2026-07-14
+
+### Fixed
+- **Export/Download bei E2E-Mailboxen lieferte „[encrypted]" statt der echten Daten** —
+  die Buttons „Header herunterladen", „Raw herunterladen" und „JSON Export" im Report
+  zeigten auf Server-Endpunkte (`/raw/.../headers`, `/raw/.../source`, `/api/reports/…`),
+  die die **gespeicherten** DB-Daten ausliefern. Bei Ende-zu-Ende-verschlüsselten
+  Mailboxen sind diese Felder aber `[encrypted]` bzw. der Report ist gestrippt — der
+  Server kann sie prinzipbedingt nicht entschlüsseln (kein Schlüssel).
+  - Im entschlüsselten Report werden die drei Exporte jetzt **clientseitig** aus dem
+    bereits entschlüsselten Payload erzeugt (Blob + Download): Header aus
+    `header_block`, Raw als `.eml` aus `raw_source`, JSON als vollständiger
+    entschlüsselter Payload. Für nicht-verschlüsselte Mailboxen bleiben die
+    serverseitigen Download-Links unverändert.
+
+
 
 ### Changed
 - **rsa-sha1-DKIM: Stichtag 01.01.2027** — bis dahin bleibt eine rsa-sha1-signierte
