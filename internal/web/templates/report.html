@@ -1753,9 +1753,23 @@ function renderDecCheckItem(c, uid){
 // setupRecheckButtons wires the per-check "Neu prüfen" buttons. On click it
 // re-runs that single DNS/RDAP/blocklist check server-side (using the values from
 // the decrypted report) and replaces the item in place with the fresh result.
+// prevFinding returns the status and score delta of the check currently shown,
+// so the server can keep the penalty when a recheck can only confirm that a DNS
+// record exists — an SPF or DMARC record proves nothing about the actual result,
+// which needs a real delivery.
+function prevFinding(id) {
+  var checks = (DEC_PAYLOAD && DEC_PAYLOAD.report && DEC_PAYLOAD.report.checks) || [];
+  for (var i = 0; i < checks.length; i++) {
+    if (checks[i] && checks[i].id === id) {
+      return { prev_status: checks[i].status || '', prev_delta: checks[i].score_delta || 0 };
+    }
+  }
+  return {};
+}
+
 // fetchRecheck runs one check server-side and returns the fresh result.
 async function fetchRecheck(id) {
-  var body = Object.assign({ check_id: id }, RECHECK_INPUTS);
+  var body = Object.assign({ check_id: id }, RECHECK_INPUTS, prevFinding(id));
   var res = await fetch('/api/recheck/' + TOKEN + '/' + MSGREF, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     cache: 'no-store', body: JSON.stringify(body)
@@ -1767,7 +1781,7 @@ async function fetchRecheck(id) {
 // fetchRecheckActivate is like fetchRecheck but adds ?activate=1 so the server
 // also persists the opt-in flag to the mailbox before running the check.
 async function fetchRecheckActivate(id) {
-  var body = Object.assign({ check_id: id }, RECHECK_INPUTS);
+  var body = Object.assign({ check_id: id }, RECHECK_INPUTS, prevFinding(id));
   var res = await fetch('/api/recheck/' + TOKEN + '/' + MSGREF + '?activate=1', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     cache: 'no-store', body: JSON.stringify(body)

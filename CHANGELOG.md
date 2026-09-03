@@ -4,7 +4,46 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.26.0] - 2026-09-03
+## [1.27.0] - 2026-09-03
+
+### Fixed
+- **„Erneut prüfen" hob SPF und DMARC auf bestanden, ohne etwas nachgewiesen zu haben** —
+  die beiden Rechecks prüfen nur, ob ein Record im DNS existiert. Ob eine Mail SPF
+  besteht, entscheidet sich aber an der sendenden IP-Adresse, und ob DMARC besteht,
+  zusätzlich am Alignment. Beides lässt sich ohne echte Zustellung nicht feststellen.
+  Trotzdem lieferten beide Prüfungen `pass`, womit der jeweilige Abzug verschwand.
+  Beide Prüfungen sind als „Kritisch" eingestuft, der Abzug beträgt je −2,6 — ein Klick
+  war also bis zu 5,2 Punkte wert, ohne dass sich am Setup etwas geändert hatte.
+  Zusätzlich entfiel dadurch die Zehn-Punkte-Sperre, weil deren Prüfung nur den Status
+  betrachtet.
+  - Beide Rechecks melden jetzt „Eintrag vorhanden, Ergebnis noch offen" und behalten
+    die Bewertung des Erstbefunds, bis eine neue Testmail sie bestätigt. Der Text sagt
+    ausdrücklich, was noch fehlt und wie man es bestätigt.
+  - Die Report-Seite schickt den bisherigen Befund beim Recheck mit. Fehlt er (ältere
+    Seite im Browser-Cache), wird nicht auf 0 zurückgefallen, sondern auf den
+    Warnungs-Abzug der jeweiligen Wichtigkeit.
+  - Spiegelfall mitbehoben: War überhaupt kein SPF-Record vorhanden, stufte der Recheck
+    den Befund von „Warnung" auf „Hinweis" herab und verbesserte den Score um 1,3
+    Punkte — für eine Domain, die weiterhin keinen SPF-Record hatte.
+- **Jeder Linktext mit einem Punkt und ohne Leerzeichen galt als Phishing** — die
+  Erkennung von irreführenden Links prüfte lediglich, ob der sichtbare Text einen Punkt
+  und kein Leerzeichen enthält, und deutete ihn dann als Domainnamen. Da die
+  Public-Suffix-Auswertung eine unbekannte Endung als eigenes Suffix behandelt, wurden
+  Dateinamen (`Rechnung_2025_11.pdf`), Sätze mit Schlusspunkt (`Weiterlesen.`),
+  Versions- und Aktenzeichen allesamt zu „Domains", die nicht zum Linkziel passten.
+  Der Check ist als „Kritisch" eingestuft, jeder Fehlalarm kostete −2,6 Punkte und
+  bezeichnete die Mail als „klassisches Phishing-Muster".
+  - Ein Linktext gilt nur noch dann als Domain, wenn seine Endung eine tatsächlich
+    gelistete Top-Level-Domain ist. `.zip` und `.mov` sind davon ausgenommen: sie sind
+    zwar echte Endungen, stehen in Linktexten aber praktisch immer für Dateien.
+  - **Klick-Tracking wird nicht mehr als Täuschung gewertet** — zeigt der Linktext die
+    eigene Absenderdomain und führt der Link über eine Zähl-Adresse des
+    Versanddienstleisters, ist das das Standardverhalten von Mailchimp, CleverReach,
+    Brevo und anderen. Der Absender kann daran nichts ändern und täuscht niemanden.
+    Dieser Fall erscheint jetzt als Hinweis ohne Punktabzug, mit der Erklärung, wozu
+    das dient und wie sich eine eigene Zähl-Domain einrichten lässt. Nennt der Linktext
+    dagegen eine **fremde** Domain, bleibt es beim roten Befund.
+  - Der Report nennt jetzt die betroffenen Links konkret, statt nur ihre Anzahl.
 
 ### Fixed
 - **Eine gestörte DNS-Auflösung wurde dem Absender als fehlender Eintrag gemeldet** —

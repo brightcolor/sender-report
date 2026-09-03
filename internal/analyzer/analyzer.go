@@ -83,6 +83,31 @@ type RecheckInput struct {
 	HELO           string
 	DKIMSignature  string
 	Links          []string
+
+	// PrevStatus and PrevDelta carry the finding this recheck is replacing.
+	// A recheck runs without a new test mail, so for SPF and DMARC it can only
+	// confirm that a record exists — never that the check now passes. Keeping
+	// the original penalty until a real message proves otherwise is what stops
+	// a click from clearing a verdict it never re-verified. An empty PrevStatus
+	// means the caller did not send them (older clients).
+	PrevStatus string
+	PrevDelta  float64
+}
+
+// pendingDelta returns the score delta a recheck must keep when it could only
+// establish that a record exists.
+//
+// Clearing the penalty here would hand out points for nothing: an SPF fail
+// means the sending IP is not authorised, which a DNS lookup cannot refute, and
+// the same holds for DMARC alignment. Both are rated "Kritisch", so the pair was
+// worth 5.2 points per click. Where the previous status is unknown, the check
+// falls back to the warn-level penalty for its importance rather than to zero —
+// an unknown previous state must not be read as "was fine".
+func (in RecheckInput) pendingDelta(id string) float64 {
+	if in.PrevStatus == "" {
+		return scoreFor(checkImportance(id), "warn")
+	}
+	return in.PrevDelta
 }
 
 // Recheckable reports whether a check ID can be re-run live. These are the
@@ -115,11 +140,11 @@ func (e *Engine) Recheck(ctx context.Context, id string, in RecheckInput) (res m
 	primary := firstNonEmpty(in.FromDomain, in.EnvelopeDomain)
 	switch id {
 	case "spf":
-		res = spfRecordRecheck(ctx, firstNonEmpty(in.EnvelopeDomain, in.FromDomain))
+		res = spfRecordRecheck(ctx, firstNonEmpty(in.EnvelopeDomain, in.FromDomain), in)
 	case "spf_strictness":
 		res = spfStrictnessRecheck(ctx, firstNonEmpty(in.EnvelopeDomain, in.FromDomain))
 	case "dmarc":
-		res = dmarcRecordRecheck(ctx, in.FromDomain)
+		res = dmarcRecordRecheck(ctx, in.FromDomain, in)
 	case "dmarc_policy":
 		res = dmarcPolicyRecheck(ctx, in.FromDomain)
 	case "mx_records":
@@ -167,10 +192,31 @@ func (e *Engine) Recheck(ctx context.Context, id string, in RecheckInput) (res m
 	return res, true
 }
 
+// recheckPendingDetailKey marks a recheck result that could establish only that
+// a record exists, without being able to confirm the check itself.
+const recheckPendingDetailKey = "recheck_pending"
+
+// recheckUnconfirmed builds that result: informational in tone, but carrying the
+// score delta of the finding it replaces.
+//
+// A recheck runs on DNS alone, without a new test mail. It can see that an SPF
+// record now exists — not whether the sending IP is authorised by it, which is
+// what an SPF fail actually means. Reporting "pass" there cleared a penalty
+// nothing had re-verified; across SPF and DMARC, both rated "Kritisch", that was
+// 5.2 points for one click, and it also lifted the 9.5 cap because
+// essentialsAllPass only looks at the status.
+func recheckUnconfirmed(id, name string, in RecheckInput, summary string) model.CheckResult {
+	c := info(id, name, in.pendingDelta(id), summary,
+		"Schicken Sie eine neue Testmail an diese Adresse, damit das Ergebnis an einer echten Zustellung geprüft werden kann. Bis dahin bleibt die bisherige Bewertung stehen.")
+	return withDetails(c, map[string]string{
+		recheckPendingDetailKey: "Eintrag vorhanden, Ergebnis noch nicht durch eine echte Zustellung bestätigt",
+	})
+}
+
 // spfRecordRecheck re-looks up the SPF TXT record (used after a DNS fix). It
 // reports record presence/strictness; the actual SPF pass against the sending IP
 // is only verified when a real mail is received.
-func spfRecordRecheck(ctx context.Context, domain string) model.CheckResult {
+func spfRecordRecheck(ctx context.Context, domain string, in RecheckInput) model.CheckResult {
 	domain = normDomain(domain)
 	if domain == "" {
 		return info("spf", "SPF", 0, "Keine Domain für den SPF-Recheck ermittelbar.", "")
@@ -186,9 +232,12 @@ func spfRecordRecheck(ctx context.Context, domain string) model.CheckResult {
 		}
 	}
 	if spf == "" {
-		return info("spf", "SPF", 0, fmt.Sprintf("Kein SPF-Record (v=spf1) für %s gefunden.", domain), "TXT-Record mit v=spf1 auf der Envelope-From-Domain veröffentlichen.")
+		// A missing record is a real negative and keeps its full weight. Reporting
+		// it as "info" used to hand back 1.3 points for a domain that still had no
+		// SPF record at all.
+		return warn("spf", "SPF", 0, fmt.Sprintf("Kein SPF-Record (v=spf1) für %s gefunden.", domain), "TXT-Record mit v=spf1 auf der Envelope-From-Domain veröffentlichen.")
 	}
-	return pass("spf", "SPF", 0, fmt.Sprintf("SPF-Record für %s vorhanden: %s. Der tatsächliche SPF-Pass wird beim nächsten echten Versand gegen die sendende IP geprüft.", domain, spf), "")
+	return recheckUnconfirmed("spf", "SPF", in, fmt.Sprintf("SPF-Record für %s ist vorhanden: %s. Ob eine Mail damit tatsächlich besteht, entscheidet sich an der sendenden IP-Adresse — und die lässt sich nur an einer echten Zustellung prüfen, nicht am DNS-Eintrag allein.", domain, spf))
 }
 
 // spfStrictnessRecheck re-fetches the SPF TXT record and re-evaluates its
@@ -212,7 +261,7 @@ func spfStrictnessRecheck(ctx context.Context, domain string) model.CheckResult 
 }
 
 // dmarcRecordRecheck re-looks up the _dmarc TXT record (used after a DNS fix).
-func dmarcRecordRecheck(ctx context.Context, fromDomain string) model.CheckResult {
+func dmarcRecordRecheck(ctx context.Context, fromDomain string, in RecheckInput) model.CheckResult {
 	fromDomain = normDomain(fromDomain)
 	if fromDomain == "" {
 		return info("dmarc", "DMARC", 0, "Keine From-Domain für den DMARC-Recheck ermittelbar.", "")
@@ -233,7 +282,7 @@ func dmarcRecordRecheck(ctx context.Context, fromDomain string) model.CheckResul
 	if !found {
 		return fail("dmarc", "DMARC", 0, fmt.Sprintf("Kein DMARC-Record für %s gefunden.", fromDomain), "_dmarc."+fromDomain+" TXT mit v=DMARC1 veröffentlichen.")
 	}
-	return pass("dmarc", "DMARC", 0, fmt.Sprintf("DMARC-Record für %s gefunden (p=%s). Das vollständige Alignment wird beim nächsten echten Versand geprüft.", fromDomain, emptyFallback(policy, "none")), "")
+	return recheckUnconfirmed("dmarc", "DMARC", in, fmt.Sprintf("DMARC-Record für %s ist vorhanden (p=%s). Ob DMARC tatsächlich besteht, hängt zusätzlich am Alignment — also daran, ob die per SPF oder DKIM geprüfte Domain zur sichtbaren Absenderdomain passt. Das zeigt sich erst an einer echten Zustellung.", fromDomain, emptyFallback(policy, "none")))
 }
 
 // dmarcPolicyRecheck re-fetches the DMARC record and re-evaluates the policy
@@ -545,7 +594,7 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	report.Checks = append(report.Checks, urlFindings...)
 	report.SpamSignals = append(report.SpamSignals, spamSignals...)
 	report.Checks = append(report.Checks, templateURLCheck(report.Links, mailType))
-	report.Checks = append(report.Checks, linkDomainMismatchCheck(parsedBody.HTML))
+	report.Checks = append(report.Checks, linkDomainMismatchCheck(parsedBody.HTML, fromDomain))
 	if e.opts.EnableBrokenLinks || in.EnableBrokenLinks {
 		report.Checks = append(report.Checks, brokenLinksCheck(ctx, report.Links))
 	} else {
@@ -1870,8 +1919,14 @@ func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult 
 	// derive their impact purely from (importance × status) so the weighting is
 	// consistent and realistic; a few checks compute their own continuous or
 	// reputation-based magnitude and keep it.
-	switch c.ID {
-	case "domain_age", "rbl", "spamassassin", "rspamd", "spf_strictness":
+	switch {
+	case c.TechnicalDetails[recheckPendingDetailKey] != "":
+		// A recheck that could only confirm a record exists carries the delta of
+		// the finding it replaces (see RecheckInput.pendingDelta). Re-deriving it
+		// from (importance × status) would zero it out — which is precisely the
+		// loophole this state closes.
+	case c.ID == "domain_age" || c.ID == "rbl" || c.ID == "spamassassin" ||
+		c.ID == "rspamd" || c.ID == "spf_strictness":
 		// keep the self-computed ScoreDelta (nuanced per-case values)
 	default:
 		c.ScoreDelta = scoreFor(c.Importance, c.Status)
@@ -3587,7 +3642,42 @@ func getOrgDomain(host string) string {
 	return etld
 }
 
-func linkDomainMismatchCheck(htmlBody string) model.CheckResult {
+// fileishTLDs are real ICANN top-level domains that appear in link texts almost
+// exclusively as file extensions. Without them, "Angebot.zip" would be read as a
+// domain name and reported as a disguised link.
+var fileishTLDs = map[string]bool{"zip": true, "mov": true}
+
+// looksLikeDomain reports whether a link's visible text can be read as a domain
+// name at all, rather than as ordinary text that happens to contain a dot.
+//
+// The previous rule — "contains a dot and no space" — matched file names
+// (Rechnung_2025_11.pdf), sentences ending in a period (Weiterlesen.), version
+// numbers and reference codes. publicsuffix treats an unknown final label as a
+// suffix in its own right, so all of those yielded an "org domain" and with it a
+// phishing accusation worth -2.6. The ICANN flag is what separates a listed
+// top-level domain from a guessed one.
+func looksLikeDomain(s string) bool {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" || strings.Contains(s, " ") || strings.HasSuffix(s, ".") || !strings.Contains(s, ".") {
+		return false
+	}
+	suffix, icann := publicsuffix.PublicSuffix(s)
+	if !icann || suffix == "" || fileishTLDs[suffix] {
+		return false
+	}
+	// Something has to precede the suffix: "de" on its own is a suffix, not a domain.
+	return len(s) > len(suffix)+1
+}
+
+// linkDomainMismatchCheck flags links whose visible text names a different
+// domain than the href actually points to.
+//
+// Two very different cases share that shape, and only one of them is a problem.
+// A text naming a *foreign* domain is the classic phishing pattern. A text
+// naming the *sender's own* domain over a tracking href is what every mailing
+// provider does by default — the sender cannot change it and it is not a
+// deception, so it must not be scored as one.
+func linkDomainMismatchCheck(htmlBody, fromDomain string) model.CheckResult {
 	if strings.TrimSpace(htmlBody) == "" {
 		return info("link_domain_mismatch", "Link-Domain-Mismatch", 0.0, "Kein HTML-Body – Mismatch-Check nicht anwendbar.", "")
 	}
@@ -3595,7 +3685,9 @@ func linkDomainMismatchCheck(htmlBody string) model.CheckResult {
 	if err != nil {
 		return info("link_domain_mismatch", "Link-Domain-Mismatch", 0.0, "HTML nicht parsebar.", "")
 	}
-	mismatches := 0
+	senderOrg := getOrgDomain(normDomain(fromDomain))
+	foreign, tracking := 0, 0
+	var foreignExamples, trackingExamples []string
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
 		if n.Type == html.ElementNode && n.Data == "a" {
@@ -3621,13 +3713,26 @@ func linkDomainMismatchCheck(htmlBody string) model.CheckResult {
 					}
 					getText(n)
 					linkText := strings.TrimSpace(textBuf.String())
-					if strings.Contains(linkText, ".") && !strings.Contains(linkText, " ") {
-						textURL, terr := url.Parse("https://" + strings.TrimPrefix(strings.TrimPrefix(linkText, "https://"), "http://"))
+					bare := strings.TrimPrefix(strings.TrimPrefix(linkText, "https://"), "http://")
+					bare = strings.TrimSuffix(bare, "/")
+					if looksLikeDomain(bare) {
+						textURL, terr := url.Parse("https://" + bare)
 						if terr == nil && textURL.Host != "" {
 							hrefOrg := getOrgDomain(hrefURL.Host)
 							textOrg := getOrgDomain(textURL.Host)
 							if hrefOrg != "" && textOrg != "" && hrefOrg != textOrg {
-								mismatches++
+								example := fmt.Sprintf("%q → %s", linkText, hrefURL.Host)
+								if senderOrg != "" && textOrg == senderOrg {
+									tracking++
+									if len(trackingExamples) < 3 {
+										trackingExamples = append(trackingExamples, example)
+									}
+								} else {
+									foreign++
+									if len(foreignExamples) < 3 {
+										foreignExamples = append(foreignExamples, example)
+									}
+								}
 							}
 						}
 					}
@@ -3639,12 +3744,19 @@ func linkDomainMismatchCheck(htmlBody string) model.CheckResult {
 		}
 	}
 	walk(doc)
-	if mismatches > 0 {
-		return fail("link_domain_mismatch", "Link-Domain-Mismatch", -0.8,
-			fmt.Sprintf("%d Link(s) mit irreführendem Anzeigetext erkannt: der sichtbare Domainname weicht vom tatsächlichen Ziel ab – klassisches Phishing-Muster.", mismatches),
-			"Sicherstellen, dass der Linktext die tatsächliche Zieldomain widerspiegelt.")
+	if foreign > 0 {
+		return withDetails(fail("link_domain_mismatch", "Link-Domain-Mismatch", 0.0,
+			fmt.Sprintf("%d Link(s) zeigen im sichtbaren Text eine fremde Domain an, führen aber woandershin. Genau so sehen Phishing-Mails aus, und Spamfilter prüfen dieses Muster gezielt.", foreign),
+			"Den sichtbaren Linktext auf die Domain ändern, zu der der Link tatsächlich führt – oder statt einer Domain eine Beschriftung wie „Zum Angebot“ verwenden."),
+			map[string]string{"betroffene_links": strings.Join(foreignExamples, "\n")})
 	}
-	return pass("link_domain_mismatch", "Link-Domain-Mismatch", 0.0, "Keine offensichtlichen Domain-Mismatches in Links erkannt.", "")
+	if tracking > 0 {
+		return withDetails(info("link_domain_mismatch", "Link-Domain-Mismatch", 0.0,
+			fmt.Sprintf("%d Link(s) zeigen Ihre eigene Domain an, führen aber über eine Zähl-Adresse Ihres Versanddienstleisters. Das ist bei Newslettern der Normalfall und kein Fehler: so werden Klicks gezählt.", tracking),
+			"Kein Handlungsbedarf. Wer es vermeiden möchte, kann beim Versanddienstleister eine eigene Zähl-Domain einrichten (z. B. links.ihre-domain.de) – dann steht auch im Linkziel Ihr eigener Name."),
+			map[string]string{"betroffene_links": strings.Join(trackingExamples, "\n")})
+	}
+	return pass("link_domain_mismatch", "Link-Domain-Mismatch", 0.0, "Keine irreführenden Linktexte erkannt: sichtbarer Text und Linkziel passen zusammen.", "")
 }
 
 func brokenLinksCheck(ctx context.Context, links []string) model.CheckResult {

@@ -1235,6 +1235,13 @@ func (s *Server) recheckAPI(w http.ResponseWriter, r *http.Request) {
 		HELO           string   `json:"helo"`
 		DKIMSignature  string   `json:"dkim_signature"`
 		Links          []string `json:"links"`
+		// The finding this recheck replaces. The report page sends it so a
+		// recheck that can only confirm a record exists keeps the original
+		// penalty rather than clearing a verdict it never re-verified. Older
+		// clients omit it; the analyzer then falls back to a conservative value
+		// instead of to zero.
+		PrevStatus string  `json:"prev_status"`
+		PrevDelta  float64 `json:"prev_delta"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&body); err != nil {
 		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
@@ -1263,6 +1270,8 @@ func (s *Server) recheckAPI(w http.ResponseWriter, r *http.Request) {
 		HELO:           body.HELO,
 		DKIMSignature:  body.DKIMSignature,
 		Links:          body.Links,
+		PrevStatus:     body.PrevStatus,
+		PrevDelta:      body.PrevDelta,
 	})
 	if !ok {
 		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "recheck failed"})
@@ -1469,6 +1478,13 @@ func (s *Server) simulateRecheckAPI(w http.ResponseWriter, r *http.Request) {
 		HELO           string   `json:"helo"`
 		DKIMSignature  string   `json:"dkim_signature"`
 		Links          []string `json:"links"`
+		// The finding this recheck replaces. The report page sends it so a
+		// recheck that can only confirm a record exists keeps the original
+		// penalty rather than clearing a verdict it never re-verified. Older
+		// clients omit it; the analyzer then falls back to a conservative value
+		// instead of to zero.
+		PrevStatus string  `json:"prev_status"`
+		PrevDelta  float64 `json:"prev_delta"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&body); err != nil {
 		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
@@ -1486,6 +1502,8 @@ func (s *Server) simulateRecheckAPI(w http.ResponseWriter, r *http.Request) {
 		HELO:           body.HELO,
 		DKIMSignature:  body.DKIMSignature,
 		Links:          body.Links,
+		PrevStatus:     body.PrevStatus,
+		PrevDelta:      body.PrevDelta,
 	})
 	if !ok {
 		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "recheck failed"})
