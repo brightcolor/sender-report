@@ -342,8 +342,8 @@
                         <div class="mp-chk-inner">
                           <span class="mp-status-dot {{.Status}}">{{statusGlyph .Status}}</span>
                           <span class="mp-chk-name">
-                            <strong>{{.Name}}{{if and .Importance (or (eq .Status "warn") (eq .Status "fail"))}} <span class="mp-imp" data-imp="{{.Importance}}">{{.Importance}}</span>{{end}}</strong>
-                            <small>{{.Summary}}</small>
+                            <strong>{{cName $.Lang .}}{{if and .Importance (or (eq .Status "warn") (eq .Status "fail"))}} <span class="mp-imp" data-imp="{{.Importance}}">{{.Importance}}</span>{{end}}</strong>
+                            <small>{{cSummary $.Lang .}}</small>
                           </span>
                           <span class="mp-pill {{.Status}}">{{statusLabel .Status}}</span>
                           {{if eq .Status "na"}}<strong class="mp-delta text-secondary">—</strong>{{else}}<strong class="mp-delta">{{fmtDelta .ScoreDelta}}</strong>{{end}}
@@ -400,7 +400,7 @@
                       {{if .Explanation}}
                       <div class="mb-3">
                         <h6 class="text-uppercase small fw-bold text-secondary mb-1" style="letter-spacing:.06em">{{t $.Lang "check.explanation"}}</h6>
-                        <p class="mb-0">{{.Explanation}}</p>
+                        <p class="mb-0">{{cExplanation $.Lang .}}</p>
                       </div>
                       {{end}}
 
@@ -408,11 +408,11 @@
                       <div class="mp-fix-box">
                         <div class="d-flex align-items-center justify-content-between mb-2">
                           <h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>{{t $.Lang "check.how_to_fix"}}</h6>
-                          <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="{{.Recommendation}}">
+                          <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="{{cRecommendation $.Lang .}}">
                             <i class="bi bi-clipboard me-1"></i>{{t $.Lang "report.copy_button"}}
                           </button>
                         </div>
-                        <p class="mb-0">{{.Recommendation}}</p>
+                        <p class="mb-0">{{cRecommendation $.Lang .}}</p>
                       </div>
                       {{end}}
 
@@ -559,7 +559,7 @@ Kind regards,
                       {{if .Explanation}}
                       <div class="mb-3">
                         <h6 class="text-uppercase small fw-bold text-secondary mb-1" style="letter-spacing:.06em">{{t $.Lang "check.explanation"}}</h6>
-                        <p class="mb-0">{{.Explanation}}</p>
+                        <p class="mb-0">{{cExplanation $.Lang .}}</p>
                       </div>
                       {{end}}
 
@@ -567,11 +567,11 @@ Kind regards,
                       <div class="mp-fix-box">
                         <div class="d-flex align-items-center justify-content-between mb-2">
                           <h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>{{t $.Lang "check.how_to_fix"}}</h6>
-                          <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="{{.Recommendation}}">
+                          <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="{{cRecommendation $.Lang .}}">
                             <i class="bi bi-clipboard me-1"></i>{{t $.Lang "report.copy_button"}}
                           </button>
                         </div>
-                        <p class="mb-0">{{.Recommendation}}</p>
+                        <p class="mb-0">{{cRecommendation $.Lang .}}</p>
                       </div>
                       {{end}}
 
@@ -644,7 +644,7 @@ Kind regards,
                         <div class="mb-3">
                           <h6 class="text-uppercase small fw-bold text-secondary mb-1"
                               style="letter-spacing:.06em">{{t $.Lang "check.explanation"}}</h6>
-                          <p class="mb-0">{{.Explanation}}</p>
+                          <p class="mb-0">{{cExplanation $.Lang .}}</p>
                         </div>
                         {{end}}
 
@@ -656,11 +656,11 @@ Kind regards,
                             </h6>
                             <button class="btn btn-sm btn-outline-secondary"
                                     type="button"
-                                    data-copy="{{.Recommendation}}">
+                                    data-copy="{{cRecommendation $.Lang .}}">
                               <i class="bi bi-clipboard me-1"></i>{{t $.Lang "report.copy_button"}}
                             </button>
                           </div>
-                          <p class="mb-0">{{.Recommendation}}</p>
+                          <p class="mb-0">{{cRecommendation $.Lang .}}</p>
                         </div>
                         {{end}}
 

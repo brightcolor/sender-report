@@ -414,6 +414,17 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"fmtScore":           fmtScore,
 		"t":                  func(lang, key string) string { return i18n.T(i18n.Lang(lang), key) },
 		"appVersion":         func() string { return version.Version },
+		// The analyzer stores an English variant of every check's name, summary,
+		// explanation and advice alongside the German one, precisely so a report
+		// can be rendered in either language without re-analysing it. Nothing
+		// read them: the server-rendered report was German whatever the visitor
+		// selected, and only the client-side decrypted path used them.
+		"cName":        func(lang string, c model.CheckResult) string { return pickLang(lang, c.Name, c.NameEN) },
+		"cSummary":     func(lang string, c model.CheckResult) string { return pickLang(lang, c.Summary, c.SummaryEN) },
+		"cExplanation": func(lang string, c model.CheckResult) string { return pickLang(lang, c.Explanation, c.ExplanationEN) },
+		"cRecommendation": func(lang string, c model.CheckResult) string {
+			return pickLang(lang, c.Recommendation, c.RecommendationEN)
+		},
 		"jsonEncode": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
 			if err != nil {
@@ -695,6 +706,19 @@ func (s *Server) setLang(w http.ResponseWriter, r *http.Request) {
 		ref = "/"
 	}
 	http.Redirect(w, r, ref, http.StatusSeeOther)
+}
+
+// pickLang returns the English text when the report is being rendered in
+// English and one exists, and the German original otherwise.
+//
+// The fallback matters for stored reports: everything analysed before the
+// English variants existed has them empty, and showing an empty explanation
+// would be worse than showing a German one.
+func pickLang(lang, de, en string) string {
+	if i18n.Lang(lang) == i18n.EN && strings.TrimSpace(en) != "" {
+		return en
+	}
+	return de
 }
 
 // gonePage renders a readable page for a link whose mailbox no longer exists.
@@ -1016,7 +1040,7 @@ func (s *Server) reportPage(w http.ResponseWriter, r *http.Request) {
 	for _, c := range selected.Report.Checks {
 		statuses[c.Status]++
 	}
-	checkGroups := groupReportChecks(selected.Report.Checks)
+	checkGroups := groupReportChecks(selected.Report.Checks, string(i18n.Detect(r)))
 	linkGroups := groupLinksByDomain(selected.Report.Links)
 	msgRef := messageReference(mb.Token, selected.Message.ID)
 	s.render(w, "report", ReportData{
@@ -2009,14 +2033,40 @@ func sortChecks(checks []model.CheckResult) {
 	})
 }
 
-func groupReportChecks(checks []model.CheckResult) []ReportCheckGroup {
+// groupTitles and groupHints hold the display texts for the five report
+// sections. The German category name doubles as the internal key, because it is
+// stored inside every report that already exists — translating it away would
+// break them. Only the presentation is language-dependent.
+var groupTitles = map[string]string{
+	"Authentifizierung":     "Authentication",
+	"DNS und Infrastruktur": "DNS and infrastructure",
+	"Spamfilter":            "Spam filters",
+	"Format und Inhalt":     "Format and content",
+	"Header und Rohdaten":   "Headers and raw data",
+}
+
+var groupHintsDE = map[string]string{
+	"Authentifizierung":     "Beweist, dass die Nachricht wirklich von Ihrer Domain stammt. SPF, DKIM und DMARC sind heute der wichtigste Faktor für die Zustellung — Gmail und Outlook lehnen Nachrichten ohne sie zunehmend ab.",
+	"DNS und Infrastruktur": "Prüft, ob Ihre sendende IP-Adresse und Ihre Hostnamen sauber im DNS hinterlegt sind (Rückwärtsauflösung, HELO, MX, A/AAAA, TLS). Widersprüche hier wirken auf Empfänger wie ein schlecht eingerichteter oder übernommener Server.",
+	"Spamfilter":            "Externe Reputations- und Inhaltsfilter (SpamAssassin, Rspamd, Blocklisten). Zeigt, wie verbreitete Filter Ihre Nachricht bewerten und welche Einzelsignale dabei zählen.",
+	"Format und Inhalt":     "Aufbau der Nachricht: MIME-Struktur, Verhältnis von Text zu HTML, Links, Betreff und Anhänge. Ein schlechtes Format ist ein klassisches Spam-Signal und kann die Darstellung beim Empfänger zerstören.",
+	"Header und Rohdaten":   "Technische Pflichtangaben im Kopfbereich (Datum, Message-ID, Received-Kette). Fehlende oder unplausible Felder deuten auf einen fehlerhaft eingerichteten Mailserver hin.",
+}
+
+var groupHintsEN = map[string]string{
+	"Authentifizierung":     "Proves the message really comes from your domain. SPF, DKIM and DMARC are the single biggest factor in deliverability today — Gmail and Outlook increasingly reject mail without them.",
+	"DNS und Infrastruktur": "Checks whether your sending IP address and hostnames are properly published in DNS (reverse DNS, HELO, MX, A/AAAA, TLS). Inconsistencies here look to a receiver like a misconfigured or hijacked server.",
+	"Spamfilter":            "External reputation and content filters (SpamAssassin, Rspamd, blocklists). Shows how widely used filters rate your message and which individual signals count.",
+	"Format und Inhalt":     "How the message is built: MIME structure, text-to-HTML ratio, links, subject and attachments. Poor formatting is a classic spam signal and can wreck how the message looks to the reader.",
+	"Header und Rohdaten":   "Mandatory technical header fields (Date, Message-ID, Received chain). Missing or implausible values point to a badly configured mail server.",
+}
+
+func groupReportChecks(checks []model.CheckResult, lang string) []ReportCheckGroup {
 	order := []string{"Authentifizierung", "DNS und Infrastruktur", "Spamfilter", "Format und Inhalt", "Header und Rohdaten"}
-	hints := map[string]string{
-		"Authentifizierung":     "Beweist, dass die Mail wirklich von deiner Domain stammt. SPF, DKIM und DMARC sind heute der wichtigste Faktor für die Zustellung – Gmail und Outlook lehnen ohne sie zunehmend ab.",
-		"DNS und Infrastruktur": "Prüft, ob deine sendende IP und deine Hostnamen sauber im DNS hinterlegt sind (Reverse DNS, HELO, MX, A/AAAA, TLS). Inkonsistenzen hier wirken wie ein schlecht konfigurierter oder gekaperter Server.",
-		"Spamfilter":            "Externe Reputations- und Inhaltsfilter (SpamAssassin, Rspamd, DNSBL). Zeigt, wie verbreitete Filter deine Mail bewerten und welche Einzelsignale dabei zählen.",
-		"Format und Inhalt":     "Aufbau der Nachricht: MIME-Struktur, Text/HTML-Verhältnis, Links, Betreff und Anhänge. Schlechtes Format ist ein klassisches Spam-Signal und kann die Darstellung beim Empfänger zerstören.",
-		"Header und Rohdaten":   "Technische Basis-Header (Date, Message-ID, Received-Kette). Fehlende oder unplausible Pflichtfelder deuten auf einen fehlkonfigurierten Mailserver hin.",
+	english := i18n.Lang(lang) == i18n.EN
+	hints := groupHintsDE
+	if english {
+		hints = groupHintsEN
 	}
 	grouped := make(map[string][]model.CheckResult)
 	for _, check := range checks {
@@ -2031,7 +2081,11 @@ func groupReportChecks(checks []model.CheckResult) []ReportCheckGroup {
 		if len(grouped[name]) == 0 {
 			continue
 		}
-		grp := ReportCheckGroup{Name: name, Hint: hints[name], Checks: grouped[name]}
+		title := name
+		if english && groupTitles[name] != "" {
+			title = groupTitles[name]
+		}
+		grp := ReportCheckGroup{Name: title, Hint: hints[name], Checks: grouped[name]}
 		for _, c := range grouped[name] {
 			switch c.Status {
 			case "pass":
@@ -2120,7 +2174,7 @@ func reportHeroSubtitle(score float64, lang string) string {
 	case score >= 5.5:
 		return "Mehrere Signale können die Inbox-Platzierung bei Gmail, Outlook, Yahoo oder Apple Mail verschlechtern."
 	default:
-		return "Bitte Authentifizierung, DNS und Inhalt priorisiert korrigieren, bevor du weiter versendest."
+		return "Bitte zuerst Authentifizierung, DNS und Inhalt in Ordnung bringen, bevor Sie weiter versenden."
 	}
 }
 
@@ -2513,7 +2567,7 @@ func (s *Server) reportPDFHandler(w http.ResponseWriter, r *http.Request) {
 		IncludeDetails: boolParam("details", true),
 	}
 
-	groups := groupReportChecks(rep.Checks)
+	groups := groupReportChecks(rep.Checks, string(i18n.Detect(r)))
 	pdfGroups := make([]reportpdf.CheckGroup, len(groups))
 	for i, g := range groups {
 		pdfGroups[i] = reportpdf.CheckGroup{Name: g.Name, Hint: g.Hint, Checks: g.Checks}

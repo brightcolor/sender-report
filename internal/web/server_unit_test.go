@@ -187,7 +187,7 @@ func TestGroupReportChecksCategoryOrdering(t *testing.T) {
 		{ID: "mime", Name: "MIME", Status: "warn", Category: "Format und Inhalt"},
 	}
 
-	groups := groupReportChecks(checks)
+	groups := groupReportChecks(checks, "de")
 
 	if len(groups) == 0 {
 		t.Fatal("expected at least one check group")
@@ -326,5 +326,63 @@ func TestForceHTTPSRedirect(t *testing.T) {
 	}
 	if got := rr.Header().Get("Location"); got != "https://probe.example.test/report/abc" {
 		t.Fatalf("unexpected redirect location %q", got)
+	}
+}
+
+// TestReportRendersInTheSelectedLanguage covers the point of storing an English
+// variant of every check alongside the German one: nothing read them, so the
+// server-rendered report was German whatever the visitor selected. Only the
+// client-side decrypted path ever used them.
+func TestReportRendersInTheSelectedLanguage(t *testing.T) {
+	c := model.CheckResult{
+		Name: "SPF für example.org", NameEN: "SPF for example.org",
+		Summary: "SPF bestanden.", SummaryEN: "SPF passed.",
+		Explanation: "Deutsche Erklärung.", ExplanationEN: "English explanation.",
+		Recommendation: "Deutsche Empfehlung.", RecommendationEN: "English advice.",
+	}
+
+	if got := pickLang("en", c.Explanation, c.ExplanationEN); got != "English explanation." {
+		t.Errorf("English report showed %q", got)
+	}
+	if got := pickLang("de", c.Explanation, c.ExplanationEN); got != "Deutsche Erklärung." {
+		t.Errorf("German report showed %q", got)
+	}
+
+	t.Run("stored reports without an English variant keep the German text", func(t *testing.T) {
+		// Everything analysed before the EN fields existed has them empty.
+		// An empty explanation would be worse than a German one.
+		if got := pickLang("en", "Nur deutsch vorhanden.", ""); got != "Nur deutsch vorhanden." {
+			t.Errorf("legacy report lost its text: %q", got)
+		}
+		if got := pickLang("en", "Nur deutsch.", "   "); got != "Nur deutsch." {
+			t.Errorf("whitespace-only English variant must not win: %q", got)
+		}
+	})
+}
+
+// TestGroupHeadingsFollowTheLanguage pins the five section headings, which were
+// hard-coded German in the server while the checks underneath them translated.
+func TestGroupHeadingsFollowTheLanguage(t *testing.T) {
+	checks := []model.CheckResult{
+		{ID: "spf", Name: "SPF", Status: "fail", Category: "Authentifizierung"},
+	}
+
+	de := groupReportChecks(checks, "de")
+	en := groupReportChecks(checks, "en")
+
+	if len(de) == 0 || len(en) == 0 {
+		t.Fatal("expected a group in both languages")
+	}
+	if de[0].Name != "Authentifizierung" {
+		t.Errorf("German heading = %q", de[0].Name)
+	}
+	if en[0].Name != "Authentication" {
+		t.Errorf("English heading = %q, want Authentication", en[0].Name)
+	}
+	if de[0].Hint == en[0].Hint {
+		t.Error("the section hint is identical in both languages — it was not translated")
+	}
+	if strings.Contains(en[0].Hint, "Ihre") || strings.Contains(en[0].Hint, "Nachricht") {
+		t.Errorf("English hint still contains German: %q", en[0].Hint)
 	}
 }

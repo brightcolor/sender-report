@@ -3,6 +3,7 @@ package analyzer
 import (
 	"net/mail"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -60,24 +61,31 @@ func TestDetailedRecommendationReachesTheReader(t *testing.T) {
 // It reads the source because that is where the strings live — there is no
 // runtime path that enumerates every user-facing sentence.
 func TestUserFacingTextIsConsistentlyFormal(t *testing.T) {
-	src, err := os.ReadFile("analyzer.go")
-	if err != nil {
-		t.Fatalf("cannot read analyzer.go: %v", err)
-	}
+	// Both files carry text the reader sees. Limiting the guard to analyzer.go
+	// let the five section headings in the web layer keep addressing the reader
+	// informally right above checks that addressed them formally.
+	files := []string{"analyzer.go", filepath.Join("..", "web", "server.go")}
 
 	// Only inside double-quoted strings, and only whole words: "du" also occurs
 	// inside identifiers and English comments.
 	informal := regexp.MustCompile(`"[^"]*\b(du|dir|dein|deine|deiner|deinem|deinen)\b[^"]*"`)
-	matches := informal.FindAllString(string(src), -1)
 
-	if len(matches) > 0 {
-		for _, m := range matches {
+	total := 0
+	for _, f := range files {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("cannot read %s: %v", f, err)
+		}
+		for _, m := range informal.FindAllString(string(src), -1) {
 			if len(m) > 120 {
 				m = m[:120] + "…"
 			}
-			t.Errorf("informal address in user-facing text: %s", m)
+			t.Errorf("%s: informal address in user-facing text: %s", f, m)
+			total++
 		}
-		t.Errorf("%d string(s) address the reader informally; the report uses \"Sie\" throughout", len(matches))
+	}
+	if total > 0 {
+		t.Errorf("%d string(s) address the reader informally; the report uses \"Sie\" throughout", total)
 	}
 }
 

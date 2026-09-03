@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.36.0] - 2026-09-04
+
+### Fixed
+- **Der Report war immer deutsch, egal welche Sprache gewählt war** — der Analysator legt
+  zu jeder Prüfung eine englische Fassung von Name, Ergebnis, Erklärung und Empfehlung
+  ab, genau damit ein Bericht ohne erneute Analyse in beiden Sprachen dargestellt werden
+  kann. Gelesen wurden diese Felder von keiner Stelle: nur der clientseitig
+  entschlüsselte Pfad nutzte sie, der serverseitig gerenderte Bericht blieb deutsch.
+  Er folgt jetzt der Sprachwahl. Berichte aus der Zeit vor diesen Feldern behalten ihren
+  deutschen Text, statt leer zu bleiben.
+- **Die fünf Abschnittsüberschriften und ihre Erläuterungen waren fest deutsch** — im
+  englischen Bericht standen deutsche Überschriften über englisch übersetzten Prüfungen.
+  Beide Sprachen sind jetzt hinterlegt; der deutsche Kategoriename bleibt intern der
+  Schlüssel, weil er in allen bereits gespeicherten Berichten steht.
+
+### Changed
+- **Der Wächtertest für die Anrede prüft jetzt auch die Weboberfläche** — er deckte nur
+  den Analysator ab, weshalb die Abschnittserläuterungen den Leser weiter duzten, direkt
+  über Prüfungen, die ihn siezten. Er fand beim Erweitern sofort zwei weitere Stellen.
+
 ## [1.35.0] - 2026-09-04
 
 ### Fixed
