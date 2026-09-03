@@ -1727,7 +1727,7 @@ function renderDecCheckItem(c, uid){
        '<h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>'+esc(lblHowToFix)+'</h6>'+
        '<button class="btn btn-sm btn-outline-secondary" type="button" data-copy="'+esc(recommendation)+'">'+
        '<i class="bi bi-clipboard me-1"></i>'+esc(lblCopy)+'</button></div>'+
-       '<p class="mb-0" style="white-space:pre-line">'+esc(recommendation)+'</p></div>';
+       '<p class="mb-0" style="white-space:pre-line;word-break:break-word">'+esc(recommendation)+'</p></div>';
   if(c.technical_details){
     var tdKeys=Object.keys(c.technical_details).filter(function(k){return k.indexOf('sym:')!==0;});
     if(tdKeys.length){
@@ -2059,7 +2059,7 @@ function renderDecryptedReport(p) {
               '<h3 class="card-title mb-0"><i class="bi bi-lightbulb me-1 text-warning"></i>Empfehlungen</h3>'+
               '<span class="badge text-bg-warning">'+r.suggestions.length+'</span></div>'+
               '<div class="card-body pt-3 pb-2"><ul class="mp-side-list">';
-    r.suggestions.forEach(function(s){sideHtml+='<li>'+esc(s)+'</li>';});
+    r.suggestions.forEach(function(s){sideHtml+='<li style="white-space:pre-line">'+esc(s)+'</li>';});
     sideHtml+='</ul></div></div>';
   }
   if((r.spam_signals||[]).length){

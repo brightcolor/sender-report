@@ -669,7 +669,6 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	// and must NOT appear here — they already run above. Including them would add a
 	// second info-status entry that breaks essentialsAllPass and caps the score.
 	if in.SimulationMode {
-		simPlaceholder := "Im Simulator nicht ausgeführt – per ↻ einzeln abrufbar."
 		simGroupBIDs := []string{
 			// Note: spf, dmarc, spf_strictness, dmarc_policy are Group A (run above
 			// from Authentication-Results / parsed headers) — do NOT list them here.
@@ -679,16 +678,33 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 		}
 		// Group B placeholders (DNS/network)
 		for _, id := range simGroupBIDs {
-			ph := info(id, id, 0, simPlaceholder, "")
+			ph := info(id, checkNameDE(id), 0, simPlaceholderText(id), "")
 			ph = enrichCheckResult(ph, enrichCtx)
+			if ph.TechnicalDetails == nil {
+				ph.TechnicalDetails = map[string]string{}
+			}
+			ph.TechnicalDetails[simulatorSkippedMarker] = "ja"
 			report.Checks = append(report.Checks, ph)
 		}
 		// Group C placeholders (opt-in). Note: broken_links is handled in Group A
 		// (lines 483-487) and must NOT appear here — it would create a duplicate.
 		for _, id := range []string{"domain_age", "domain_blocklist"} {
-			ph := info(id, id, 0, simPlaceholder, "")
+			ph := info(id, checkNameDE(id), 0, simPlaceholderText(id), "")
 			ph = enrichCheckResult(ph, enrichCtx)
+			if ph.TechnicalDetails == nil {
+				ph.TechnicalDetails = map[string]string{}
+			}
+			ph.TechnicalDetails[simulatorSkippedMarker] = "ja"
 			report.Checks = append(report.Checks, ph)
+		}
+		// SPF, DKIM and DMARC were read out of the pasted Authentication-Results
+		// header, not measured. On a real delivery this server runs those checks
+		// itself against the connecting IP; here it can only repeat what the
+		// pasted text asserts — and pasted text can assert anything. Saying so is
+		// the difference between a simulation and a false claim.
+		markSimulatedAuthResults(report.Checks)
+		if n := countSimulatorSkipped(report.Checks); n > 0 {
+			report.Warnings = append(report.Warnings, fmt.Sprintf("Dies ist ein Teilergebnis: %d Prüfungen laufen im Simulator nicht, weil sie eine echte Zustellung voraussetzen. Der Wert lässt sich deshalb nicht mit dem einer versendeten Testmail vergleichen.", n))
 		}
 	} else {
 		netTasks := []checkTask{
@@ -750,6 +766,16 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 
 	for _, c := range report.Checks {
 		report.Score += c.ScoreDelta
+	}
+
+	// Collect advice worst-first so the sidebar leads with what actually costs
+	// the sender delivery, not with whatever sorts first alphabetically.
+	sortedForAdvice := make([]model.CheckResult, len(report.Checks))
+	copy(sortedForAdvice, report.Checks)
+	sort.SliceStable(sortedForAdvice, func(i, j int) bool {
+		return sortedForAdvice[i].ScoreDelta < sortedForAdvice[j].ScoreDelta
+	})
+	for _, c := range sortedForAdvice {
 		if c.Status == "fail" || c.Status == "warn" {
 			if c.Recommendation != "" {
 				report.Suggestions = append(report.Suggestions, c.Recommendation)
@@ -774,7 +800,11 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	if n := countUnresolved(report.Checks); n > 0 {
 		report.Warnings = append(report.Warnings, unresolvedWarning(n))
 	}
-	report.Suggestions = dedupeSorted(report.Suggestions)
+	// Deduplicate but keep the order the checks produced, which runs from the
+	// most severe finding downwards. Sorting alphabetically put whichever advice
+	// happened to start with an early letter at the top of the sidebar, so the
+	// reader met a cosmetic tip before the reason their mail lands in spam.
+	report.Suggestions = dedupeKeepOrder(report.Suggestions)
 	report.Warnings = dedupeSorted(report.Warnings)
 	report.SpamSignals = dedupeSorted(report.SpamSignals)
 	assignLabel(&report)
@@ -2472,6 +2502,81 @@ func enrichEnglish(c *model.CheckResult, ctx checkContext) {
 	c.SummaryEN = summaryEN(c.ID, c.Status, c.Summary, ctx)
 	c.ExplanationEN = explanationEN(c.ID)
 	c.RecommendationEN = recommendationEN(c.ID, c.Status, ctx)
+}
+
+// simulatorSkippedMarker labels a check the simulator could not run.
+const simulatorSkippedMarker = "simulator_uebersprungen"
+
+// markSimulatedAuthResults appends a note to the authentication findings in
+// simulator mode, where they are taken from the pasted header instead of being
+// verified.
+func markSimulatedAuthResults(checks []model.CheckResult) {
+	const note = " Hinweis: Im Simulator wird dieses Ergebnis aus der eingefügten Authentication-Results-Kopfzeile übernommen und nicht selbst nachgeprüft. Was dort steht, hat der empfangende Server der eingefügten Nachricht festgestellt — nicht dieser Simulator."
+	for i := range checks {
+		switch checks[i].ID {
+		case "spf", "dkim", "dmarc", "spf_alignment", "dkim_alignment", "dmarc_alignment":
+			checks[i].Summary += note
+			if checks[i].TechnicalDetails == nil {
+				checks[i].TechnicalDetails = map[string]string{}
+			}
+			checks[i].TechnicalDetails["herkunft"] = "aus der eingefügten Kopfzeile übernommen, nicht verifiziert"
+		}
+	}
+}
+
+// countSimulatorSkipped counts the checks that did not run in simulator mode.
+func countSimulatorSkipped(checks []model.CheckResult) int {
+	n := 0
+	for _, c := range checks {
+		if _, ok := c.TechnicalDetails[simulatorSkippedMarker]; ok {
+			n++
+		}
+	}
+	return n
+}
+
+// checkNameDE returns the German check name for an ID.
+//
+// The simulator built its placeholders with the raw ID as the title, so sixteen
+// entries appeared in the report as "dane_tlsa" or "ptr_pattern" — readable to
+// whoever wrote the code and to nobody else. Everywhere else the name is passed
+// in at the call site; this table covers the one place that has only an ID.
+func checkNameDE(id string) string {
+	names := map[string]string{
+		"spf": "SPF", "dkim": "DKIM", "dmarc": "DMARC",
+		"spf_strictness": "SPF-Strenge", "dmarc_policy": "DMARC-Policy-Stärke",
+		"dkim_keylength": "DKIM-Schlüssellänge",
+		"mx_records":     "MX-Records", "address_records": "A/AAAA-Records",
+		"envelope_mx": "Bounce-Empfang (Envelope-MX)", "from_domain_rcv": "From-Domain Empfangsfähigkeit",
+		"mta_sts": "MTA-STS", "tls_rpt": "TLS-RPT", "bimi": "BIMI",
+		"dnssec": "DNSSEC", "dane_tlsa": "DANE/TLSA",
+		"ptr": "PTR/rDNS", "ptr_pattern": "PTR-Hostname-Muster",
+		"rbl": "DNSBL/RBL", "domain_blocklist": "Domain-Blocklist",
+		"link_blocklist": "Link-Domain-Blocklist", "domain_age": "Domain-Alter",
+		"broken_links": "Erreichbarkeit der Links",
+	}
+	if n, ok := names[id]; ok {
+		return n
+	}
+	return id
+}
+
+// simPlaceholderText explains why a check did not run in the simulator.
+//
+// The single sentence it replaces promised "per ↻ einzeln abrufbar" for every
+// placeholder, including `rbl`, which Recheckable does not list — so the report
+// pointed at a button that does not exist. Checks needing a sending IP cannot
+// run in the simulator at all, because a pasted message has no connecting IP.
+func simPlaceholderText(id string) string {
+	switch id {
+	case "rbl", "ptr", "ptr_pattern":
+		return "Im Simulator nicht prüfbar: Dafür wird die IP-Adresse des sendenden Servers gebraucht, und die entsteht erst, wenn eine Nachricht wirklich zugestellt wird. Schicken Sie eine Testmail, um diesen Punkt zu prüfen."
+	default:
+		if Recheckable(id) {
+			return "Im Simulator nicht ausgeführt – mit dem Knopf ↻ einzeln abrufbar."
+		}
+		return "Im Simulator nicht ausgeführt."
+	}
 }
 
 // checkNameEN returns the English check name for a given ID.

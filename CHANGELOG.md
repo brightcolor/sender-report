@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.31.0] - 2026-09-04
+
+### Fixed
+- **Der Simulator gab übernommene Ergebnisse als eigene Prüfung aus** — SPF, DKIM und
+  DMARC wurden im Mail-Simulator aus der eingefügten `Authentication-Results`-Kopfzeile
+  gelesen und wie ein selbst ermitteltes Ergebnis dargestellt. Wer dort „spf=pass"
+  einfügte, bekam ein bestandenes SPF angezeigt. Diese Prüfungen sind jetzt als
+  übernommen gekennzeichnet, mit dem Hinweis, dass die Feststellung vom empfangenden
+  Server der eingefügten Nachricht stammt und nicht vom Simulator.
+- **Im Simulator trugen 16 Prüfungen ihre technische Kennung als Titel** — im Report
+  standen Zeilen wie `dane_tlsa` oder `ptr_pattern`. Sie tragen jetzt dieselben Namen wie
+  überall sonst.
+- **Der Simulator versprach einen Knopf, den es nicht gibt** — jeder Platzhalter trug den
+  Hinweis „per ↻ einzeln abrufbar", auch die Blocklisten- und PTR-Prüfungen, die gar nicht
+  nachprüfbar sind: sie brauchen die IP-Adresse eines echten Verbindungsaufbaus. Für diese
+  steht jetzt, dass eine Testmail nötig ist; die übrigen behalten den Hinweis.
+- **Das Simulator-Ergebnis wurde nicht als Teilergebnis gekennzeichnet** — obwohl rund ein
+  Dutzend Prüfungen nicht laufen. Ein Hinweis am Kopf des Reports nennt jetzt die Zahl und
+  sagt, dass sich der Wert nicht mit dem einer versendeten Testmail vergleichen lässt.
+- **Abgelaufene Report-Links endeten in einer weißen Seite mit „mailbox not found"** —
+  zwei englische Wörter ohne Erklärung, auch in der deutschen Oberfläche. Dass ein Link
+  abläuft, ist kein Fehler, sondern das Datenschutzversprechen dieses Dienstes. Es gibt
+  jetzt eine Seite in der Sprache des Besuchers, die das erklärt und zum Start zurückführt.
+- **Die Empfehlungen in der Seitenleiste waren alphabetisch sortiert** — dadurch stand
+  eine Kleinigkeit über dem Grund, aus dem die Nachricht im Spam landet. Sie erscheinen
+  jetzt nach Gewicht, und mehrzeilige Konfigurationsbeispiele behalten ihre Zeilenumbrüche
+  statt in einer Zeile zusammenzulaufen.
+
 ## [1.30.0] - 2026-09-04
 
 ### Added

@@ -327,3 +327,21 @@ func unresolvedWarning(count int) string {
 	}
 	return fmt.Sprintf("%d Prüfungen konnten nicht durchgeführt werden, weil DNS-Abfragen nicht beantwortet wurden. Das Ergebnis ist deshalb unvollständig — bitte später erneut prüfen.", count)
 }
+
+// dedupeKeepOrder removes duplicates while preserving first-seen order.
+//
+// The counterpart dedupeSorted also sorts, which is right for warnings but wrong
+// for advice: it put the alphabetically first recommendation at the top of the
+// sidebar regardless of how much the underlying problem costs.
+func dedupeKeepOrder(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
+}

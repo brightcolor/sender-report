@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"html/template"
 	"io"
 	"log"
@@ -54,7 +55,7 @@ type Server struct {
 	metrics        *telemetry.Counters
 	staticFS       http.Handler
 	trustedProxy   []*net.IPNet
-	engine         *analyzer.Engine  // for live single-check rechecks
+	engine         *analyzer.Engine   // for live single-check rechecks
 	iptLimiter     *ratelimit.Limiter // max 3 placement tests per IP per hour
 	seeds          *ipt.SeedConfig    // nil when feature disabled
 	iptMailer      *ipt.Mailer        // nil when email alerting not configured
@@ -79,7 +80,7 @@ type HomeData struct {
 	Stats                store.GlobalStats
 	Lang                 string
 	EnableInboxPlacement bool
-	IPTProviderNames     []string      // kept for legacy; prefer IPTProviders
+	IPTProviderNames     []string // kept for legacy; prefer IPTProviders
 	IPTProviders         []IPTProviderInfo
 }
 
@@ -103,20 +104,20 @@ type MailboxData struct {
 }
 
 type ReportData struct {
-	AppName         string
-	Message         model.Message
-	Mailbox         model.Mailbox
-	Report          model.AnalysisReport
-	Lang            string
-	Statuses        map[string]int
-	CheckGroups     []ReportCheckGroup
-	LinkGroups      []ReportLinkGroup
-	LinkTotal       int
-	HeroTitle       string
-	HeroSubtitle    string
-	PlainTextBody   string
-	HTMLSourceBody  string
-	HTMLPreviewBody string
+	AppName              string
+	Message              model.Message
+	Mailbox              model.Mailbox
+	Report               model.AnalysisReport
+	Lang                 string
+	Statuses             map[string]int
+	CheckGroups          []ReportCheckGroup
+	LinkGroups           []ReportLinkGroup
+	LinkTotal            int
+	HeroTitle            string
+	HeroSubtitle         string
+	PlainTextBody        string
+	HTMLSourceBody       string
+	HTMLPreviewBody      string
 	Encrypted            bool   // true when content is E2E-encrypted (Phase 3+4)
 	MsgRef               string // reference passed to /api/payload for decryption
 	EnableInboxPlacement bool
@@ -411,7 +412,7 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"mailTypeIcon":       analyzer.MailTypeIcon,
 		"fmtDelta":           fmtDelta,
 		"fmtScore":           fmtScore,
-		"t": func(lang, key string) string { return i18n.T(i18n.Lang(lang), key) },
+		"t":                  func(lang, key string) string { return i18n.T(i18n.Lang(lang), key) },
 		"appVersion":         func() string { return version.Version },
 		"jsonEncode": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
@@ -696,6 +697,37 @@ func (s *Server) setLang(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, ref, http.StatusSeeOther)
 }
 
+// gonePage renders a readable page for a link whose mailbox no longer exists.
+//
+// Reaching one of these is a normal event, not a malfunction: mailboxes expire
+// on purpose, and that expiry is the privacy promise this service makes. It used
+// to end in a blank page carrying the two English words "mailbox not found",
+// with no explanation of why and no way onward — for a reader who had done
+// nothing wrong and, in the German UI, may not read English at all.
+func (s *Server) gonePage(w http.ResponseWriter, r *http.Request, status int) {
+	lang := i18n.Detect(r)
+	title, body, back := "Dieser Link ist abgelaufen", "Testpostfächer und ihre Berichte werden nach kurzer Zeit automatisch gelöscht — das gehört zum Datenschutzversprechen dieses Dienstes. Der Bericht dahinter existiert nicht mehr und lässt sich auch nicht wiederherstellen. Schicken Sie einfach eine neue Testmail, um einen frischen Bericht zu bekommen.", "Neuen Test starten"
+	if lang == i18n.EN {
+		title, body, back = "This link has expired", "Test mailboxes and their reports are deleted automatically after a short time — that is part of this service's privacy promise. The report behind this link no longer exists and cannot be restored. Send a new test message to get a fresh report.", "Start a new test"
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = fmt.Fprintf(w, `<!doctype html><html lang="%s"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>%s</title>
+<style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+background:#f6f7f9;color:#1d2125;font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:34rem;padding:2rem;text-align:center}
+h1{font-size:1.4rem;margin:0 0 .75rem}
+p{margin:0 0 1.5rem;color:#4a5157}
+a{display:inline-block;padding:.6rem 1.2rem;border-radius:.5rem;background:#1d2125;color:#fff;text-decoration:none}
+@media (prefers-color-scheme:dark){body{background:#15181b;color:#e8eaed}p{color:#a8adb3}a{background:#e8eaed;color:#15181b}}
+</style></head><body><main><h1>%s</h1><p>%s</p><a href="/">%s</a></main></body></html>`,
+		lang, html.EscapeString(title), html.EscapeString(title), html.EscapeString(body), html.EscapeString(back))
+}
+
 func (s *Server) ready(w http.ResponseWriter, _ *http.Request) {
 	// The DNS failure counter is reported here but does not make the service
 	// unready on purpose: a restart cannot fix a resolver outage, it would only
@@ -914,7 +946,7 @@ func (s *Server) mailboxPage(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, store.ErrNotFound) {
 			status = http.StatusNotFound
 		}
-		http.Error(w, "mailbox not found", status)
+		s.gonePage(w, r, status)
 		return
 	}
 	_ = s.store.TouchMailbox(ctx, mb.ID)
@@ -948,7 +980,7 @@ func (s *Server) reportPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	mb, err := s.store.GetMailboxByToken(ctx, token)
 	if err != nil {
-		http.Error(w, "mailbox not found", http.StatusNotFound)
+		s.gonePage(w, r, http.StatusNotFound)
 		return
 	}
 
@@ -988,19 +1020,19 @@ func (s *Server) reportPage(w http.ResponseWriter, r *http.Request) {
 	linkGroups := groupLinksByDomain(selected.Report.Links)
 	msgRef := messageReference(mb.Token, selected.Message.ID)
 	s.render(w, "report", ReportData{
-		AppName:         s.cfg.AppName,
-		Message:         selected.Message,
-		Mailbox:         mb,
-		Report:          *selected.Report,
-		Statuses:        statuses,
-		CheckGroups:     checkGroups,
-		LinkGroups:      linkGroups,
-		LinkTotal:       len(selected.Report.Links),
-		HeroTitle:       reportHeroTitle(selected.Report.Score, string(i18n.Detect(r))),
-		HeroSubtitle:    reportHeroSubtitle(selected.Report.Score, string(i18n.Detect(r))),
-		PlainTextBody:   plainText,
-		HTMLSourceBody:  htmlSource,
-		HTMLPreviewBody: htmlSource,
+		AppName:              s.cfg.AppName,
+		Message:              selected.Message,
+		Mailbox:              mb,
+		Report:               *selected.Report,
+		Statuses:             statuses,
+		CheckGroups:          checkGroups,
+		LinkGroups:           linkGroups,
+		LinkTotal:            len(selected.Report.Links),
+		HeroTitle:            reportHeroTitle(selected.Report.Score, string(i18n.Detect(r))),
+		HeroSubtitle:         reportHeroSubtitle(selected.Report.Score, string(i18n.Detect(r))),
+		PlainTextBody:        plainText,
+		HTMLSourceBody:       htmlSource,
+		HTMLPreviewBody:      htmlSource,
 		Encrypted:            encrypted,
 		MsgRef:               msgRef,
 		Lang:                 string(i18n.Detect(r)),
@@ -2583,8 +2615,8 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 	}
 	if len(providers) == 0 {
 		jsonResp(w, http.StatusServiceUnavailable, map[string]any{
-			"error":               "all selected providers are currently unavailable",
-			"unavailable":         unavailable,
+			"error":       "all selected providers are currently unavailable",
+			"unavailable": unavailable,
 		})
 		return
 	}
