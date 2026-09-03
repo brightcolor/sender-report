@@ -530,8 +530,13 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	helo := strings.TrimSpace(in.Message.HELO)
 	if helo == "" {
 		report.Checks = append(report.Checks, fail("helo", "HELO/EHLO", -0.8, "HELO/EHLO fehlt.", "MTA sollte einen validen FQDN als EHLO senden."))
-	} else if net.ParseIP(helo) != nil {
-		report.Checks = append(report.Checks, warn("helo", "HELO/EHLO", -0.4, "HELO/EHLO ist eine IP-Literal-Angabe.", "FQDN statt IP in EHLO verwenden."))
+	} else if isIPLiteralHELO(helo) {
+		// RFC 5321 §4.1.3 requires the bracketed form for an IP literal, and the
+		// bracketed form used to slip past this branch entirely: ParseIP rejects
+		// "[203.0.113.5]", the name contains no dot outside the brackets either,
+		// so a correctly formatted IP literal came out as "looks plausible" and
+		// earned a bonus point, while the bare form was flagged.
+		report.Checks = append(report.Checks, warn("helo", "HELO/EHLO", -0.4, "HELO/EHLO ist eine IP-Adresse statt eines Hostnamens.", "Im Mailserver einen vollständigen Hostnamen als EHLO eintragen, der zum PTR-Eintrag der sendenden IP passt — zum Beispiel mail.ihre-domain.de."))
 	} else if strings.Count(helo, ".") < 1 {
 		report.Checks = append(report.Checks, warn("helo", "HELO/EHLO", -0.3, "HELO/EHLO wirkt nicht wie ein FQDN.", "FQDN mit PTR-bezogener Hostkennung verwenden."))
 	} else {
@@ -849,6 +854,23 @@ func na(id, name, mailType string) model.CheckResult {
 
 // detectMailType inspects the message headers and returns one of
 // "personal", "transactional", "bulk", or "unknown".
+// isIPLiteralHELO reports whether a HELO/EHLO argument is an IP address, in
+// either the bare form or the bracketed form RFC 5321 §4.1.3 prescribes
+// (including the "IPv6:" prefix it requires for v6 literals).
+func isIPLiteralHELO(helo string) bool {
+	h := strings.TrimSpace(helo)
+	if net.ParseIP(h) != nil {
+		return true
+	}
+	if !strings.HasPrefix(h, "[") || !strings.HasSuffix(h, "]") {
+		return false
+	}
+	inner := strings.TrimSuffix(strings.TrimPrefix(h, "["), "]")
+	inner = strings.TrimPrefix(inner, "IPv6:")
+	inner = strings.TrimPrefix(inner, "ipv6:")
+	return net.ParseIP(inner) != nil
+}
+
 // bulkContentPattern matches the wording a newsletter carries even when its
 // headers do not: the unsubscribe line every bulk sender is legally required to
 // include somewhere in the body.
@@ -4768,6 +4790,14 @@ func spamAssassinHeuristic(ctx context.Context, hostport, raw string) model.Chec
 		return withDetails(fail("spamassassin", "SpamAssassin", -1.6, emptyFallback(spamLine, "SpamAssassin stuft Nachricht als Spam ein."), "SpamAssassin-Regeln/Symbole prüfen und Mailinhalt überarbeiten."), details)
 	}
 	if spamLine != "" {
+		// The yes/no threshold alone hides how close a message came to it. A score
+		// of 4.9 against a limit of 5.0 passed silently — yet every receiver runs
+		// its own limit, and many are stricter, so that message is spam elsewhere.
+		if score, limit, ok := parseSpamAssassinScore(spamLine); ok && limit > 0 && score >= limit*0.6 {
+			return withDetails(warn("spamassassin", "SpamAssassin", -0.4,
+				fmt.Sprintf("%s — der Wert liegt bei %.1f von %.1f und damit dicht an der Grenze. Diese Grenze setzt jeder Empfänger selbst; viele liegen niedriger, dort gilt diese Nachricht bereits als Spam.", spamLine, score, limit),
+				"Die Auslöser stehen unten in den technischen Details. Meist helfen: weniger Bilder im Verhältnis zum Text, keine Wörter in Großbuchstaben, keine verkürzten Links und ein sauberer Plaintext-Teil."), details)
+		}
 		return withDetails(pass("spamassassin", "SpamAssassin", 0.0, spamLine, ""), details)
 	}
 	return withDetails(info("spamassassin", "SpamAssassin", 0.0, "SpamAssassin Antwort ohne klassisches Spam-Headerformat erhalten.", ""), details)

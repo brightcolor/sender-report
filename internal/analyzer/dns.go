@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -344,4 +346,23 @@ func dedupeKeepOrder(in []string) []string {
 		out = append(out, s)
 	}
 	return out
+}
+
+// spamAssassinScorePattern matches the score and limit in a SpamAssassin
+// "Spam: False ; 4.9 / 5.0" status line.
+var spamAssassinScorePattern = regexp.MustCompile(`(-?\d+(?:\.\d+)?)\s*/\s*(-?\d+(?:\.\d+)?)`)
+
+// parseSpamAssassinScore pulls the score and the configured limit out of the
+// status line, so a near miss can be reported instead of only a hard verdict.
+func parseSpamAssassinScore(line string) (score, limit float64, ok bool) {
+	m := spamAssassinScorePattern.FindStringSubmatch(line)
+	if len(m) != 3 {
+		return 0, 0, false
+	}
+	s, err1 := strconv.ParseFloat(m[1], 64)
+	l, err2 := strconv.ParseFloat(m[2], 64)
+	if err1 != nil || err2 != nil {
+		return 0, 0, false
+	}
+	return s, l, true
 }

@@ -66,3 +66,65 @@ func TestRBLAllProvidersSilentIsNotAPass(t *testing.T) {
 		t.Fatal("a listing must not be swallowed as a refusal")
 	}
 }
+
+// TestHELOIPLiteralIsRecognised covers the branch that gave a bonus point to
+// the very form RFC 5321 §4.1.3 prescribes. net.ParseIP rejects the bracketed
+// notation, and it contains no dot outside the brackets either, so a correctly
+// formatted IP literal fell through to "looks plausible" while the bare form
+// was flagged — the standard-conforming spelling scored better than the
+// non-conforming one.
+func TestHELOIPLiteralIsRecognised(t *testing.T) {
+	literals := []string{
+		"203.0.113.5",
+		"[203.0.113.5]",
+		"[IPv6:2001:db8::1]",
+		"[ipv6:2001:db8::1]",
+		"2001:db8::1",
+	}
+	for _, h := range literals {
+		if !isIPLiteralHELO(h) {
+			t.Errorf("isIPLiteralHELO(%q) = false — this would be scored as a plausible hostname", h)
+		}
+	}
+
+	hostnames := []string{
+		"mail.example.org",
+		"smtp.versand.example",
+		"[not-an-ip]",
+		"example.org",
+	}
+	for _, h := range hostnames {
+		if isIPLiteralHELO(h) {
+			t.Errorf("isIPLiteralHELO(%q) = true — a real hostname would be penalised", h)
+		}
+	}
+}
+
+// TestSpamAssassinNearMiss covers the gap between "not spam here" and "not spam
+// anywhere": every receiver sets its own limit, and many are stricter than the
+// default of 5.0.
+func TestSpamAssassinNearMiss(t *testing.T) {
+	cases := []struct {
+		line       string
+		wantScore  float64
+		wantLimit  float64
+		wantParsed bool
+	}{
+		{"Spam: False ; 4.9 / 5.0", 4.9, 5.0, true},
+		{"Spam: False ; 0.1 / 5.0", 0.1, 5.0, true},
+		{"Spam: True ; 12.4 / 5.0", 12.4, 5.0, true},
+		{"Spam: False ; -1.2 / 5.0", -1.2, 5.0, true},
+		{"Spam: False", 0, 0, false},
+		{"kein Score hier", 0, 0, false},
+	}
+	for _, tc := range cases {
+		score, limit, ok := parseSpamAssassinScore(tc.line)
+		if ok != tc.wantParsed {
+			t.Errorf("parseSpamAssassinScore(%q): parsed = %v, want %v", tc.line, ok, tc.wantParsed)
+			continue
+		}
+		if ok && (score != tc.wantScore || limit != tc.wantLimit) {
+			t.Errorf("parseSpamAssassinScore(%q) = %v/%v, want %v/%v", tc.line, score, limit, tc.wantScore, tc.wantLimit)
+		}
+	}
+}

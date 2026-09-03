@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.33.0] - 2026-09-04
+
+### Fixed
+- **Die RFC-konforme Schreibweise im HELO wurde belohnt statt bemängelt** — RFC 5321
+  §4.1.3 verlangt für eine IP-Adresse im EHLO die Klammerform `[203.0.113.5]`. Die
+  Prüfung erkannte nur die Form ohne Klammern; die vorgeschriebene Schreibweise fiel durch
+  alle Zweige und landete bei „sieht plausibel aus" samt Bonuspunkt. Die standardkonforme
+  Variante schnitt damit besser ab als die nicht konforme. Beide Formen werden jetzt
+  erkannt, inklusive der `IPv6:`-Kennzeichnung.
+- **SpamAssassin: 4,9 von 5,0 galt als sauber** — bewertet wurde nur die Ja/Nein-Schwelle,
+  und die setzt jeder Empfänger selbst. Ein Wert knapp unterhalb der eigenen Grenze
+  bedeutet, dass die Nachricht bei jedem strengeren Empfänger bereits als Spam gilt.
+  Ab 60 % der Grenze erscheint das jetzt als Warnung mit dem konkreten Wert, statt
+  wortlos zu bestehen.
+
 ## [1.32.0] - 2026-09-04
 
 ### Fixed
