@@ -407,9 +407,9 @@
                       {{if and .Recommendation (or (eq .Status "warn") (eq .Status "fail"))}}
                       <div class="mp-fix-box">
                         <div class="d-flex align-items-center justify-content-between mb-2">
-                          <h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>Empfehlung</h6>
+                          <h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>{{t $.Lang "check.how_to_fix"}}</h6>
                           <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="{{.Recommendation}}">
-                            <i class="bi bi-clipboard me-1"></i>Kopieren
+                            <i class="bi bi-clipboard me-1"></i>{{t $.Lang "report.copy_button"}}
                           </button>
                         </div>
                         <p class="mb-0">{{.Recommendation}}</p>
@@ -515,7 +515,7 @@
                               <button class="btn btn-sm btn-outline-secondary"
                                       type="button"
                                       data-copy="Sehr geehrte Damen und Herren,&#10;&#10;hiermit beantrage ich die Entfernung der IP-Adresse {{$remoteIP}} aus Ihrer Blockliste.&#10;&#10;Die Ursache für das Listing war: [bitte ergänzen].&#10;Wir haben folgende Maßnahmen ergriffen: [bitte ergänzen].&#10;&#10;Die IP-Adresse sendet seit [Datum] keinen unerwünschten Verkehr mehr. Ich bitte um Prüfung und Entfernung aus Ihrer Liste.&#10;&#10;Mit freundlichen Grüßen&#10;[Name / Unternehmen / Kontakt]">
-                                <i class="bi bi-clipboard me-1"></i>Kopieren
+                                <i class="bi bi-clipboard me-1"></i>{{t $.Lang "report.copy_button"}}
                               </button>
                             </div>
                             <pre class="mp-raw-pre mb-0" style="font-size:.8rem">Sehr geehrte Damen und Herren,
@@ -566,9 +566,9 @@ Kind regards,
                       {{if and .Recommendation (or (eq .Status "warn") (eq .Status "fail"))}}
                       <div class="mp-fix-box">
                         <div class="d-flex align-items-center justify-content-between mb-2">
-                          <h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>Empfehlung</h6>
+                          <h6 class="fw-bold mb-0"><i class="bi bi-wrench me-1"></i>{{t $.Lang "check.how_to_fix"}}</h6>
                           <button class="btn btn-sm btn-outline-secondary" type="button" data-copy="{{.Recommendation}}">
-                            <i class="bi bi-clipboard me-1"></i>Kopieren
+                            <i class="bi bi-clipboard me-1"></i>{{t $.Lang "report.copy_button"}}
                           </button>
                         </div>
                         <p class="mb-0">{{.Recommendation}}</p>
@@ -657,7 +657,7 @@ Kind regards,
                             <button class="btn btn-sm btn-outline-secondary"
                                     type="button"
                                     data-copy="{{.Recommendation}}">
-                              <i class="bi bi-clipboard me-1"></i>Kopieren
+                              <i class="bi bi-clipboard me-1"></i>{{t $.Lang "report.copy_button"}}
                             </button>
                           </div>
                           <p class="mb-0">{{.Recommendation}}</p>
@@ -677,7 +677,7 @@ Kind regards,
                               <button class="btn btn-sm btn-outline-secondary"
                                       type="button"
                                       data-copy="{{detailsText .TechnicalDetails}}">
-                                <i class="bi bi-clipboard me-1"></i>Kopieren
+                                <i class="bi bi-clipboard me-1"></i>{{t $.Lang "report.copy_button"}}
                               </button>
                             </div>
                             <dl class="mp-tech-dl">
@@ -818,7 +818,7 @@ Kind regards,
                     {{if .PlainTextBody}}
                     <button class="btn btn-sm btn-outline-secondary mb-2"
                             type="button" data-copy="{{.PlainTextBody}}">
-                      <i class="bi bi-clipboard me-1"></i>Kopieren
+                      <i class="bi bi-clipboard me-1"></i>{{t $.Lang "report.copy_button"}}
                     </button>
                     <pre class="mp-raw-pre">{{.PlainTextBody}}</pre>
                     {{else}}
@@ -861,7 +861,7 @@ Kind regards,
                     {{if .HTMLSourceBody}}
                     <button class="btn btn-sm btn-outline-secondary mb-2"
                             type="button" data-copy="{{.HTMLSourceBody}}">
-                      <i class="bi bi-clipboard me-1"></i>Kopieren
+                      <i class="bi bi-clipboard me-1"></i>{{t $.Lang "report.copy_button"}}
                     </button>
                     <pre class="mp-raw-pre">{{.HTMLSourceBody}}</pre>
                     {{else}}
@@ -883,7 +883,7 @@ Kind regards,
                   <div class="accordion-body">
                     <button class="btn btn-sm btn-outline-secondary mb-2"
                             type="button" data-copy="{{.Message.HeaderBlock}}">
-                      <i class="bi bi-clipboard me-1"></i>Kopieren
+                      <i class="bi bi-clipboard me-1"></i>{{t $.Lang "report.copy_button"}}
                     </button>
                     <pre class="mp-raw-pre">{{.Message.HeaderBlock}}</pre>
                   </div>
@@ -902,7 +902,7 @@ Kind regards,
                   <div class="accordion-body">
                     <button class="btn btn-sm btn-outline-secondary mb-2"
                             type="button" data-copy="{{.Message.RawSource}}">
-                      <i class="bi bi-clipboard me-1"></i>Kopieren
+                      <i class="bi bi-clipboard me-1"></i>{{t $.Lang "report.copy_button"}}
                     </button>
                     <pre class="mp-raw-pre">{{.Message.RawSource}}</pre>
                   </div>
@@ -2085,12 +2085,12 @@ function renderDecryptedReport(p) {
   if(p.raw_source&&p.raw_source!=='[encrypted]'){
     rawHtml='<div class="d-flex align-items-center gap-2 mb-2">'+
             '<button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#raw-dec-section">'+
-            '<i class="bi bi-code me-1"></i>E-Mail-Quelltext &amp; Rohdaten anzeigen</button></div>'+
+            '<i class="bi bi-code me-1"></i>'+esc(LANG==='en'?'Show message source & raw data':'E-Mail-Quelltext & Rohdaten anzeigen')+'</button></div>'+
             '<div id="raw-dec-section" class="collapse mb-1"><div class="card mb-3">'+
             '<div class="card-header d-flex align-items-center justify-content-between">'+
-            '<h3 class="card-title mb-0"><i class="bi bi-code me-1"></i>Vollständige Rohnachricht</h3>'+
+            '<h3 class="card-title mb-0"><i class="bi bi-code me-1"></i>'+esc(LANG==='en'?'Full raw message':'Vollständige Rohnachricht')+'</h3>'+
             '<button class="btn btn-sm btn-outline-secondary" type="button" data-copy="'+esc(p.raw_source)+'">'+
-            '<i class="bi bi-clipboard me-1"></i>Kopieren</button></div>'+
+            '<i class="bi bi-clipboard me-1"></i>'+esc(LANG==='en'?'Copy':'Kopieren')+'</button></div>'+
             '<div class="card-body p-0"><div class="accordion-body"><pre class="mp-raw-pre">'+esc(p.raw_source)+'</pre></div></div></div></div>';
   }
 

@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.35.0] - 2026-09-04
+
+### Fixed
+- **Fest deutsche Beschriftungen im englischen Report** — „Empfehlung", „Kopieren",
+  „Vollständige Rohnachricht" und „E-Mail-Quelltext & Rohdaten anzeigen" standen fest
+  verdrahtet im Template, obwohl die Übersetzungsschlüssel teils schon existierten und
+  unmittelbar daneben korrekt verwendet wurden. Sie folgen jetzt der Sprachwahl.
+
 ## [1.34.0] - 2026-09-04
 
 ### Fixed

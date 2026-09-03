@@ -165,6 +165,7 @@ var de = map[string]string{
 	"report.share_nokey":   "Link ohne Schlüssel",
 	"report.share_key":     "Nur der Schlüssel",
 	"report.copy":          "Klicken zum Kopieren",
+	"report.copy_button":   "Kopieren",
 	"report.copied":        "Kopiert!",
 
 	// Check body
@@ -339,6 +340,7 @@ var en = map[string]string{
 	"report.share_nokey":   "Link without key",
 	"report.share_key":     "Key only",
 	"report.copy":          "Click to copy",
+	"report.copy_button":   "Copy",
 	"report.copied":        "Copied!",
 
 	// Check body
