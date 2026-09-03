@@ -262,7 +262,55 @@ func humanizeKey(key string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
-func techLabel(key string) string {
+// techLabelsEN holds the English captions for the raw-data table. Only the
+// entries that actually differ are listed; protocol names such as HELO/EHLO,
+// Return-Path or List-Id read the same in both languages and fall through to
+// the German table below.
+var techLabelsEN = map[string]string{
+	"remote_ip": "Sending IP", "ptr_hostname": "PTR hostname", "ptr_pattern": "PTR pattern",
+	"dkim_result": "DKIM result", "dkim_signature": "DKIM signature",
+	"key_type": "Key type", "key_bits": "Key length (bits)", "dns_name": "DNS name",
+	"spf_result": "SPF result", "spf_records": "SPF record(s)",
+	"all_mechanism": "SPF all mechanism", "lookup_mechanisms_toplevel": "SPF DNS lookups (top level)",
+	"dmarc_result": "DMARC result", "dmarc_records": "DMARC record(s)",
+	"header_from_domain": "Header-From domain", "envelope_from_domain": "Envelope-From domain",
+	"return_path_domain": "Return-Path domain", "bounce_domain": "Bounce domain",
+	"mx_host": "MX host", "mx_records": "MX records", "a_aaaa_records": "A/AAAA records",
+	"registered": "Registered on", "age_days": "Domain age (days)", "rdap_error": "RDAP error",
+	"dnskey_records": "DNSKEY records", "tlsa_records": "TLSA records", "tlsa_name": "TLSA name",
+	"mx_domain": "MX domain", "checked_providers": "Lists checked", "listed_on": "Listed on",
+	"listed": "Listed", "listed_providers": "Listed on", "listing_responses": "Listing responses",
+	"lookup_errors": "Lookup errors", "deliverability_impact": "Impact on delivery",
+	"rbl_query_prefix": "RBL query", "query_names": "Query names",
+	"link_count": "Number of links", "links": "Links", "link_domains_checked": "Link domains checked",
+	"display_name": "Display name", "impersonated_brand": "Impersonated brand",
+	"embedded_domain": "Embedded domain", "subject": "Subject", "subject_chars": "Subject length (characters)",
+	"exclamation_count": "Exclamation marks", "date": "Date", "date_header": "Date header",
+	"date_skew": "Clock skew", "received_count": "Number of Received headers",
+	"received_headers": "Received headers", "charset": "Character set",
+	"has_html_part": "HTML part present", "has_text_part": "Text part present",
+	"html_chars": "HTML characters", "text_chars": "Text characters", "image_count": "Images",
+	"image_text_ratio": "Image-to-text ratio", "attachment_count": "Attachments", "part_count": "MIME parts",
+	"error": "Error", "parse_error": "Parse error", "raw_bytes": "Raw size (bytes)",
+	"action": "Action", "required_score": "Threshold", "expected": "Expected", "spam_line": "Spam line",
+	"dns_lookup": "DNS lookup", "beantwortet": "Answered", "nicht_pruefbar": "Not checkable",
+	"defekt": "Broken", "geprueft": "Checked", "nicht_abgerufen": "Not opened",
+	"nicht_abgerufen_grund": "Why not opened", "herkunft": "Source", "pct": "pct",
+	"subdomain_policy": "Subdomain policy", "betroffene_links": "Affected links",
+	"beantwortete_abfragen": "Answered queries", "recheck_pending": "Result still open",
+	"simulator_uebersprungen": "Skipped in the simulator",
+}
+
+// techLabel returns the caption for a raw-data key in the report's language.
+//
+// The table was German only, so the English report showed English check names
+// and explanations above a table captioned "Sendende IP" and "Schlüssellänge".
+func techLabel(lang, key string) string {
+	if i18n.Lang(lang) == i18n.EN {
+		if v, ok := techLabelsEN[key]; ok {
+			return v
+		}
+	}
 	if v, ok := techLabels[key]; ok {
 		return v
 	}
@@ -271,8 +319,21 @@ func techLabel(key string) string {
 
 // techLabelsJSON exposes the label map to the client so the E2E renderer uses the
 // same labels.
-func techLabelsJSON() (template.JS, error) {
-	b, err := json.Marshal(techLabels)
+// techLabelsJSON hands the caption table to the client-side renderer, which
+// builds the raw-data table for decrypted reports. It has to carry the same
+// language as the server-rendered half, or one report shows both.
+func techLabelsJSON(lang string) (template.JS, error) {
+	table := techLabels
+	if i18n.Lang(lang) == i18n.EN {
+		table = make(map[string]string, len(techLabels))
+		for k, v := range techLabels {
+			table[k] = v
+		}
+		for k, v := range techLabelsEN {
+			table[k] = v
+		}
+	}
+	b, err := json.Marshal(table)
 	if err != nil {
 		return "", err
 	}

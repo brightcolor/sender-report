@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.38.0] - 2026-09-04
+
+### Fixed
+- **Die Beschriftungen der Rohdaten-Tabelle gab es nur auf Deutsch** — im englischen
+  Bericht standen englische Prüfnamen und Erklärungen über einer Tabelle mit
+  „Sendende IP", „Schlüssellänge (Bit)" und „Geprüfte Listen". Für die Einträge, die
+  sich unterscheiden, gibt es jetzt eine englische Fassung; Protokollnamen wie HELO/EHLO
+  oder Return-Path bleiben in beiden Sprachen gleich. Der clientseitige Renderer für
+  entschlüsselte Berichte bekommt dieselbe Tabelle, damit nicht eine Hälfte des Berichts
+  in der einen und die andere in der anderen Sprache erscheint.
+
 ## [1.37.0] - 2026-09-04
 
 ### Fixed

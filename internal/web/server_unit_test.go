@@ -386,3 +386,54 @@ func TestGroupHeadingsFollowTheLanguage(t *testing.T) {
 		t.Errorf("English hint still contains German: %q", en[0].Hint)
 	}
 }
+
+// TestTechLabelsFollowTheLanguage covers the raw-data table, which was German
+// only: the English report showed English check names and explanations above a
+// table captioned "Sendende IP" and "Schlüssellänge (Bit)".
+func TestTechLabelsFollowTheLanguage(t *testing.T) {
+	cases := []struct{ key, de, en string }{
+		{"remote_ip", "Sendende IP", "Sending IP"},
+		{"key_bits", "Schlüssellänge (Bit)", "Key length (bits)"},
+		{"checked_providers", "Geprüfte Listen", "Lists checked"},
+		{"image_text_ratio", "Bild/Text-Verhältnis", "Image-to-text ratio"},
+	}
+	for _, tc := range cases {
+		if got := techLabel("de", tc.key); got != tc.de {
+			t.Errorf("techLabel(de, %q) = %q, want %q", tc.key, got, tc.de)
+		}
+		if got := techLabel("en", tc.key); got != tc.en {
+			t.Errorf("techLabel(en, %q) = %q, want %q", tc.key, got, tc.en)
+		}
+	}
+
+	t.Run("protocol names stay identical in both languages", func(t *testing.T) {
+		for _, k := range []string{"helo", "return_path", "list_id", "message_id"} {
+			if techLabel("de", k) != techLabel("en", k) {
+				t.Errorf("%q differs between languages although it is a protocol name", k)
+			}
+		}
+	})
+
+	t.Run("unknown keys still get a readable caption", func(t *testing.T) {
+		if got := techLabel("en", "some_new_key"); got != "Some new key" {
+			t.Errorf("fallback = %q", got)
+		}
+	})
+
+	t.Run("the client-side table carries the same language", func(t *testing.T) {
+		en, err := techLabelsJSON("en")
+		if err != nil {
+			t.Fatalf("techLabelsJSON: %v", err)
+		}
+		if !strings.Contains(string(en), "Sending IP") {
+			t.Error("English table is missing its English captions")
+		}
+		if strings.Contains(string(en), "Sendende IP") {
+			t.Error("English table still carries the German caption")
+		}
+		de, _ := techLabelsJSON("de")
+		if !strings.Contains(string(de), "Sendende IP") {
+			t.Error("German table lost its captions")
+		}
+	})
+}

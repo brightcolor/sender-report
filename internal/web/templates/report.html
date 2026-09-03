@@ -682,7 +682,7 @@ Kind regards,
                             </div>
                             <dl class="mp-tech-dl">
                               {{range $k, $v := .TechnicalDetails}}
-                              <div><dt>{{techLabel $k}}</dt><dd><code>{{$v}}</code></dd></div>
+                              <div><dt>{{techLabel $.Lang $k}}</dt><dd><code>{{$v}}</code></dd></div>
                               {{end}}
                             </dl>
                           </div>
@@ -1119,7 +1119,7 @@ window.__mpReport = {
   groups: {{jsonEncode .CheckGroups}}
 };
 // Friendly German labels for raw-data keys, shared from the server (one source).
-window.__mpTechLabels = {{techLabelsJSON}};
+window.__mpTechLabels = {{techLabelsJSON .Lang}};
 </script>
 <script src="/static/vendor/jspdf.umd.min.js"></script>
 <script src="/static/pdf-report.js?v={{appVersion}}"></script>
@@ -1426,8 +1426,9 @@ function statusGlyph(s) {
   }[s] || '';
 }
 
-// techLabel mirrors server.go techLabel(): friendly German label for a raw-data
-// key, with a humanised fallback for unknown keys.
+// techLabel mirrors server.go techLabel(): caption for a raw-data key, in the
+// language the server put into window.__mpTechLabels, with a humanised
+// fallback for unknown keys.
 function techLabel(key) {
   var map = window.__mpTechLabels || {};
   if (map[key]) return map[key];
