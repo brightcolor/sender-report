@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.37.0] - 2026-09-04
+
+### Fixed
+- **Der Absender wurde für einen Kopfzeileneintrag bestraft, den dieser Server selbst
+  hätte schreiben müssen** — den `Received:`-Eintrag schreibt nach RFC 5321 §4.4 der
+  *empfangende* Server, und das ist bei einer Testnachricht dieser hier. Er wurde nie
+  geschrieben. Eine Nachricht, die direkt hierher zugestellt wird — das ist beim Testen
+  der Normalfall, etwa mit swaks, einem Python-Skript oder einem Mailserver, der direkt
+  an den MX liefert — kam damit korrekterweise ohne einen einzigen `Received:`-Eintrag
+  an und bekam dafür einen roten Befund samt der Aufforderung, den Transportweg zu
+  korrigieren. Daran konnte der Absender nichts ändern. Der Eintrag wird jetzt
+  geschrieben, mit HELO-Name, IP-Adresse, Empfängeradresse und Zeitstempel.
+- **Der Verschlüsselungszustand wurde aus fremden Kopfzeilen geraten** — geprüft wurde,
+  ob irgendwo in der gesamten `Received:`-Kette ein Hinweis auf TLS steht. Damit
+  entschied ein Eintrag, den eine frühere, nicht überprüfbare Station geschrieben hatte,
+  über das Urteil — auch dann, wenn die letzte Teilstrecke unverschlüsselt war. Genau
+  diese letzte Teilstrecke ist gemeint, und nur für sie kann dieser Server aus eigener
+  Kenntnis sprechen. Bewertet wird jetzt der jüngste Eintrag; der Text sagt in klaren
+  Worten, ob die Nachricht verschlüsselt übergeben wurde.
+
 ## [1.36.0] - 2026-09-04
 
 ### Fixed

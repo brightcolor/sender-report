@@ -1186,11 +1186,26 @@ func dmarcAlignmentCheck(fromDomain, spfResult, dkimResult string, alignedSPF, a
 }
 
 func tlsTransportCheck(received []string) model.CheckResult {
+	// The first Received line is the most recent hop: the delivery to this
+	// server, whose TLS state this server established itself. Every line below
+	// it was written by a system we cannot verify, and a "TLS" somewhere down
+	// the chain says nothing about whether the final leg was encrypted — which
+	// is the leg the check is about. Scanning all of them at once meant the
+	// verdict was inherited from a stranger's header.
+	if len(received) > 0 {
+		first := strings.ToLower(received[0])
+		switch {
+		case strings.Contains(first, "esmtps") || strings.Contains(first, "with tls") || strings.Contains(first, "cipher"):
+			return pass("tls_transport", "TLS Transport", 0.1, "Die Nachricht wurde verschlüsselt (STARTTLS) an diesen Server übergeben.", "")
+		case strings.Contains(first, "esmtp") || strings.Contains(first, " smtp"):
+			return warn("tls_transport", "TLS Transport", -0.2, "Die Nachricht wurde unverschlüsselt an diesen Server übergeben. Mitlesen ist auf dem Transportweg damit möglich.", "Im Versandsystem STARTTLS für ausgehende Verbindungen aktivieren. Fast alle Empfänger bieten es an; ohne es geht die Nachricht im Klartext über fremde Netze.")
+		}
+	}
 	raw := strings.ToLower(strings.Join(received, "\n"))
 	if strings.Contains(raw, "tls") || strings.Contains(raw, "esmtps") || strings.Contains(raw, "cipher") {
-		return pass("tls_transport", "TLS Transport", 0.1, "Received-Header enthalten Hinweise auf verschlüsselten Transport.", "")
+		return info("tls_transport", "TLS Transport", 0.0, "Verschlüsselter Transport ist an einer früheren Station belegt, für die Übergabe an diesen Server aber nicht eindeutig.", "")
 	}
-	return warn("tls_transport", "TLS Transport", -0.2, "Kein klarer TLS-Transport-Nachweis in den Received-Headern erkennbar.", "TLS (STARTTLS/SMTPS) für ausgehende SMTP-Verbindungen aktivieren.")
+	return warn("tls_transport", "TLS Transport", -0.2, "Kein klarer Nachweis für verschlüsselten Transport in den Received-Headern.", "Im Versandsystem STARTTLS für ausgehende SMTP-Verbindungen aktivieren.")
 }
 
 // ── Group A: deeper checks derived from already-available data ──────────────

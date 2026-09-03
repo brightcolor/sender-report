@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/emersion/go-msgauth/dkim"
 	"github.com/emersion/go-msgauth/dmarc"
@@ -34,6 +35,7 @@ func enrichWithReceiverAuthHeaders(ctx context.Context, cfg config.Config, rm sm
 	authHeader := buildAuthenticationResultsHeader(cfg.SMTPDomain, res)
 	receivedSPF := buildReceivedSPFHeader(cfg.SMTPDomain, rm, res.SPFResult)
 	detailHeaders := []string{
+		buildReceivedHeader(cfg.SMTPDomain, rm),
 		authHeader,
 		receivedSPF,
 		"X-Sender-Report-SPF-Detail: " + safeAuthValue(emptyFallback(res.SPFDetail, "none")),
@@ -86,6 +88,35 @@ func buildAuthenticationResultsHeader(authServID string, res authResults) string
 		fromDomain,
 	)
 	return line
+}
+
+// buildReceivedHeader writes the Received: line RFC 5321 §4.4 makes the duty of
+// the *receiving* server — which, for a test message, is this one.
+//
+// It was missing, and the report then failed the sender for its absence with
+// "the transport path must contain Received headers". A message delivered
+// straight to this server, which is the normal case for a test, legitimately
+// arrives with none: swaks, a script using smtplib, any MTA going directly to
+// the MX. The sender could not have fixed that — the header was ours to write.
+//
+// Writing it also makes the TLS state of the delivery a fact rather than
+// something guessed out of other people's Received lines.
+func buildReceivedHeader(receiver string, rm smtp.ReceivedMail) string {
+	if strings.TrimSpace(receiver) == "" {
+		receiver = "sender-report.local"
+	}
+	proto := "ESMTP"
+	if rm.TLS {
+		proto = "ESMTPS"
+	}
+	helo := safeAuthValue(emptyFallback(rm.HELO, "unknown"))
+	ip := safeAuthValue(emptyFallback(rm.RemoteIP, "unknown"))
+	for_ := ""
+	if r := strings.TrimSpace(rm.RcptTo); r != "" {
+		for_ = "\r\n\tfor <" + safeAuthValue(r) + ">"
+	}
+	return fmt.Sprintf("Received: from %s ([%s])\r\n\tby %s with %s;%s\r\n\t%s",
+		helo, ip, safeAuthValue(receiver), proto, for_, time.Now().UTC().Format(time.RFC1123Z))
 }
 
 func buildReceivedSPFHeader(receiver string, rm smtp.ReceivedMail, spfResult string) string {

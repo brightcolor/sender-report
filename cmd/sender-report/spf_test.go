@@ -1,6 +1,12 @@
 package main
 
-import "testing"
+import (
+	"net/mail"
+	"strings"
+	"testing"
+
+	"github.com/brightcolor/sender-report/internal/smtp"
+)
 
 // TestPTRNameUnderDomain guards the SPF ptr mechanism against the two ways its
 // suffix comparison used to be wrong.
@@ -49,4 +55,67 @@ func TestSPFLookupBudgetIsAConstant(t *testing.T) {
 	if spfLookupBudget != 10 {
 		t.Errorf("spfLookupBudget = %d, want 10 (RFC 7208 §4.6.4)", spfLookupBudget)
 	}
+}
+
+// TestReceivedHeaderIsWritten covers the duty RFC 5321 §4.4 places on the
+// receiving server — which for a test message is this one.
+//
+// Without it, a message delivered straight here (swaks, a smtplib script, any
+// MTA going directly to the MX) legitimately arrived with no Received header at
+// all, and the report failed the sender for it with "the transport path must
+// contain Received headers". Nothing the sender could have done.
+func TestReceivedHeaderIsWritten(t *testing.T) {
+	rm := smtp.ReceivedMail{
+		RemoteIP: "203.0.113.5",
+		HELO:     "mail.example.org",
+		MailFrom: "sender@example.org",
+		RcptTo:   "abc123@mx-test.example.net",
+		TLS:      true,
+	}
+
+	got := buildReceivedHeader("sender.report", rm)
+
+	for _, want := range []string{"Received: from mail.example.org", "([203.0.113.5])", "by sender.report", "ESMTPS", "abc123@mx-test.example.net"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("header missing %q:\n%s", want, got)
+		}
+	}
+
+	t.Run("plain delivery is marked ESMTP, not ESMTPS", func(t *testing.T) {
+		plain := buildReceivedHeader("sender.report", smtp.ReceivedMail{RemoteIP: "203.0.113.5", HELO: "h"})
+		if strings.Contains(plain, "ESMTPS") {
+			t.Errorf("unencrypted delivery claims TLS:\n%s", plain)
+		}
+		if !strings.Contains(plain, "ESMTP") {
+			t.Errorf("protocol missing:\n%s", plain)
+		}
+	})
+
+	t.Run("continuation lines are folded with a tab", func(t *testing.T) {
+		// A header spanning lines must continue with whitespace, or every parser
+		// downstream reads the rest as separate headers.
+		for _, line := range strings.Split(strings.ReplaceAll(got, "\r\n", "\n"), "\n")[1:] {
+			if line == "" {
+				continue
+			}
+			if !strings.HasPrefix(line, "\t") && !strings.HasPrefix(line, " ") {
+				t.Errorf("continuation line is not folded: %q", line)
+			}
+		}
+	})
+
+	t.Run("the message parses with the header prepended", func(t *testing.T) {
+		raw := "From: a@example.org\r\nSubject: Test\r\n\r\nHallo\r\n"
+		enriched := prependHeaders(raw, []string{got})
+		msg, err := mail.ReadMessage(strings.NewReader(enriched))
+		if err != nil {
+			t.Fatalf("enriched message no longer parses: %v", err)
+		}
+		if msg.Header.Get("Received") == "" {
+			t.Error("Received header did not survive prependHeaders")
+		}
+		if msg.Header.Get("From") != "a@example.org" {
+			t.Errorf("original headers damaged: From = %q", msg.Header.Get("From"))
+		}
+	})
 }

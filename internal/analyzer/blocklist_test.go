@@ -128,3 +128,38 @@ func TestSpamAssassinNearMiss(t *testing.T) {
 		}
 	}
 }
+
+// TestTLSTransportUsesTheFinalHop covers where the verdict comes from. Scanning
+// every Received line at once let a "TLS" written by some earlier system decide
+// the result, even when the last leg — the delivery to this server, the only one
+// this server can vouch for — was in the clear.
+func TestTLSTransportUsesTheFinalHop(t *testing.T) {
+	t.Run("encrypted delivery to us passes", func(t *testing.T) {
+		got := tlsTransportCheck([]string{
+			"from mail.example.org ([203.0.113.5]) by sender.report with ESMTPS; Mon, 1 Sep 2026 10:00:00 +0000",
+			"from old.example.net by mail.example.org with SMTP; Mon, 1 Sep 2026 09:59:00 +0000",
+		})
+		if got.Status != "pass" {
+			t.Errorf("status = %q, want pass (%q)", got.Status, got.Summary)
+		}
+	})
+
+	t.Run("plain delivery to us warns even with TLS earlier in the chain", func(t *testing.T) {
+		got := tlsTransportCheck([]string{
+			"from relay.example.net ([203.0.113.9]) by sender.report with ESMTP; Mon, 1 Sep 2026 10:00:00 +0000",
+			"from origin.example.org by relay.example.net with ESMTPS (TLS1.3); Mon, 1 Sep 2026 09:59:00 +0000",
+		})
+		if got.Status != "warn" {
+			t.Errorf("status = %q, want warn — the last leg was unencrypted (%q)", got.Status, got.Summary)
+		}
+		if got.ScoreDelta >= 0 {
+			t.Errorf("ScoreDelta = %v, want a penalty", got.ScoreDelta)
+		}
+	})
+
+	t.Run("no Received headers at all", func(t *testing.T) {
+		if got := tlsTransportCheck(nil); got.Status != "warn" {
+			t.Errorf("status = %q, want warn", got.Status)
+		}
+	})
+}
