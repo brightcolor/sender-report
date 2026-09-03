@@ -4421,8 +4421,19 @@ func newsletterHeuristics(headers mail.Header, body parsedBody, mailType string)
 			checks = append(checks, na("one_click_unsub", "One-Click-Abmeldung (RFC 8058)", "no-list-unsub"))
 		} else {
 			listUnsubPost := headers.Get("List-Unsubscribe-Post")
-			if strings.Contains(strings.ToLower(listUnsubPost), "list-unsubscribe=one-click") {
-				checks = append(checks, pass("one_click_unsub", "One-Click-Abmeldung (RFC 8058)", 0.1, "List-Unsubscribe-Post One-Click vorhanden (RFC 8058 konform) – maximale Kompatibilität mit Gmail/Yahoo.", ""))
+			hasPost := strings.Contains(strings.ToLower(listUnsubPost), "list-unsubscribe=one-click")
+			// RFC 8058 needs both halves: the Post header *and* an https: URI in
+			// List-Unsubscribe for the POST to go to. Checking only the header let
+			// a mailto:-only mailing count as fully conformant, while Gmail and
+			// Yahoo — the reason to implement RFC 8058 at all — see nothing they
+			// can use and treat the sender as if the header were absent.
+			hasHTTPS := strings.Contains(strings.ToLower(listUnsub), "https://")
+			if hasPost && !hasHTTPS {
+				checks = append(checks, warn("one_click_unsub", "One-Click-Abmeldung (RFC 8058)", -0.3,
+					"Die Kopfzeile für die Ein-Klick-Abmeldung ist gesetzt, aber im List-Unsubscribe fehlt eine https-Adresse — nur an eine solche kann der Abmeldeklick geschickt werden. In dieser Form bleibt die Ein-Klick-Abmeldung bei Gmail und Yahoo wirkungslos.",
+					"Im List-Unsubscribe-Header zusätzlich zur mailto-Adresse eine https-Adresse angeben, die eine Abmeldung per HTTP-POST sofort ausführt — ohne Rückfrage und ohne Anmeldung."))
+			} else if hasPost {
+				checks = append(checks, pass("one_click_unsub", "One-Click-Abmeldung (RFC 8058)", 0.1, "Ein-Klick-Abmeldung nach RFC 8058 vollständig eingerichtet: Kopfzeile und https-Adresse sind vorhanden.", ""))
 			} else {
 				checks = append(checks, warn("one_click_unsub", "One-Click-Abmeldung (RFC 8058)", -0.3, "List-Unsubscribe vorhanden, aber One-Click-Abmeldung (RFC 8058) fehlt. Gmail und Yahoo werten Bulk-Sender ab.", "List-Unsubscribe-Post: List-Unsubscribe=One-Click Header ergänzen und eine HTTPS-URL bereitstellen, die sofortige Abmeldung via HTTP-POST ausführt."))
 			}

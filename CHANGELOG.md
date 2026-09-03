@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.34.0] - 2026-09-04
+
+### Fixed
+- **Ein-Klick-Abmeldung galt schon mit der halben Voraussetzung als eingerichtet** —
+  RFC 8058 verlangt zweierlei: die Kopfzeile `List-Unsubscribe-Post` **und** eine
+  https-Adresse im `List-Unsubscribe`, an die der Abmeldeklick geschickt werden kann.
+  Geprüft wurde nur die Kopfzeile. Eine Massenmail mit ausschließlich einer
+  mailto-Adresse galt damit als vollständig konform — obwohl Gmail und Yahoo, für die
+  man RFC 8058 überhaupt umsetzt, dort nichts finden, was sie ansprechen können, und den
+  Absender behandeln, als fehlte die Angabe ganz. Fehlt die https-Adresse, erscheint das
+  jetzt als Warnung mit der Erklärung, warum die Ein-Klick-Abmeldung so wirkungslos bleibt.
+
 ## [1.33.0] - 2026-09-04
 
 ### Fixed

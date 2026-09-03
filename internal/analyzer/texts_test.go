@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"net/mail"
 	"os"
 	"regexp"
 	"strings"
@@ -105,6 +106,59 @@ func TestCoreExplanationsAreSelfContained(t *testing.T) {
 		}
 		if len(c.Explanation) < 200 {
 			t.Errorf("%s explanation looks too thin to teach anything: %q", id, c.Explanation)
+		}
+	}
+}
+
+// TestOneClickUnsubscribeNeedsBothHalves covers RFC 8058's two requirements.
+// Checking only the Post header let a mailto:-only mailing count as fully
+// conformant — while Gmail and Yahoo, the entire reason to implement RFC 8058,
+// find nothing they can POST to and treat the sender as if it were missing.
+func TestOneClickUnsubscribeNeedsBothHalves(t *testing.T) {
+	cases := []struct {
+		name       string
+		unsub      string
+		post       string
+		wantStatus string
+	}{
+		{
+			"both halves present",
+			"<https://example.org/u/abc>, <mailto:unsub@example.org>",
+			"List-Unsubscribe=One-Click",
+			"pass",
+		},
+		{
+			"post header but only mailto",
+			"<mailto:unsub@example.org>",
+			"List-Unsubscribe=One-Click",
+			"warn",
+		},
+		{
+			"https but no post header",
+			"<https://example.org/u/abc>",
+			"",
+			"warn",
+		},
+	}
+
+	for _, tc := range cases {
+		h := mail.Header{
+			"List-Unsubscribe":      []string{tc.unsub},
+			"List-Unsubscribe-Post": []string{tc.post},
+			"List-Id":               []string{"<news.example.org>"},
+		}
+		found := false
+		for _, c := range newsletterHeuristics(h, parsedBody{}, "bulk") {
+			if c.ID != "one_click_unsub" {
+				continue
+			}
+			found = true
+			if c.Status != tc.wantStatus {
+				t.Errorf("%s: status = %q, want %q (%q)", tc.name, c.Status, tc.wantStatus, c.Summary)
+			}
+		}
+		if !found {
+			t.Errorf("%s: one_click_unsub check did not run", tc.name)
 		}
 	}
 }
