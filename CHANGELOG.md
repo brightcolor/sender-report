@@ -4,6 +4,58 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.26.0] - 2026-09-03
+
+### Fixed
+- **Eine gestörte DNS-Auflösung wurde dem Absender als fehlender Eintrag gemeldet** —
+  `net.Resolver` liefert bei SERVFAIL, Zeitüberschreitung und NXDOMAIN dasselbe leere
+  Ergebnis und unterscheidet die Fälle nur über den Fehlerwert. Dieser Fehler wurde an
+  den meisten Abfragestellen verworfen. Ein Aussetzer des Resolvers führte deshalb zu
+  Aussagen wie „Kein DMARC-Record für die From-Domain gefunden" oder „Kein PTR/rDNS für
+  die sendende IP gefunden" — für eine Domain, die vollständig korrekt konfiguriert ist.
+  In der Summe kostete ein Ausfall bis zu 4,8 Punkte, und der Report wurde trotzdem als
+  vollständig ausgeliefert.
+  - Alle DNS-Abfragen laufen jetzt über eine gemeinsame Schicht, die drei Zustände
+    unterscheidet: Eintrag vorhanden, Eintrag nachweislich nicht vorhanden (NXDOMAIN
+    beziehungsweise leere Antwort mit NOERROR), und Abfrage nicht beantwortet. Nur der
+    mittlere Fall führt weiterhin zu einer negativen Bewertung.
+  - Betroffen waren SPF, DMARC, MX, A/AAAA, PTR/rDNS, PTR-Muster, DKIM-Schlüssel,
+    Bounce-Empfang, Empfangsfähigkeit der From-Domain, MTA-STS, TLS-RPT, BIMI, DNSSEC
+    und DANE/TLSA — jeweils im Hauptreport und in den Rechecks.
+- **Der Recheck schrieb einen solchen Falschbefund dauerhaft fest** — die vier
+  Recheck-Prüfungen (SPF, SPF-Strenge, DMARC, DMARC-Policy) werden genau dann
+  ausgeführt, wenn jemand gerade einen DNS-Eintrag korrigiert hat, also in dem Moment,
+  in dem vorübergehende Auflösungsfehler am wahrscheinlichsten sind. Das Ergebnis wurde
+  über `/api/recheck-persist` samt neuem Score über das vorherige, korrekte Ergebnis
+  geschrieben. Diese Prüfungen melden jetzt „nicht abfragbar", statt einen Eintrag für
+  fehlend zu erklären.
+- **SPF meldete `fail` statt `temperror`, wenn eine Mechanismus-Abfrage scheiterte** —
+  bei den Mechanismen `a`, `mx` und `ptr` wurde ein DNS-Fehler als „Mechanismus trifft
+  nicht zu" gewertet. Bei einem Record wie `v=spf1 a mx -all` griff dadurch das
+  abschließende `-all`, und ein korrekt konfigurierter Absender bekam ein hartes
+  `fail` mit der Aufforderung, seinen SPF-Record zu korrigieren. RFC 7208 §4.4 verlangt
+  hier `temperror`. Der `exists`-Mechanismus prüfte bereits auf `IsTemporary`, erfasste
+  damit aber weder Zeitüberschreitungen noch Fehler, die kein `net.DNSError` sind.
+- **DNSSEC- und DANE-Abfragen werteten weder Rcode noch Truncation aus** — ein SERVFAIL
+  ist auf Transportebene ein erfolgreicher Austausch und war von „kein Record vorhanden"
+  nicht zu unterscheiden. Da diese Abfragen das DO-Bit setzen, überschreiten DNSKEY- und
+  RRSIG-Antworten regelmäßig 512 Byte; eine gekürzte Antwort wurde als leere Antwort
+  gelesen. Beides wird jetzt erkannt, gekürzte Antworten werden über TCP wiederholt.
+- **Domains mit Umlauten sahen aus wie nicht existierende Domains** — Go weist
+  Nicht-ASCII-Namen bereits vor der Abfrage ab und meldet dabei „nicht gefunden".
+  Namen werden jetzt vor jeder Abfrage labelweise nach Punycode umgewandelt;
+  Unterstrich-Label wie `_dmarc` oder `selector._domainkey` bleiben dabei unverändert.
+
+### Added
+- **Dritter Ergebniszustand „nicht abfragbar"** — betroffene Prüfungen erscheinen als
+  Hinweis ohne Punktabzug und erklären in einfachen Worten, dass die Namensauflösung
+  nicht geantwortet hat und der Eintrag durchaus vorhanden sein kann. Der Text nennt
+  ausdrücklich, dass die Ursache nicht beim E-Mail-Versand des Absenders liegt.
+- **Hinweis am Kopf des Reports, wenn Prüfungen ausgefallen sind** — nennt die Anzahl
+  und bezeichnet das Ergebnis als unvollständig, damit der Score nicht für ein
+  abgeschlossenes Urteil gehalten wird. Die Zehn-Punkte-Sperre greift weiterhin, weil
+  eine nicht abfragbare Pflichtprüfung nicht als bestanden zählt.
+
 ## [1.25.1] - 2026-07-14
 
 ### Fixed

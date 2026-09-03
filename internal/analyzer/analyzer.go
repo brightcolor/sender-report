@@ -175,7 +175,10 @@ func spfRecordRecheck(ctx context.Context, domain string) model.CheckResult {
 	if domain == "" {
 		return info("spf", "SPF", 0, "Keine Domain für den SPF-Recheck ermittelbar.", "")
 	}
-	recs, _ := net.DefaultResolver.LookupTXT(ctx, domain)
+	recs, st := lookupTXT(ctx, domain)
+	if st == dnsUnavailable {
+		return unresolved("spf", "SPF", "Der SPF-Eintrag")
+	}
 	spf := ""
 	for _, r := range recs {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(r)), "v=spf1") {
@@ -195,7 +198,10 @@ func spfStrictnessRecheck(ctx context.Context, domain string) model.CheckResult 
 	if domain == "" {
 		return info("spf_strictness", "SPF-Strenge", 0, "Keine Domain für den SPF-Strenge-Recheck ermittelbar.", "")
 	}
-	recs, _ := net.DefaultResolver.LookupTXT(ctx, domain)
+	recs, st := lookupTXT(ctx, domain)
+	if st == dnsUnavailable {
+		return unresolved("spf_strictness", "SPF-Strenge", "Der SPF-Eintrag")
+	}
 	spf := make([]string, 0, 1)
 	for _, r := range recs {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(r)), "v=spf1") {
@@ -211,7 +217,10 @@ func dmarcRecordRecheck(ctx context.Context, fromDomain string) model.CheckResul
 	if fromDomain == "" {
 		return info("dmarc", "DMARC", 0, "Keine From-Domain für den DMARC-Recheck ermittelbar.", "")
 	}
-	recs, _ := net.DefaultResolver.LookupTXT(ctx, "_dmarc."+fromDomain)
+	recs, st := lookupTXT(ctx, "_dmarc."+fromDomain)
+	if st == dnsUnavailable {
+		return unresolved("dmarc", "DMARC", "Der DMARC-Eintrag")
+	}
 	policy := ""
 	found := false
 	for _, r := range recs {
@@ -234,7 +243,10 @@ func dmarcPolicyRecheck(ctx context.Context, fromDomain string) model.CheckResul
 	if fromDomain == "" {
 		return info("dmarc_policy", "DMARC-Policy-Stärke", 0, "Keine From-Domain für den Recheck ermittelbar.", "")
 	}
-	recs, _ := net.DefaultResolver.LookupTXT(ctx, "_dmarc."+fromDomain)
+	recs, st := lookupTXT(ctx, "_dmarc."+fromDomain)
+	if st == dnsUnavailable {
+		return unresolved("dmarc_policy", "DMARC-Policy-Stärke", "Der DMARC-Eintrag")
+	}
 	var dmarcRecs []string
 	policy := ""
 	for _, r := range recs {
@@ -327,8 +339,10 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 
 	// SPF
 	spfRecords := make([]string, 0)
+	spfLookup := dnsOK
 	if envelopeDomain != "" {
-		recs, _ := net.DefaultResolver.LookupTXT(ctx, envelopeDomain)
+		recs, st := lookupTXT(ctx, envelopeDomain)
+		spfLookup = st
 		for _, rec := range recs {
 			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(rec)), "v=spf1") {
 				spfRecords = append(spfRecords, strings.TrimSpace(rec))
@@ -351,6 +365,8 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	default:
 		if len(spfRecords) > 0 {
 			report.Checks = append(report.Checks, info("spf", "SPF", 0.0, "SPF-Record vorhanden, kein eindeutiges SPF-Ergebnis im Header.", ""))
+		} else if spfLookup == dnsUnavailable {
+			report.Checks = append(report.Checks, unresolved("spf", "SPF", "Der SPF-Eintrag der Domain "+envelopeDomain))
 		} else {
 			report.Checks = append(report.Checks, warn("spf", "SPF", -0.8, "Kein SPF-Record erkannt oder Ergebnis fehlt.", "TXT-Record mit v=spf1 auf der Envelope-From-Domain setzen."))
 		}
@@ -394,8 +410,10 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	// DMARC
 	dmarcRecords := make([]string, 0)
 	dmarcPolicy := ""
+	dmarcLookup := dnsOK
 	if fromDomain != "" {
-		dmarcTXT, _ := net.DefaultResolver.LookupTXT(ctx, "_dmarc."+fromDomain)
+		dmarcTXT, st := lookupTXT(ctx, "_dmarc."+fromDomain)
+		dmarcLookup = st
 		for _, rec := range dmarcTXT {
 			lr := strings.ToLower(rec)
 			if strings.HasPrefix(lr, "v=dmarc1") {
@@ -429,6 +447,8 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 		} else {
 			report.Checks = append(report.Checks, fail("dmarc", "DMARC", -1.0, fmt.Sprintf("DMARC-Record vorhanden (p=%s), aber kein SPF/DKIM-Alignment.", emptyFallback(dmarcPolicy, "none")), "From-Domain-Alignment mit SPF oder DKIM sicherstellen."))
 		}
+	} else if dmarcLookup == dnsUnavailable {
+		report.Checks = append(report.Checks, unresolved("dmarc", "DMARC", "Der DMARC-Eintrag der Domain "+fromDomain))
 	} else {
 		report.Checks = append(report.Checks, fail("dmarc", "DMARC", -1.2, "Kein DMARC-Record für die From-Domain gefunden.", "_dmarc.<domain> TXT mit v=DMARC1 veröffentlichen."))
 	}
@@ -690,6 +710,11 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	if !in.SimulationMode && report.Score > essentialPerfectCap && !essentialsAllPass(report.Checks) {
 		report.Score = essentialPerfectCap
 	}
+	// A report that could not ask DNS is incomplete, not clean. Say so at the
+	// top so the score is not mistaken for a finished verdict.
+	if n := countUnresolved(report.Checks); n > 0 {
+		report.Warnings = append(report.Warnings, unresolvedWarning(n))
+	}
 	report.Suggestions = dedupeSorted(report.Suggestions)
 	report.Warnings = dedupeSorted(report.Warnings)
 	report.SpamSignals = dedupeSorted(report.SpamSignals)
@@ -932,8 +957,11 @@ func mxRecordCheck(ctx context.Context, domain string) model.CheckResult {
 	if domain == "" {
 		return info("mx_records", "MX-Records", 0.0, "Keine Domain für den MX-Check ermittelbar.", "Header-From oder Envelope-From sauber setzen.")
 	}
-	mxs, err := net.DefaultResolver.LookupMX(ctx, domain)
-	if err != nil || len(mxs) == 0 {
+	mxs, st := lookupMX(ctx, domain)
+	if st == dnsUnavailable {
+		return unresolved("mx_records", "MX-Records", "Die MX-Einträge")
+	}
+	if st == dnsAbsent {
 		return warn("mx_records", "MX-Records", -0.3, fmt.Sprintf("Für %s wurde kein MX-Record gefunden.", domain), fmt.Sprintf("Falls %s E-Mails empfangen soll, in der DNS-Zone einen MX-Record setzen, z. B. %s. MX 10 mail.%s.", domain, domain, domain))
 	}
 	values := make([]string, 0, len(mxs))
@@ -951,8 +979,11 @@ func addressRecordCheck(ctx context.Context, domain string) model.CheckResult {
 	if domain == "" {
 		return info("address_records", "A/AAAA-Records", 0.0, "Keine Domain für A/AAAA-Check ermittelbar.", "Header-From oder Envelope-From sauber setzen.")
 	}
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, domain)
-	if err != nil || len(ips) == 0 {
+	ips, st := lookupIPAddr(ctx, domain)
+	if st == dnsUnavailable {
+		return unresolved("address_records", "A/AAAA-Records", "Die A/AAAA-Einträge")
+	}
+	if st == dnsAbsent {
 		return warn("address_records", "A/AAAA-Records", -0.3, fmt.Sprintf("%s löst nicht auf A/AAAA auf.", domain), fmt.Sprintf("In der DNS-Zone A/AAAA-Records für %s setzen, wenn diese Domain direkt als Hostname verwendet wird.", domain))
 	}
 	values := make([]string, 0, len(ips))
@@ -1155,8 +1186,11 @@ func dkimKeyLengthCheck(ctx context.Context, dkimSig string) model.CheckResult {
 	}
 	dnsName := selector + "._domainkey." + domain
 	det := map[string]string{"selector": selector, "domain": domain, "dns_name": dnsName}
-	txt, err := net.DefaultResolver.LookupTXT(ctx, dnsName)
-	if err != nil || len(txt) == 0 {
+	txt, st := lookupTXT(ctx, dnsName)
+	if st == dnsUnavailable {
+		return withDetails(unresolved("dkim_keylength", "DKIM-Schlüssellänge", "Der DKIM-Schlüssel unter "+dnsName), det)
+	}
+	if st == dnsAbsent {
 		return withDetails(warn("dkim_keylength", "DKIM-Schlüssellänge", -0.3, "DKIM-Public-Key konnte per DNS nicht abgerufen werden.", "Prüfen, ob der DKIM-Record unter "+dnsName+" existiert."), det)
 	}
 	joined := strings.Join(txt, "")
@@ -1198,8 +1232,11 @@ func ptrPatternCheck(ctx context.Context, ip string) model.CheckResult {
 	if ip == "" || net.ParseIP(ip) == nil {
 		return info("ptr_pattern", "PTR-Hostname-Muster", 0.0, "Keine sendende IP für die PTR-Mustererkennung verfügbar.", "")
 	}
-	names, err := net.DefaultResolver.LookupAddr(ctx, ip)
-	if err != nil || len(names) == 0 {
+	names, st := lookupAddr(ctx, ip)
+	if st == dnsUnavailable {
+		return unresolved("ptr_pattern", "PTR-Hostname-Muster", "Der PTR-Hostname der IP "+ip)
+	}
+	if st == dnsAbsent {
 		return info("ptr_pattern", "PTR-Hostname-Muster", 0.0, "Kein PTR-Hostname auflösbar – Muster nicht bewertbar (siehe PTR/rDNS-Check).", "")
 	}
 	host := strings.TrimSuffix(strings.ToLower(names[0]), ".")
@@ -1264,10 +1301,17 @@ func envelopeBounceMXCheck(ctx context.Context, bounceDomain string) model.Check
 		return info("envelope_mx", "Bounce-Empfang (Envelope-MX)", 0.0, "Keine Envelope-/Return-Path-Domain für den Bounce-MX-Check ermittelbar.", "Envelope-From/Return-Path mit einer eigenen Domain setzen.")
 	}
 	det := map[string]string{"bounce_domain": bounceDomain}
-	mxs, err := net.DefaultResolver.LookupMX(ctx, bounceDomain)
-	if err != nil || len(mxs) == 0 {
+	mxs, mxSt := lookupMX(ctx, bounceDomain)
+	if mxSt == dnsUnavailable {
+		return withDetails(unresolved("envelope_mx", "Bounce-Empfang (Envelope-MX)", "Die MX-Einträge der Bounce-Domain "+bounceDomain), det)
+	}
+	if mxSt == dnsAbsent {
 		// Fall back to A/AAAA — RFC 5321 allows implicit MX.
-		if ips, ierr := net.DefaultResolver.LookupIPAddr(ctx, bounceDomain); ierr == nil && len(ips) > 0 {
+		_, ipSt := lookupIPAddr(ctx, bounceDomain)
+		if ipSt == dnsUnavailable {
+			return withDetails(unresolved("envelope_mx", "Bounce-Empfang (Envelope-MX)", "Die DNS-Einträge der Bounce-Domain "+bounceDomain), det)
+		}
+		if ipSt == dnsOK {
 			return withDetails(info("envelope_mx", "Bounce-Empfang (Envelope-MX)", 0.0, fmt.Sprintf("Bounce-Domain %s hat keinen MX, aber A/AAAA (impliziter MX) – Bounces sind grenzwertig zustellbar.", bounceDomain), "Für sauberes Bounce-Handling einen MX-Record auf der Bounce-Domain setzen."), det)
 		}
 		return withDetails(warn("envelope_mx", "Bounce-Empfang (Envelope-MX)", -0.5, fmt.Sprintf("Bounce-Domain %s hat weder MX noch A/AAAA – Unzustellbarkeits-Benachrichtigungen (Bounces) können nicht zugestellt werden.", bounceDomain), "MX-Record für die Envelope-From/Return-Path-Domain setzen, damit Bounces ankommen."), det)
@@ -1282,12 +1326,18 @@ func fromDomainReceiveCheck(ctx context.Context, fromDomain, bounceDomain string
 	if fromDomain == bounceDomain {
 		return info("from_domain_rcv", "From-Domain Empfangsfähigkeit", 0.0, "From-Domain identisch mit Bounce-Domain – bereits durch Bounce-MX-Check abgedeckt.", "")
 	}
-	mxs, err := net.DefaultResolver.LookupMX(ctx, fromDomain)
-	if err == nil && len(mxs) > 0 {
+	_, mxSt := lookupMX(ctx, fromDomain)
+	if mxSt == dnsOK {
 		return pass("from_domain_rcv", "From-Domain Empfangsfähigkeit", 0.0, "From-Domain hat MX-Record(s) – Antworten und Bounces sind zustellbar.", "")
 	}
-	addrs, err2 := net.DefaultResolver.LookupIPAddr(ctx, fromDomain)
-	if err2 == nil && len(addrs) > 0 {
+	if mxSt == dnsUnavailable {
+		return unresolved("from_domain_rcv", "From-Domain Empfangsfähigkeit", "Die MX-Einträge der From-Domain "+fromDomain)
+	}
+	_, ipSt := lookupIPAddr(ctx, fromDomain)
+	if ipSt == dnsUnavailable {
+		return unresolved("from_domain_rcv", "From-Domain Empfangsfähigkeit", "Die DNS-Einträge der From-Domain "+fromDomain)
+	}
+	if ipSt == dnsOK {
 		return info("from_domain_rcv", "From-Domain Empfangsfähigkeit", 0.0, "From-Domain hat keinen MX, aber A/AAAA-Record (impliziter Fallback).", "Für sauberes Handling einen MX-Record auf der From-Domain setzen.")
 	}
 	return warn("from_domain_rcv", "From-Domain Empfangsfähigkeit", -0.4, "From-Domain kann keine E-Mails empfangen (kein MX, kein A/AAAA). Antworten an den Absender gehen verloren.", "MX-Record für die From-Domain setzen oder eine antwortfähige From-Adresse verwenden.")
@@ -1300,18 +1350,22 @@ func normDomain(d string) string {
 }
 
 // txtHasPrefix reports whether any TXT record at name starts with prefix.
-func txtHasPrefix(ctx context.Context, name, prefix string) (bool, []string) {
-	recs, err := net.DefaultResolver.LookupTXT(ctx, name)
-	if err != nil || len(recs) == 0 {
-		return false, nil
+//
+// The third return value separates "there is no such record" from "the lookup
+// did not answer". Without it these optional checks would claim a missing
+// policy after a resolver failure and silently withhold the bonus points.
+func txtHasPrefix(ctx context.Context, name, prefix string) (bool, []string, dnsStatus) {
+	recs, st := lookupTXT(ctx, name)
+	if st != dnsOK {
+		return false, nil, st
 	}
 	lp := strings.ToLower(prefix)
 	for _, r := range recs {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(r)), lp) {
-			return true, recs
+			return true, recs, dnsOK
 		}
 	}
-	return false, recs
+	return false, recs, dnsOK
 }
 
 func mtaStsCheck(ctx context.Context, domain string) model.CheckResult {
@@ -1320,8 +1374,11 @@ func mtaStsCheck(ctx context.Context, domain string) model.CheckResult {
 		return info("mta_sts", "MTA-STS", 0.0, "Keine Domain für den MTA-STS-Check ermittelbar.", "")
 	}
 	name := "_mta-sts." + domain
-	ok, recs := txtHasPrefix(ctx, name, "v=STSv1")
+	ok, recs, st := txtHasPrefix(ctx, name, "v=STSv1")
 	det := map[string]string{"dns_name": name, "txt": joinOrNone(recs)}
+	if st == dnsUnavailable {
+		return withDetails(unresolved("mta_sts", "MTA-STS", "Die MTA-STS-Policy unter "+name), det)
+	}
 	if ok {
 		return withDetails(pass("mta_sts", "MTA-STS", 0.15, "MTA-STS-Policy veröffentlicht – erzwingt verschlüsselten (TLS) Transport zum Mailserver.", ""), det)
 	}
@@ -1334,8 +1391,11 @@ func tlsRptCheck(ctx context.Context, domain string) model.CheckResult {
 		return info("tls_rpt", "TLS-RPT", 0.0, "Keine Domain für den TLS-RPT-Check ermittelbar.", "")
 	}
 	name := "_smtp._tls." + domain
-	ok, recs := txtHasPrefix(ctx, name, "v=TLSRPTv1")
+	ok, recs, st := txtHasPrefix(ctx, name, "v=TLSRPTv1")
 	det := map[string]string{"dns_name": name, "txt": joinOrNone(recs)}
+	if st == dnsUnavailable {
+		return withDetails(unresolved("tls_rpt", "TLS-RPT", "Der TLS-RPT-Eintrag unter "+name), det)
+	}
 	if ok {
 		return withDetails(pass("tls_rpt", "TLS-RPT", 0.1, "TLS-RPT-Reporting konfiguriert – du erhältst Berichte über fehlgeschlagene TLS-Verbindungen.", ""), det)
 	}
@@ -1348,8 +1408,11 @@ func bimiCheck(ctx context.Context, domain string) model.CheckResult {
 		return info("bimi", "BIMI", 0.0, "Keine Domain für den BIMI-Check ermittelbar.", "")
 	}
 	name := "default._bimi." + domain
-	ok, recs := txtHasPrefix(ctx, name, "v=BIMI1")
+	ok, recs, st := txtHasPrefix(ctx, name, "v=BIMI1")
 	det := map[string]string{"dns_name": name, "txt": joinOrNone(recs)}
+	if st == dnsUnavailable {
+		return withDetails(unresolved("bimi", "BIMI", "Der BIMI-Eintrag unter "+name), det)
+	}
 	if ok {
 		return withDetails(pass("bimi", "BIMI", 0.1, "BIMI-Record veröffentlicht – Logo-Anzeige bei unterstützenden Providern (setzt durchgesetztes DMARC voraus).", ""), det)
 	}
@@ -1373,16 +1436,47 @@ func resolverServer() string {
 
 // dnsRecords queries a specific record type via the system resolver using
 // miekg/dns (needed for DNSKEY/TLSA, which net.Resolver cannot request).
-func dnsRecords(ctx context.Context, server, name string, qtype uint16) []dns.RR {
+// dnsRecords asks server for a name's records and reports whether the answer
+// can be trusted.
+//
+// Two failure modes are invisible to the transport layer and were previously
+// read as "no such record": SERVFAIL comes back with err == nil and an empty
+// answer section, and a truncated response does the same. The DO bit set below
+// regularly pushes DNSKEY and RRSIG answers past 512 bytes, so truncation is
+// the normal case here rather than an exotic one — it must be retried over TCP.
+func dnsRecords(ctx context.Context, server, name string, qtype uint16) ([]dns.RR, dnsStatus) {
+	ascii, err := asciiDomain(name)
+	if err != nil {
+		return nil, dnsAbsent
+	}
 	m := new(dns.Msg)
-	m.SetQuestion(dns.Fqdn(name), qtype)
+	m.SetQuestion(dns.Fqdn(ascii), qtype)
 	m.SetEdns0(4096, true)
 	c := &dns.Client{Timeout: 4 * time.Second}
 	resp, _, err := c.ExchangeContext(ctx, m, server)
 	if err != nil || resp == nil {
-		return nil
+		return nil, dnsUnavailable
 	}
-	return resp.Answer
+	if resp.Truncated {
+		tcp := &dns.Client{Timeout: 4 * time.Second, Net: "tcp"}
+		tcpResp, _, tcpErr := tcp.ExchangeContext(ctx, m, server)
+		if tcpErr != nil || tcpResp == nil {
+			return nil, dnsUnavailable
+		}
+		resp = tcpResp
+	}
+	switch resp.Rcode {
+	case dns.RcodeSuccess:
+		if len(resp.Answer) == 0 {
+			return nil, dnsAbsent
+		}
+		return resp.Answer, dnsOK
+	case dns.RcodeNameError:
+		// NXDOMAIN is the one authoritative negative answer.
+		return nil, dnsAbsent
+	default:
+		return nil, dnsUnavailable
+	}
 }
 
 func dnssecCheck(ctx context.Context, domain string) model.CheckResult {
@@ -1394,7 +1488,10 @@ func dnssecCheck(ctx context.Context, domain string) model.CheckResult {
 	if server == "" {
 		return info("dnssec", "DNSSEC", 0.0, "DNSSEC nicht prüfbar (kein DNS-Resolver konfiguriert).", "")
 	}
-	ans := dnsRecords(ctx, server, domain, dns.TypeDNSKEY)
+	ans, st := dnsRecords(ctx, server, domain, dns.TypeDNSKEY)
+	if st == dnsUnavailable {
+		return unresolved("dnssec", "DNSSEC", "Die DNSSEC-Schlüssel (DNSKEY) der Domain "+domain)
+	}
 	has := false
 	for _, rr := range ans {
 		if _, ok := rr.(*dns.DNSKEY); ok {
@@ -1418,13 +1515,19 @@ func daneCheck(ctx context.Context, domain string) model.CheckResult {
 	if server == "" {
 		return info("dane_tlsa", "DANE/TLSA", 0.0, "DANE nicht prüfbar (kein DNS-Resolver konfiguriert).", "")
 	}
-	mxs, err := net.DefaultResolver.LookupMX(ctx, domain)
-	if err != nil || len(mxs) == 0 {
+	mxs, mxSt := lookupMX(ctx, domain)
+	if mxSt == dnsUnavailable {
+		return unresolved("dane_tlsa", "DANE/TLSA", "Die MX-Einträge der Domain "+domain)
+	}
+	if mxSt == dnsAbsent {
 		return withDetails(info("dane_tlsa", "DANE/TLSA", 0.0, "Kein MX vorhanden – DANE/TLSA nicht anwendbar.", ""), map[string]string{"domain": domain})
 	}
 	host := strings.TrimSuffix(mxs[0].Host, ".")
 	name := "_25._tcp." + host
-	ans := dnsRecords(ctx, server, name, dns.TypeTLSA)
+	ans, st := dnsRecords(ctx, server, name, dns.TypeTLSA)
+	if st == dnsUnavailable {
+		return unresolved("dane_tlsa", "DANE/TLSA", "Der TLSA-Eintrag unter "+name)
+	}
 	has := false
 	for _, rr := range ans {
 		if _, ok := rr.(*dns.TLSA); ok {
@@ -2220,6 +2323,16 @@ func defaultExplanation(id string) string {
 //nolint:cyclop,funlen
 func enrichEnglish(c *model.CheckResult, ctx checkContext) {
 	c.NameEN = checkNameEN(c.ID)
+	// A check that ended in the "could not ask DNS" state must not inherit the
+	// English phrase of the ordinary info case: those assert that a record is
+	// present or absent, which is precisely what this state cannot claim. The
+	// explanation stays — it teaches what the record does and is true either way.
+	if _, ok := c.TechnicalDetails[unresolvedDetailKey]; ok {
+		c.SummaryEN = unresolvedSummaryEN
+		c.ExplanationEN = explanationEN(c.ID)
+		c.RecommendationEN = unresolvedRecommendationEN
+		return
+	}
 	c.SummaryEN = summaryEN(c.ID, c.Status, c.Summary, ctx)
 	c.ExplanationEN = explanationEN(c.ID)
 	c.RecommendationEN = recommendationEN(c.ID, c.Status, ctx)
@@ -3161,13 +3274,19 @@ func ptrPlausibility(ctx context.Context, ip, helo string) model.CheckResult {
 	if parsed == nil {
 		return warn("ptr", "PTR/rDNS", -0.4, "Remote-IP ist ungültig, PTR nicht prüfbar.", "SMTP-Quelle prüfen.")
 	}
-	ptr, err := net.DefaultResolver.LookupAddr(ctx, parsed.String())
-	if err != nil || len(ptr) == 0 {
+	ptr, ptrSt := lookupAddr(ctx, parsed.String())
+	if ptrSt == dnsUnavailable {
+		return unresolved("ptr", "PTR/rDNS", "Die Rückwärtsauflösung (PTR) der sendenden IP "+parsed.String())
+	}
+	if ptrSt == dnsAbsent {
 		return fail("ptr", "PTR/rDNS", -1.0, "Kein PTR/rDNS für die sendende IP gefunden.", "PTR-Record für ausgehende Mail-IP setzen.")
 	}
 	host := strings.TrimSuffix(strings.ToLower(ptr[0]), ".")
-	fwd, err := net.DefaultResolver.LookupHost(ctx, host)
-	if err != nil || len(fwd) == 0 {
+	fwd, fwdSt := lookupHost(ctx, host)
+	if fwdSt == dnsUnavailable {
+		return unresolved("ptr", "PTR/rDNS", "Die Vorwärtsauflösung des PTR-Namens "+host)
+	}
+	if fwdSt == dnsAbsent {
 		return warn("ptr", "PTR/rDNS", -0.5, "PTR vorhanden, aber Forward-Lookup liefert keine Adresse.", "Forward-confirmed reverse DNS einrichten.")
 	}
 	for _, candidate := range fwd {

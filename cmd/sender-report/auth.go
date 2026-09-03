@@ -12,6 +12,7 @@ import (
 	"github.com/emersion/go-msgauth/dkim"
 	"github.com/emersion/go-msgauth/dmarc"
 
+	"github.com/brightcolor/sender-report/internal/analyzer"
 	"github.com/brightcolor/sender-report/internal/config"
 	"github.com/brightcolor/sender-report/internal/smtp"
 )
@@ -394,13 +395,13 @@ func matchSPFMechanism(ctx context.Context, remoteIP net.IP, currentDomain, mech
 		if target == "" {
 			target = currentDomain
 		}
-		return hostResolvesToIP(ctx, target, remoteIP, cidr), ""
+		return hostResolvesToIP(ctx, target, remoteIP, cidr)
 	case "mx":
 		target := value
 		if target == "" {
 			target = currentDomain
 		}
-		return mxResolvesToIP(ctx, target, remoteIP, cidr), ""
+		return mxResolvesToIP(ctx, target, remoteIP, cidr)
 	case "exists":
 		target := value
 		if target == "" {
@@ -408,7 +409,9 @@ func matchSPFMechanism(ctx context.Context, remoteIP net.IP, currentDomain, mech
 		}
 		ips, err := net.DefaultResolver.LookupHost(ctx, target)
 		if err != nil {
-			if dnsErr, ok := err.(*net.DNSError); ok && dnsErr.IsTemporary {
+			// IsTemporary alone misses timeouts and non-DNSError failures, both of
+			// which are lookup failures rather than an absent record.
+			if analyzer.DNSLookupFailed(err) {
 				return false, "temperror"
 			}
 			return false, ""
@@ -417,6 +420,9 @@ func matchSPFMechanism(ctx context.Context, remoteIP net.IP, currentDomain, mech
 	case "ptr":
 		ptrs, err := net.DefaultResolver.LookupAddr(ctx, remoteIP.String())
 		if err != nil {
+			if analyzer.DNSLookupFailed(err) {
+				return false, "temperror"
+			}
 			return false, ""
 		}
 		for _, host := range ptrs {
@@ -452,34 +458,56 @@ func parseSPFMechanism(mech string) (name, value string, cidr int) {
 	return name, value, cidr
 }
 
-func hostResolvesToIP(ctx context.Context, host string, remoteIP net.IP, cidr int) bool {
+// hostResolvesToIP reports whether host resolves to an address matching
+// remoteIP. The second return value is "temperror" when the lookup could not be
+// answered at all: RFC 7208 §4.4 requires SPF evaluation to stop there instead
+// of treating the mechanism as "no match". Without it a resolver outage lets a
+// trailing `-all` turn a perfectly correct record into a hard fail.
+func hostResolvesToIP(ctx context.Context, host string, remoteIP net.IP, cidr int) (bool, string) {
 	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 	if err != nil {
-		return false
+		if analyzer.DNSLookupFailed(err) {
+			return false, "temperror"
+		}
+		return false, ""
 	}
 	for _, a := range addrs {
 		if ipMatchesWithOptionalCIDR(remoteIP, a.IP, cidr) {
-			return true
+			return true, ""
 		}
 	}
-	return false
+	return false, ""
 }
 
-func mxResolvesToIP(ctx context.Context, domain string, remoteIP net.IP, cidr int) bool {
+// mxResolvesToIP reports whether any MX host of domain resolves to remoteIP.
+// Like hostResolvesToIP it surfaces "temperror" for a lookup that failed —
+// both for the MX query itself and for the address lookup of each MX host.
+func mxResolvesToIP(ctx context.Context, domain string, remoteIP net.IP, cidr int) (bool, string) {
 	mxs, err := net.DefaultResolver.LookupMX(ctx, domain)
 	if err != nil {
-		return false
+		if analyzer.DNSLookupFailed(err) {
+			return false, "temperror"
+		}
+		return false, ""
 	}
 	sort.SliceStable(mxs, func(i, j int) bool {
 		return mxs[i].Pref < mxs[j].Pref
 	})
+	// A failed lookup for one MX host is remembered but does not stop the loop:
+	// another host may still match. Only if none matches does the failure decide
+	// the outcome — otherwise a single unreachable MX would mask a valid match.
+	deferred := ""
 	for _, mx := range mxs {
 		host := strings.TrimSuffix(mx.Host, ".")
-		if hostResolvesToIP(ctx, host, remoteIP, cidr) {
-			return true
+		matched, errRes := hostResolvesToIP(ctx, host, remoteIP, cidr)
+		if matched {
+			return true, ""
+		}
+		if errRes != "" {
+			deferred = errRes
 		}
 	}
-	return false
+	return false, deferred
 }
 
 func ipMatchesWithOptionalCIDR(remoteIP, candidate net.IP, cidr int) bool {
