@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.29.0] - 2026-09-04
+
+### Fixed
+- **Blocklisten: „keine Antwort" wurde als „nicht gelistet" gewertet — samt Bonuspunkt** —
+  scheiterten alle Abfragen, meldete der Report „Die Absender-IP ist in den konfigurierten
+  RBLs nicht gelistet" und vergab dafür +0,1 Punkte. Das ist ein Freispruch für eine
+  Prüfung, die nicht stattgefunden hat, und tritt regelmäßig auf: viele Blocklisten lehnen
+  Anfragen ab, die über öffentliche DNS-Server wie 8.8.8.8 laufen. Es wird jetzt gezählt,
+  wie viele Anbieter tatsächlich geantwortet haben — bei keinem einzigen erscheint ein
+  Hinweis ohne Punktvergabe, der erklärt, dass das an der Namensauflösung des Prüfservers
+  liegt und nicht am Absender. Haben nur einige geantwortet, nennt der Text die Zahl.
+  Dasselbe gilt für die Domain- und die Link-Blocklist.
+- **Fehlermeldungen der Blocklisten galten als Treffer** — erkannt wurden nur zwei der
+  Spamhaus-Fehlercodes. Die übrigen Antworten aus `127.255.255.0/24` (Anfrage abgelehnt,
+  offener Resolver, Kontingent überschritten) sowie `127.0.0.1`, das mehrere Listen als
+  Test- oder Sperrantwort verwenden, wurden als Listung gewertet. Der Report forderte dann
+  zu einem Delisting-Antrag für eine Listung auf, die es nie gab. Alle Fehlercodes werden
+  jetzt als „nicht beantwortet" behandelt.
+- **Die ausführlichen Handlungsanweisungen erschienen nie** — `defaultRecommendation`
+  begann mit einer Rückgabe der Kurzfassung, sobald eine gesetzt war. Da jede Prüfung eine
+  setzt (alle Ergebnisarten nehmen sie als Parameter entgegen), war der gesamte Block
+  darunter unerreichbar: rund zwei Dutzend ausformulierte Anleitungen mit der eigenen
+  Domain, der eigenen IP und dem eigenen Selektor. Der spezifische Text hat jetzt Vorrang,
+  die Kurzfassung dient als Rückfall.
+- **Die Abhilfe wurde nur bei Warnungen und Fehlern angezeigt** — Prüfungen mit dem Status
+  „Hinweis" blieben ohne Handlungsteil, darunter die nicht abfragbaren aus v1.26.0. Genau
+  dort steht der Satz, dass der Nutzer nichts falsch gemacht hat.
+
+### Changed
+- **Einheitliche Anrede im gesamten Report** — an einigen Stellen wurde der Leser geduzt,
+  an anderen gesiezt, teils innerhalb einer Bildschirmseite. Alle Texte siezen jetzt. Ein
+  Test über die gesamte Datei hält das fest.
+- **SPF, DKIM und DMARC werden erklärt, statt vorausgesetzt** — die drei Erklärungen, die
+  jeder Leser zu sehen bekommt, schreiben die Abkürzung jetzt aus und beschreiben in
+  Alltagssprache, was der Mechanismus tut und was ohne ihn passiert. DKIM erklärt zudem,
+  warum es Weiterleitungen übersteht und SPF nicht; DMARC führt den Begriff Alignment ein,
+  von dem das Ergebnis abhängt.
+
 ## [1.28.0] - 2026-09-04
 
 ### Fixed

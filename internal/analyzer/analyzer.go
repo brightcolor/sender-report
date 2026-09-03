@@ -1107,7 +1107,7 @@ func dmarcPolicyCheck(records []string, policy string) model.CheckResult {
 	hasRUA := strings.Contains(strings.ToLower(strings.Join(records, " ")), "rua=")
 	ruaNote := ""
 	if !hasRUA {
-		ruaNote = " Es ist keine rua=-Reporting-Adresse gesetzt – ohne Reports siehst du nicht, wer in deinem Namen sendet."
+		ruaNote = " Es ist keine rua=-Reporting-Adresse gesetzt – ohne Reports sehen Sie nicht, wer in Ihrem Namen sendet."
 	}
 	det := map[string]string{"policy": emptyFallback(p, "none"), "rua_present": strconv.FormatBool(hasRUA), "dmarc_records": strings.Join(records, "\n")}
 	switch p {
@@ -1126,7 +1126,7 @@ func ruaOnlyRec(hasRUA bool) string {
 	if hasRUA {
 		return ""
 	}
-	return "rua=mailto:dmarc@deine-domain für aggregierte Reports ergänzen, um Versandquellen zu überwachen."
+	return "rua=mailto:dmarc@ihre-domain für aggregierte Reports ergänzen, um Versandquellen zu überwachen."
 }
 
 // spfStrictnessCheck evaluates the SPF 'all' qualifier and the top-level DNS
@@ -1173,7 +1173,7 @@ func spfStrictnessCheck(ctx context.Context, records []string) model.CheckResult
 		"lookup_mechanisms_toplevel": strconv.Itoa(lookups),
 	}
 	if all == "+all" {
-		return withDetails(fail("spf_strictness", "SPF-Strenge", -1.5, "SPF endet auf +all – das erlaubt JEDEM Server, in deinem Namen zu senden (gefährlich).", "Sofort auf -all (hardfail) oder mindestens ~all (softfail) ändern."), det)
+		return withDetails(fail("spf_strictness", "SPF-Strenge", -1.5, "SPF endet auf +all – das erlaubt JEDEM Server, in Ihrem Namen zu senden (gefährlich).", "Sofort auf -all (hardfail) oder mindestens ~all (softfail) ändern."), det)
 	}
 	if lookups > 10 {
 		return withDetails(warn("spf_strictness", "SPF-Strenge", -0.6, fmt.Sprintf("SPF hat schon %d Lookup-Mechanismen auf oberster Ebene – das 10-Lookup-Limit (RFC 7208) droht überschritten zu werden (PermError).", lookups), "include-Ketten reduzieren oder per SPF-Flattening zusammenfassen."), det)
@@ -1301,7 +1301,7 @@ func ptrPatternCheck(ctx context.Context, ip string) model.CheckResult {
 	host := strings.TrimSuffix(strings.ToLower(names[0]), ".")
 	det := map[string]string{"remote_ip": ip, "ptr_hostname": host}
 	if dynamicPTRPattern.MatchString(host) {
-		return withDetails(warn("ptr_pattern", "PTR-Hostname-Muster", -0.6, fmt.Sprintf("PTR-Hostname %q wirkt generisch/dynamisch (Endkunden-/Dynamic-IP-Muster) – ein verbreitetes Spam-Signal.", host), "Beim Hosting-Provider einen dedizierten, sprechenden Mailserver-PTR setzen, z. B. mail.deine-domain – nicht den automatischen Provider-Default."), det)
+		return withDetails(warn("ptr_pattern", "PTR-Hostname-Muster", -0.6, fmt.Sprintf("PTR-Hostname %q wirkt generisch/dynamisch (Endkunden-/Dynamic-IP-Muster) – ein verbreitetes Spam-Signal.", host), "Beim Hosting-Provider einen dedizierten, sprechenden Mailserver-PTR setzen, z. B. mail.ihre-domain – nicht den automatischen Vorgabenamen des Anbieters."), det)
 	}
 	return withDetails(pass("ptr_pattern", "PTR-Hostname-Muster", 0.1, fmt.Sprintf("PTR-Hostname %q sieht nach einem dedizierten Mailserver aus.", host), ""), det)
 }
@@ -1456,7 +1456,7 @@ func tlsRptCheck(ctx context.Context, domain string) model.CheckResult {
 		return withDetails(unresolved("tls_rpt", "TLS-RPT", "Der TLS-RPT-Eintrag unter "+name), det)
 	}
 	if ok {
-		return withDetails(pass("tls_rpt", "TLS-RPT", 0.1, "TLS-RPT-Reporting konfiguriert – du erhältst Berichte über fehlgeschlagene TLS-Verbindungen.", ""), det)
+		return withDetails(pass("tls_rpt", "TLS-RPT", 0.1, "TLS-RPT-Reporting konfiguriert – Sie erhalten Berichte über fehlgeschlagene TLS-Verbindungen.", ""), det)
 	}
 	return withDetails(info("tls_rpt", "TLS-RPT", 0.0, "Kein TLS-RPT-Record gefunden (optional; sinnvoll zusammen mit MTA-STS).", "Optional: _smtp._tls-TXT mit v=TLSRPTv1 und rua-Reporting-Adresse setzen."), det)
 }
@@ -1562,7 +1562,7 @@ func dnssecCheck(ctx context.Context, domain string) model.CheckResult {
 	if has {
 		return withDetails(pass("dnssec", "DNSSEC", 0.1, "Domain ist DNSSEC-signiert (DNSKEY vorhanden) – schützt DNS-Antworten vor Manipulation.", ""), det)
 	}
-	return withDetails(info("dnssec", "DNSSEC", 0.0, "Keine DNSSEC-Signierung erkannt (optional; erhöht die DNS-Integrität und ist Voraussetzung für DANE).", "Optional: DNSSEC bei deinem DNS-Provider/Registrar aktivieren."), det)
+	return withDetails(info("dnssec", "DNSSEC", 0.0, "Keine DNSSEC-Signierung erkannt (optional; erhöht die DNS-Integrität und ist Voraussetzung für DANE).", "Optional: DNSSEC bei Ihrem DNS-Anbieter oder Registrar aktivieren."), det)
 }
 
 func daneCheck(ctx context.Context, domain string) model.CheckResult {
@@ -1738,17 +1738,28 @@ func domainAgeCheck(ctx context.Context, domain string) model.CheckResult {
 
 // dnsblListed reports whether <name>.<provider> returns a 127.0.0.x listing
 // (real hit), ignoring 127.255.255.x error/blocked responses.
-func dnsblListed(ctx context.Context, name, provider string) bool {
-	ips, err := net.DefaultResolver.LookupHost(ctx, name+"."+provider)
-	if err != nil {
-		return false
+// dnsblListed asks one blocklist about a name. The second return value says
+// whether the provider answered at all: a discarded error made "the list said
+// no" and "the list did not answer" indistinguishable, and the caller then
+// reported a clean domain plus a bonus point for a check that never ran.
+func dnsblListed(ctx context.Context, name, provider string) (bool, dnsStatus) {
+	ips, st := lookupHost(ctx, name+"."+provider)
+	switch st {
+	case dnsAbsent:
+		// NXDOMAIN is how a blocklist says "not listed" — a real answer.
+		return false, dnsOK
+	case dnsUnavailable:
+		return false, dnsUnavailable
+	}
+	if rblQueryRefusal(ips) {
+		return false, dnsUnavailable
 	}
 	for _, ip := range ips {
 		if strings.HasPrefix(ip, "127.0.") {
-			return true
+			return true, dnsOK
 		}
 	}
-	return false
+	return false, dnsOK
 }
 
 func domainBlocklistCheck(ctx context.Context, domain string, providers []string) model.CheckResult {
@@ -1758,21 +1769,32 @@ func domainBlocklistCheck(ctx context.Context, domain string, providers []string
 	}
 	listed := []string{}
 	checked := []string{}
+	answered := 0
 	for _, p := range providers {
 		p = strings.TrimSpace(p)
 		if p == "" {
 			continue
 		}
 		checked = append(checked, p)
-		if dnsblListed(ctx, reg, p) {
+		hit, st := dnsblListed(ctx, reg, p)
+		if st != dnsOK {
+			continue
+		}
+		answered++
+		if hit {
 			listed = append(listed, p)
 		}
 	}
-	det := map[string]string{"domain": reg, "checked_providers": strings.Join(checked, "\n"), "listed_on": joinOrNone(listed)}
+	det := map[string]string{"domain": reg, "checked_providers": strings.Join(checked, "\n"), "listed_on": joinOrNone(listed), "beantwortet": fmt.Sprintf("%d von %d", answered, len(checked))}
 	if len(listed) > 0 {
 		return withDetails(fail("domain_blocklist", "Domain-Blocklist", -1.5, fmt.Sprintf("Domain %s ist auf %d Domain-Blocklist(en) gelistet: %s.", reg, len(listed), strings.Join(listed, ", ")), "Delisting bei den jeweiligen Anbietern beantragen und die Ursache (kompromittierte Inhalte, Spam-Historie) beheben."), det)
 	}
-	return withDetails(pass("domain_blocklist", "Domain-Blocklist", 0.2, fmt.Sprintf("Domain %s steht auf keiner der geprüften Domain-Blocklists.", reg), ""), det)
+	if answered == 0 {
+		return withDetails(info("domain_blocklist", "Domain-Blocklist", 0,
+			fmt.Sprintf("Die Domain-Blocklisten konnten nicht abgefragt werden — keiner der %d Anbieter hat geantwortet. Ob %s gelistet ist, bleibt damit offen.", len(checked), reg),
+			"Das liegt an der Namensauflösung dieses Prüfservers, nicht an Ihrer Domain. Später erneut prüfen."), det)
+	}
+	return withDetails(pass("domain_blocklist", "Domain-Blocklist", 0.2, fmt.Sprintf("Domain %s steht auf keiner der %d Blocklisten, die geantwortet haben.", reg, answered), ""), det)
 }
 
 func linkBlocklistCheck(ctx context.Context, links []string, providers []string) model.CheckResult {
@@ -1791,6 +1813,7 @@ func linkBlocklistCheck(ctx context.Context, links []string, providers []string)
 		return info("link_blocklist", "Link-Domain-Blocklist", 0.0, "Keine Link-Domains zum Prüfen gefunden.", "")
 	}
 	listed := []string{}
+	answered := 0
 	n := 0
 	for d := range doms {
 		n++
@@ -1799,14 +1822,27 @@ func linkBlocklistCheck(ctx context.Context, links []string, providers []string)
 		}
 		for _, p := range providers {
 			p = strings.TrimSpace(p)
-			if p != "" && dnsblListed(ctx, d, p) {
+			if p == "" {
+				continue
+			}
+			hit, st := dnsblListed(ctx, d, p)
+			if st != dnsOK {
+				continue
+			}
+			answered++
+			if hit {
 				listed = append(listed, d+" ("+p+")")
 			}
 		}
 	}
-	det := map[string]string{"link_domains_checked": strconv.Itoa(len(doms)), "listed": joinOrNone(listed)}
+	det := map[string]string{"link_domains_checked": strconv.Itoa(len(doms)), "listed": joinOrNone(listed), "beantwortete_abfragen": strconv.Itoa(answered)}
 	if len(listed) > 0 {
 		return withDetails(fail("link_blocklist", "Link-Domain-Blocklist", -1.2, fmt.Sprintf("%d verlinkte Domain(s) sind auf URI-Blocklists gelistet: %s.", len(listed), strings.Join(listed, ", ")), "Verlinkte Domains bereinigen oder ersetzen; gelistete Domains beim Anbieter delisten lassen."), det)
+	}
+	if answered == 0 {
+		return withDetails(info("link_blocklist", "Link-Domain-Blocklist", 0,
+			"Die Link-Blocklisten konnten nicht abgefragt werden — kein Anbieter hat geantwortet. Ob die verlinkten Domains gelistet sind, bleibt offen.",
+			"Das liegt an der Namensauflösung dieses Prüfservers, nicht an Ihren Links. Später erneut prüfen."), det)
 	}
 	return withDetails(pass("link_blocklist", "Link-Domain-Blocklist", 0.1, fmt.Sprintf("Alle %d geprüften Link-Domain(s) sind sauber (keine URI-Blocklist-Treffer).", len(doms)), ""), det)
 }
@@ -1989,7 +2025,7 @@ func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult 
 		c.TechnicalDetails["header_from_domain"] = emptyFallback(ctx.FromDomain, "none")
 		c.TechnicalDetails["spf_result"] = emptyFallback(ctx.SPFResult, "none")
 		c.TechnicalDetails["spf_records"] = joinOrNone(ctx.SPFRecords)
-		c.Explanation = "SPF legt fest, welche Server im Namen der Envelope-From- oder Bounce-Domain senden dürfen. Empfänger prüfen dabei die sendende IP gegen den SPF-TXT-Record dieser Domain. Gmail, Outlook, Yahoo und große Gateways gewichten SPF besonders stark, wenn DMARC aktiv ist oder die IP-Reputation noch schwach ist. Wichtigkeit: hoch – ohne SPF-Pass kann DMARC nicht greifen und viele Provider erhöhen den Spam-Score oder lehnen direkt ab."
+		c.Explanation = "SPF (Sender Policy Framework) ist eine öffentliche Liste in Ihrer Domain-Verwaltung, die festhält, welche Server E-Mails in Ihrem Namen verschicken dürfen. Der empfangende Mailserver sieht dort nach, ob die Adresse, von der die Nachricht kam, in dieser Liste steht. Steht sie nicht darin, wirkt die Mail wie eine Fälschung. Gmail, Outlook und Yahoo gewichten das besonders stark, solange Ihre Absenderadresse noch keinen langen guten Ruf hat. Bedeutung: hoch – ohne bestandenes SPF greift auch DMARC nicht, und viele Anbieter verschieben die Nachricht in den Spam-Ordner oder lehnen sie ganz ab."
 		c.Recommendation = spfRecommendation(ctx)
 		c.DocLinks = spfDocLinks()
 	case "dkim":
@@ -1997,7 +2033,7 @@ func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult 
 		c.TechnicalDetails["dkim_result"] = emptyFallback(ctx.DKIMResult, "none")
 		c.TechnicalDetails["dkim_domain"] = emptyFallback(ctx.DKIMDomain, "none")
 		c.TechnicalDetails["dkim_signature"] = emptyFallback(ctx.Headers.Get("DKIM-Signature"), "none")
-		c.Explanation = "DKIM signiert relevante Header und Body-Inhalte kryptografisch. Der empfangende Server prüft den Public Key per DNS unter dem Selector der DKIM-Signatur. Gmail, Outlook, Yahoo und Apple Mail nutzen DKIM stark, um Manipulationen, Weiterleitungsprobleme und Domain-Spoofing zu erkennen. Wichtigkeit: sehr hoch – DKIM ist neben SPF die zweite Säule von DMARC und trägt maßgeblich zur Domain-Reputation bei. Ohne DKIM-Signatur landen Mails häufiger im Spam-Ordner."
+		c.Explanation = "DKIM (DomainKeys Identified Mail) versieht jede Ihrer Nachrichten beim Versand mit einer Art unsichtbarem Siegel. Den passenden Prüfschlüssel hinterlegen Sie öffentlich in Ihrer Domain-Verwaltung. Der empfangende Server holt ihn dort ab und stellt damit zweierlei fest: dass die Nachricht wirklich aus Ihrem Haus stammt und dass unterwegs niemand daran etwas verändert hat. Bedeutung: sehr hoch – DKIM ist neben SPF die zweite Säule von DMARC. Anders als SPF übersteht es Weiterleitungen, weil das Siegel an der Nachricht hängt und nicht am versendenden Server. Ohne DKIM landen Nachrichten deutlich häufiger im Spam-Ordner."
 		c.Recommendation = dkimRecommendation(ctx)
 		c.DocLinks = dkimDocLinks()
 	case "dmarc":
@@ -2009,7 +2045,7 @@ func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult 
 		c.TechnicalDetails["dmarc_result"] = emptyFallback(ctx.DMARCResult, "none")
 		c.TechnicalDetails["dmarc_records"] = joinOrNone(ctx.DMARCRecords)
 		c.TechnicalDetails["policy"] = emptyFallback(ctx.DMARCPolicy, "none")
-		c.Explanation = "DMARC verbindet SPF und DKIM mit der sichtbaren From-Domain. Eine Nachricht besteht DMARC, wenn SPF oder DKIM erfolgreich ist und die jeweilige Domain zur From-Domain passt. Moderne Provider erwarten für seriöse Versanddomains mindestens eine DMARC-Policy; für Bulk-Mail ist DMARC seit 2024 (Gmail/Yahoo-Anforderungen) praktisch Pflicht. Wichtigkeit: kritisch – ohne DMARC können andere Provider deine Domain für Phishing missbrauchen (Domain-Spoofing), und große Provider stufen nicht-DMARC-authentifizierte Bulk-Mails als Spam ein."
+		c.Explanation = "DMARC ist die Anweisung, was ein Empfänger mit Nachrichten tun soll, die vorgeben, von Ihnen zu stammen, aber weder die SPF- noch die DKIM-Prüfung bestehen: durchlassen, in den Spam-Ordner legen oder ablehnen. Damit eine Nachricht DMARC besteht, reicht eine der beiden Prüfungen — sie muss aber zu genau der Absenderadresse gehören, die der Empfänger im Postfach sieht. Diese Zusammengehörigkeit heißt Alignment. Bedeutung: kritisch – ohne DMARC kann jeder Fremde in Ihrem Namen schreiben, und seit 2024 verlangen Gmail und Yahoo es von allen, die größere Mengen versenden."
 		c.Recommendation = dmarcRecommendation(ctx)
 		c.DocLinks = dmarcDocLinks()
 	case "ptr":
@@ -2297,7 +2333,7 @@ func checkSeverity(status string) string {
 func defaultExplanation(id string) string {
 	switch id {
 	case "dmarc_policy":
-		return "Die DMARC-Policy (p=) bestimmt, was Empfänger mit Mails tun, die DMARC nicht bestehen. p=none = nur Monitoring (kein Schutz), p=quarantine = ab in den Spam, p=reject = komplett ablehnen. Wichtigkeit: hoch – nur quarantine/reject schützen deine Domain aktiv vor Spoofing/Phishing. Gmail & Yahoo erwarten von Bulk-Sendern zunehmend mindestens eine durchgesetzte Policy. Vorgehen: mit p=none + rua-Reporting starten, Quellen sauber konfigurieren, dann schrittweise auf quarantine und reject erhöhen."
+		return "Die DMARC-Policy (p=) bestimmt, was Empfänger mit Mails tun, die DMARC nicht bestehen. p=none = nur Monitoring (kein Schutz), p=quarantine = ab in den Spam, p=reject = komplett ablehnen. Wichtigkeit: hoch – nur quarantine/reject schützen Ihre Domain aktiv vor Spoofing/Phishing. Gmail & Yahoo erwarten von Bulk-Sendern zunehmend mindestens eine durchgesetzte Policy. Vorgehen: mit p=none + rua-Reporting starten, Quellen sauber konfigurieren, dann schrittweise auf quarantine und reject erhöhen."
 	case "spf_strictness":
 		return "Der abschließende all-Mechanismus eines SPF-Records legt fest, wie streng nicht-autorisierte Server behandelt werden: -all = hardfail (empfohlen), ~all = softfail, ?all = neutral (wirkungslos), +all = erlaubt alle (gefährlich). Außerdem begrenzt RFC 7208 SPF auf 10 DNS-Lookups – wird das überschritten, schlägt SPF mit PermError fehl. Wichtigkeit: hoch – ein zu lascher oder kaputter SPF-Record untergräbt SPF und damit DMARC."
 	case "dkim_keylength":
@@ -2311,9 +2347,9 @@ func defaultExplanation(id string) string {
 	case "mta_sts":
 		return "MTA-STS (RFC 8461) erlaubt einer Domain, verschlüsselten SMTP-Transport (TLS) verbindlich zu verlangen, statt ihn nur opportunistisch zu nutzen. Sendende Server prüfen die per HTTPS veröffentlichte Policy und brechen ab, wenn kein gültiges TLS möglich ist – das schützt vor Downgrade-/Man-in-the-Middle-Angriffen. Wichtigkeit: mittel – kein direkter Inbox-Platzierungsfaktor, aber ein klares Reifesignal und zunehmend Standard bei seriösen Absendern."
 	case "tls_rpt":
-		return "TLS-RPT (RFC 8460) lässt empfangende Server aggregierte Berichte über fehlgeschlagene oder herabgestufte TLS-Verbindungen an eine Reporting-Adresse schicken. So bemerkst du TLS-/MTA-STS-Probleme, bevor sie zu Zustellausfällen führen. Wichtigkeit: gering bis mittel – ein Monitoring-/Reifesignal, sinnvoll in Kombination mit MTA-STS."
+		return "TLS-RPT (RFC 8460) lässt empfangende Server aggregierte Berichte über fehlgeschlagene oder herabgestufte TLS-Verbindungen an eine Reporting-Adresse schicken. So bemerken Sie TLS-/MTA-STS-Probleme, bevor sie zu Zustellausfällen führen. Wichtigkeit: gering bis mittel – ein Monitoring-/Reifesignal, sinnvoll in Kombination mit MTA-STS."
 	case "bimi":
-		return "BIMI (Brand Indicators for Message Identification) zeigt bei unterstützenden Providern (Gmail, Apple Mail, Yahoo) dein Markenlogo neben der Nachricht an. Voraussetzung ist eine durchgesetzte DMARC-Policy (quarantine/reject) und ein SVG-Logo (bei manchen Providern zusätzlich ein VMC-Zertifikat). Wichtigkeit: gering für die Zustellung selbst, aber ein starkes Vertrauens-/Reifesignal und Beleg für ein vollständig konfiguriertes Authentifizierungs-Setup."
+		return "BIMI (Brand Indicators for Message Identification) zeigt bei unterstützenden Anbietern (Gmail, Apple Mail, Yahoo) Ihr Markenlogo neben der Nachricht an. Voraussetzung ist eine durchgesetzte DMARC-Policy (quarantine/reject) und ein SVG-Logo (bei manchen Providern zusätzlich ein VMC-Zertifikat). Wichtigkeit: gering für die Zustellung selbst, aber ein starkes Vertrauens-/Reifesignal und Beleg für ein vollständig konfiguriertes Authentifizierungs-Setup."
 	case "dnssec":
 		return "DNSSEC signiert DNS-Antworten kryptografisch und schützt vor DNS-Manipulation (Cache-Poisoning, Spoofing). Eine signierte Absenderzone ist ein Reifesignal und Voraussetzung für DANE. Wichtigkeit: gering bis mittel für die reine Inbox-Platzierung, aber relevant für die Gesamtintegrität der Mail-Infrastruktur."
 	case "dane_tlsa":
@@ -2407,7 +2443,7 @@ func defaultExplanation(id string) string {
 	case "link_domain_mismatch":
 		return "Erkennt Links, bei denen der sichtbare Anzeigetext eine andere Domain zeigt als das tatsächliche href-Ziel – ein klassisches Phishing-Muster. Spamfilter und Anti-Phishing-Systeme prüfen dieses Muster explizit. Legitime Mails müssen Linkziele nie verschleiern."
 	case "broken_links":
-		return "Stellt HTTP-GET-Anfragen an alle Links in der Mail und prüft, ob sie mit einem Fehler-Status (4xx/5xx) antworten oder einen Timeout verursachen. Defekte Links schaden dem Vertrauen der Empfänger und können die Zustellbarkeit negativ beeinflussen. Datenschutzhinweis: Dieser Check kontaktiert externe Server. Die Zielserver erhalten eine HTTP-Anfrage von sender.reports Server. Nur aktivieren, wenn du damit einverstanden bist."
+		return "Stellt HTTP-GET-Anfragen an alle Links in der Mail und prüft, ob sie mit einem Fehler-Status (4xx/5xx) antworten oder einen Timeout verursachen. Defekte Links schaden dem Vertrauen der Empfänger und können die Zustellbarkeit negativ beeinflussen. Datenschutzhinweis: Dieser Check kontaktiert externe Server. Die Zielserver erhalten eine HTTP-Anfrage von sender.reports Server. Nur aktivieren, wenn Sie damit einverstanden sind."
 	default:
 		return "Dieser Check bewertet ein technisches Signal, das Mailprovider für Zustellbarkeit, Missbrauchserkennung oder Nutzervertrauen heranziehen."
 	}
@@ -2986,10 +3022,17 @@ func naExplanationEN(id string) string {
 	}
 }
 
+// defaultRecommendation returns the worked-out advice for a check — the version
+// that names the reader's own domain, IP and selector instead of describing the
+// fix in the abstract.
+//
+// These texts used to be unreachable. The function began by returning
+// c.Suggestion whenever it was set, and every check sets it: pass, warn, fail
+// and info all take a suggestion argument. So for roughly two dozen checks the
+// detailed text below was dead code and the reader only ever saw the one-line
+// version. The specific text now wins, and the check's own suggestion serves as
+// the fallback for everything not listed here.
 func defaultRecommendation(c model.CheckResult, ctx checkContext) string {
-	if c.Suggestion != "" {
-		return c.Suggestion
-	}
 	switch c.ID {
 	case "from_alignment":
 		return fmt.Sprintf("Envelope-From/Bounce-Domain und sichtbare From-Domain angleichen. Aktuell: Header-From `%s`, Envelope-From-Domain `%s`. Empfehlenswert ist z. B. Bounce-Adresse `bounce@%s` oder eine Subdomain wie `bounce.%s`, die per SPF autorisiert ist.", emptyFallback(ctx.Headers.Get("From"), "none"), emptyFallback(ctx.EnvelopeDomain, "none"), emptyFallback(ctx.FromDomain, "example.org"), emptyFallback(ctx.FromDomain, "example.org"))
@@ -3040,6 +3083,11 @@ func defaultRecommendation(c model.CheckResult, ctx checkContext) string {
 	case "unicode":
 		return "Zero-Width-Zeichen und unnötige Unicode-Obfuskation aus Betreff und Body entfernen. Normale Sonderzeichen für Sprache sind ok; versteckte Steuerzeichen sollten vermieden werden."
 	default:
+		// The check's own suggestion is more specific than any generic sentence,
+		// so it comes first; the generic line is the last resort.
+		if c.Suggestion != "" {
+			return c.Suggestion
+		}
 		return "Den genannten Wert im Mailserver, DNS oder Versandtemplate korrigieren und danach erneut testen."
 	}
 }
@@ -4125,6 +4173,11 @@ func rblHeuristics(ctx context.Context, remoteIP string, providers []string) []m
 	octets := strings.Split(ip.String(), ".")
 	queryIP := fmt.Sprintf("%s.%s.%s.%s", octets[3], octets[2], octets[1], octets[0])
 	listed := 0
+	// answered counts providers that actually gave a usable answer — including
+	// NXDOMAIN, which is how a blocklist says "not listed". Without it, a run in
+	// which every provider refused or timed out ended in "not listed" plus a
+	// bonus point: a clean bill of health for a check that never happened.
+	answered := 0
 	listedProviders := make([]string, 0)
 	cleanProviders := make([]string, 0, len(providers))
 	queryNames := make([]string, 0, len(providers))
@@ -4147,15 +4200,22 @@ func rblHeuristics(ctx context.Context, remoteIP string, providers []string) []m
 		cancel()
 		if err != nil {
 			if dnsErr, ok := err.(*net.DNSError); ok && dnsErr.IsNotFound {
+				// NXDOMAIN is this protocol's way of saying "not listed" — a real
+				// answer, not a failure.
+				answered++
 				continue
 			}
 			lookupErrors = append(lookupErrors, fmt.Sprintf("%s: %v", provider, err))
 			continue
 		}
+		answered++
 		if len(ips) > 0 {
 			// Query-Verweigerungen (z. B. Spamhaus 127.255.255.254 = Open Resolver)
 			// sind kein echtes Listing — als Fehler behandeln, nicht als Treffer.
 			if rblQueryRefusal(ips) {
+				// A refusal means this provider did not answer the question, so it
+				// must not count towards "checked and clean" either.
+				answered--
 				lookupErrors = append(lookupErrors, fmt.Sprintf("%s: Query verweigert (%s) — Open Resolver oder Rate Limit; kein echtes Listing", provider, strings.Join(ips, ", ")))
 				continue
 			}
@@ -4206,7 +4266,16 @@ func rblHeuristics(ctx context.Context, remoteIP string, providers []string) []m
 		}
 		return []model.CheckResult{withDetails(warn("rbl", "DNSBL/RBL", scoreDelta, summary, rec), details)}
 	}
-	return []model.CheckResult{withDetails(pass("rbl", "DNSBL/RBL", 0.1, fmt.Sprintf("Die Absender-IP %s ist in den konfigurierten RBLs nicht gelistet.", remoteIP), ""), details)}
+	if answered == 0 {
+		return []model.CheckResult{withDetails(info("rbl", "DNSBL/RBL", 0,
+			fmt.Sprintf("Die Blocklisten konnten nicht abgefragt werden — keiner der %d Anbieter hat geantwortet. Ob die IP %s gelistet ist, ist damit offen. Das ist kein Hinweis auf ein Problem bei Ihnen: häufig lehnen Blocklisten Anfragen ab, die über öffentliche DNS-Server wie 8.8.8.8 laufen.", len(cleanProviders), remoteIP),
+			"Beim Betreiber dieses Prüfservers nachfragen, ob ein eigener DNS-Resolver eingerichtet ist. Ihre eigene Konfiguration ist davon nicht betroffen."), details)}
+	}
+	summary := fmt.Sprintf("Die Absender-IP %s ist in den konfigurierten RBLs nicht gelistet.", remoteIP)
+	if answered < len(cleanProviders) {
+		summary = fmt.Sprintf("Die Absender-IP %s ist auf keiner der %d Blocklisten gelistet, die geantwortet haben. %d weitere konnten nicht abgefragt werden.", remoteIP, answered, len(cleanProviders)-answered)
+	}
+	return []model.CheckResult{withDetails(pass("rbl", "DNSBL/RBL", 0.1, summary, ""), details)}
 }
 
 type rblProvider struct {
@@ -4220,7 +4289,16 @@ type rblProvider struct {
 // Fehlermeldung ist (kein echtes Listing, sondern Query-Verweigerung).
 func rblQueryRefusal(ips []string) bool {
 	for _, ip := range ips {
-		if ip == "127.255.255.254" || ip == "127.255.255.255" {
+		// Spamhaus answers anywhere in 127.255.255.0/24 for its error conditions:
+		// query refused, open resolver, rate limit exceeded, account blocked.
+		// Only two of those were recognised, so the others were counted as hits.
+		if strings.HasPrefix(ip, "127.255.255.") {
+			return true
+		}
+		// 127.0.0.1 is a test entry or "query blocked" at several lists, never a
+		// real listing. Treating it as one sent senders off to request delisting
+		// for something they were never listed on.
+		if ip == "127.0.0.1" {
 			return true
 		}
 	}
@@ -4373,7 +4451,7 @@ func rblImpactText(listed int) string {
 }
 
 func rblListedRecommendation(remoteIP string, listedProviders []string) string {
-	return fmt.Sprintf("Die IP %s ist gelistet. Stoppe zunächst die Ursache, bevor du Delisting beantragst; sonst wird die IP meist erneut gelistet. Prüfe insbesondere kompromittierte SMTP-Accounts, offene Relay-/Proxy-Konfiguration, infizierte Webanwendungen, Spamtrap-Treffer durch alte Empfängerlisten und fehlgeleitete Bounces. Danach pro gelisteter RBL den Delisting-Link aus den technischen Details nutzen und in der Begründung konkret nennen, was behoben wurde. Betroffene Listen: %s.", emptyFallback(remoteIP, "<sender-ip>"), strings.Join(listedProviders, ", "))
+	return fmt.Sprintf("Die IP %s ist gelistet. Beheben Sie zuerst die Ursache, bevor Sie ein Delisting beantragen; sonst wird die IP meist erneut gelistet. Prüfen Sie insbesondere kompromittierte SMTP-Accounts, offene Relay-/Proxy-Konfiguration, infizierte Webanwendungen, Spamtrap-Treffer durch alte Empfängerlisten und fehlgeleitete Bounces. Danach pro gelisteter RBL den Delisting-Link aus den technischen Details nutzen und in der Begründung konkret nennen, was behoben wurde. Betroffene Listen: %s.", emptyFallback(remoteIP, "<sender-ip>"), strings.Join(listedProviders, ", "))
 }
 
 func rblGenericRecommendation(remoteIP string) string {
