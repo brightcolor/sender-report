@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.32.0] - 2026-09-04
+
+### Fixed
+- **Die Link-Prüfung öffnete Abmeldelinks und meldete damit die Testadresse ab** — geprüft
+  wurde jeder Link der Nachricht per HTTP-GET, und im Fuß eines Newsletters steht der
+  Abmeldelink. Außerhalb des Ein-Klick-Verfahrens nach RFC 8058 wirken diese Links bereits
+  beim bloßen Aufruf: die Prüfung meldete also die getestete Adresse vom Verteiler ab und
+  wies den Link anschließend als „erreichbar" aus. Links, deren Adresse auf Abmeldung,
+  Austragung oder Bestätigung hindeutet, werden jetzt gar nicht mehr geöffnet und im
+  Bericht als bewusst übersprungen ausgewiesen.
+- **Nicht erreichbar, abgewiesen und tatsächlich defekt waren dasselbe** — ein Zeitablauf,
+  ein TLS-Problem oder eine Abweisung durch einen Schutzdienst (Cloudflare & Co. antworten
+  unbekannten Programmen mit 403) wurden als „Link defekt" gewertet, mit der Aufforderung,
+  ihn zu entfernen. Ein Newsletter, der auf einen geschützten Shop verlinkt, bekam so
+  regelmäßig Abzüge für einwandfreie Links. Es wird jetzt getrennt: Fehlercodes der
+  Zielseite gelten als defekt und werden mit Statuscode benannt, Transportprobleme und
+  Abweisungen als „nicht prüfbar" ohne Punktabzug. Außerdem wird zuerst mit HEAD gefragt
+  statt die Seite vollständig abzurufen.
+- **DMARC-Policy: `pct=` und `sp=` wurden übergangen** — `p=reject; pct=1` bedeutet, dass
+  die Regel auf eine von hundert Nachrichten angewendet wird, wurde aber als „stärkster
+  Schutz gegen Domain-Spoofing" gelobt. Ebenso blieb ein abweichendes `sp=none`
+  unerwähnt, das sämtliche Subdomains ungeschützt lässt — dort, wo Fälschungsversuche
+  meist ansetzen. Beide Angaben werden jetzt ausgewertet und im Klartext erklärt.
+- **Newsletter ohne List-Kopfzeilen wurden als persönliche Nachricht eingestuft** — und
+  damit wurde die Prüfung auf den fehlenden Abmeldelink als „nicht anwendbar"
+  übersprungen. Genau die Nachricht mit dem Problem wurde also von der Prüfung
+  ausgenommen, weil das Fehlen des Merkmals zugleich das Erkennungsmerkmal war. Sieht der
+  Inhalt nach einer Massensendung aus (HTML, viele Links, Abmeldeformulierung im Text und
+  kein Bezug auf eine laufende Unterhaltung), wird die Nachricht jetzt als solche bewertet
+  und der Grund im Bericht genannt.
+
 ## [1.31.0] - 2026-09-04
 
 ### Fixed

@@ -628,6 +628,17 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 		report.SpamSignals = append(report.SpamSignals, unicodeSignal)
 	}
 
+	// The mail type is derived from headers alone, and every bulk signal it looks
+	// for is a List-* or Feedback-ID header. A newsletter that forgot those is
+	// therefore classified as personal — and the List-Unsubscribe check is then
+	// skipped as "not applicable" for exactly the mail that needs it. Once the
+	// body is parsed, its content can say otherwise.
+	if mailType == "personal" && looksLikeBulkContent(headers, parsedBody) {
+		mailType = "bulk"
+		report.Warnings = append(report.Warnings, "Diese Nachricht sieht inhaltlich nach einem Newsletter aus, trägt aber keine der Kopfzeilen, an denen Mailprogramme das erkennen (List-Unsubscribe, List-Id). Sie wird deshalb wie eine Massensendung bewertet.")
+	}
+	report.MailType = mailType
+
 	newsletterChecks := newsletterHeuristics(headers, parsedBody, mailType)
 	report.Checks = append(report.Checks, newsletterChecks...)
 
@@ -838,6 +849,40 @@ func na(id, name, mailType string) model.CheckResult {
 
 // detectMailType inspects the message headers and returns one of
 // "personal", "transactional", "bulk", or "unknown".
+// bulkContentPattern matches the wording a newsletter carries even when its
+// headers do not: the unsubscribe line every bulk sender is legally required to
+// include somewhere in the body.
+var bulkContentPattern = regexp.MustCompile(`(?i)(abmelden|abbestellen|austragen|unsubscribe|newsletter abbestellen|aus dem verteiler|vom newsletter|opt.?out|abmeldelink)`)
+
+// looksLikeBulkContent reports whether a message reads like a bulk mailing even
+// though it carries none of the headers detectMailType looks for.
+//
+// Without this, the classification was circular: the only bulk signals were the
+// List-* headers, so a newsletter missing them counted as personal, and the
+// List-Unsubscribe check was then reported as "not applicable" — silently
+// excusing the one mail that actually had the problem.
+//
+// The test is deliberately conservative: an unsubscribe phrase alone is not
+// enough, since a personal mail can mention one. It must coincide with the
+// shape of a mailing — HTML with a fair number of links.
+func looksLikeBulkContent(headers mail.Header, body parsedBody) bool {
+	if !bulkContentPattern.MatchString(body.AllText) {
+		return false
+	}
+	if !body.HasHTMLPart {
+		return false
+	}
+	// A personal message rarely carries this many links.
+	if strings.Count(strings.ToLower(body.HTML), "<a ") < 5 {
+		return false
+	}
+	// A reply or forward in a running conversation is not a mailing.
+	if strings.TrimSpace(headers.Get("In-Reply-To")) != "" || strings.TrimSpace(headers.Get("References")) != "" {
+		return false
+	}
+	return true
+}
+
 func detectMailType(headers mail.Header) string {
 	// ── Bulk / Newsletter signals ──────────────────────────────────────────────
 	prec := strings.ToLower(strings.TrimSpace(headers.Get("Precedence")))
@@ -1139,11 +1184,44 @@ func dmarcPolicyCheck(records []string, policy string) model.CheckResult {
 	if !hasRUA {
 		ruaNote = " Es ist keine rua=-Reporting-Adresse gesetzt – ohne Reports sehen Sie nicht, wer in Ihrem Namen sendet."
 	}
-	det := map[string]string{"policy": emptyFallback(p, "none"), "rua_present": strconv.FormatBool(hasRUA), "dmarc_records": strings.Join(records, "\n")}
+	joined := strings.ToLower(strings.Join(records, " "))
+	// pct= says what share of failing mail the policy is actually applied to.
+	// It defaults to 100, but "p=reject; pct=1" means one message in a hundred —
+	// which was being reported as the strongest possible protection.
+	pct := 100
+	if v := extractTagValue(joined, "pct"); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n >= 0 && n <= 100 {
+			pct = n
+		}
+	}
+	sp := extractTagValue(joined, "sp")
+	det := map[string]string{"policy": emptyFallback(p, "none"), "rua_present": strconv.FormatBool(hasRUA), "dmarc_records": strings.Join(records, "\n"), "pct": strconv.Itoa(pct), "subdomain_policy": emptyFallback(sp, "wie p=")}
+
+	pctNote := ""
+	if pct < 100 {
+		pctNote = fmt.Sprintf(" Achtung: pct=%d bedeutet, dass die Regel nur auf %d %% der betroffenen Nachrichten angewendet wird — der Schutz gilt also nur zu einem Bruchteil.", pct, pct)
+	}
+	// A weaker sp= overrides p= for every subdomain, which is where spoofing
+	// attempts usually aim.
+	spNote := ""
+	if sp != "" && sp != p {
+		spNote = fmt.Sprintf(" Für Subdomains gilt abweichend sp=%s.", sp)
+		if (p == "reject" || p == "quarantine") && sp == "none" {
+			spNote += " Damit sind alle Subdomains ungeschützt — genau dort setzen Fälschungsversuche meist an."
+		}
+	}
+	ruaNote += pctNote + spNote
+
 	switch p {
 	case "reject":
+		if pct < 100 || sp == "none" {
+			return withDetails(warn("dmarc_policy", "DMARC-Policy-Stärke", -0.2, "DMARC p=reject ist gesetzt, greift aber nicht vollständig."+ruaNote, "pct= entfernen (dann gilt der Standardwert 100) und sp= entweder weglassen oder ebenfalls auf reject setzen."), det)
+		}
 		return withDetails(pass("dmarc_policy", "DMARC-Policy-Stärke", 0.3, "DMARC p=reject – stärkster Schutz gegen Domain-Spoofing."+ruaNote, ruaOnlyRec(hasRUA)), det)
 	case "quarantine":
+		if pct < 100 || sp == "none" {
+			return withDetails(warn("dmarc_policy", "DMARC-Policy-Stärke", -0.2, "DMARC p=quarantine ist gesetzt, greift aber nicht vollständig."+ruaNote, "pct= entfernen und sp= weglassen oder mindestens auf quarantine setzen."), det)
+		}
 		return withDetails(pass("dmarc_policy", "DMARC-Policy-Stärke", 0.1, "DMARC p=quarantine – mittlerer Schutz; verdächtige Mails landen im Spam."+ruaNote, "Sobald die Reports sauber sind, auf p=reject erhöhen."), det)
 	case "none":
 		return withDetails(warn("dmarc_policy", "DMARC-Policy-Stärke", -0.3, "DMARC p=none – nur Monitoring, kein aktiver Schutz vor Domain-Spoofing."+ruaNote, "Nach einer Monitoring-Phase auf p=quarantine und später p=reject erhöhen."), det)
@@ -4011,6 +4089,10 @@ func brokenLinksCheck(ctx context.Context, links []string) model.CheckResult {
 		url    string
 		ok     bool
 		status int
+		// unreachable marks a transport-level failure: DNS, TLS or timeout. That
+		// is not evidence of a broken link — this server may simply not have got
+		// through — so it must not be charged to the sender.
+		unreachable bool
 	}
 	results := make([]result, 0, len(links))
 	mu := sync.Mutex{}
@@ -4018,9 +4100,18 @@ func brokenLinksCheck(ctx context.Context, links []string) model.CheckResult {
 	var wg sync.WaitGroup
 	seen := map[string]struct{}{}
 	unique := make([]string, 0, len(links))
+	skipped := make([]string, 0)
 	for _, l := range links {
 		if _, ok := seen[l]; !ok && (strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://")) {
 			seen[l] = struct{}{}
+			// Never open a link that acts on being opened. A newsletter footer
+			// carries the unsubscribe link, and outside RFC 8058 one-click these
+			// work on a plain GET — so checking it would unsubscribe the very
+			// address under test, and then report the link as working.
+			if isActionLink(l) {
+				skipped = append(skipped, l)
+				continue
+			}
 			unique = append(unique, l)
 		}
 	}
@@ -4033,42 +4124,121 @@ func brokenLinksCheck(ctx context.Context, links []string) model.CheckResult {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+			// HEAD first: it asks whether the resource exists without fetching it,
+			// which is both lighter on the target and less likely to trigger any
+			// side effect. Some servers reject HEAD, hence the GET fallback below.
+			status, err := probeLink(ctx, client, http.MethodHead, u)
+			if err == nil && status == http.StatusMethodNotAllowed {
+				status, err = probeLink(ctx, client, http.MethodGet, u)
+			}
 			if err != nil {
 				mu.Lock()
-				results = append(results, result{u, false, 0})
+				results = append(results, result{u, false, 0, true})
 				mu.Unlock()
 				return
 			}
-			req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; sender.report link-check/1.0)")
-			resp, err := client.Do(req)
-			if err != nil {
-				mu.Lock()
-				results = append(results, result{u, false, 0})
-				mu.Unlock()
-				return
-			}
-			_ = resp.Body.Close()
-			ok := resp.StatusCode < 400
+			// 401, 403 and 429 say the target refused this particular client —
+			// exactly what Cloudflare and other WAFs answer an unknown user agent.
+			// Reporting that as a broken link blamed the sender for a link that
+			// works perfectly well in a browser.
+			refused := status == http.StatusUnauthorized || status == http.StatusForbidden || status == http.StatusTooManyRequests
+			ok := status < 400
 			mu.Lock()
-			results = append(results, result{u, ok, resp.StatusCode})
+			results = append(results, result{u, ok, status, refused})
 			mu.Unlock()
 		}(link)
 	}
 	wg.Wait()
+
 	broken := 0
+	unreachable := 0
+	brokenList := make([]string, 0)
+	unreachableList := make([]string, 0)
 	for _, r := range results {
-		if !r.ok {
+		switch {
+		case r.unreachable:
+			unreachable++
+			if len(unreachableList) < 5 {
+				unreachableList = append(unreachableList, fmt.Sprintf("%s (%s)", r.url, statusNote(r.status)))
+			}
+		case !r.ok:
 			broken++
+			if len(brokenList) < 5 {
+				brokenList = append(brokenList, fmt.Sprintf("%s (HTTP %d)", r.url, r.status))
+			}
 		}
 	}
 	total := len(results)
-	if broken == 0 {
-		return pass("broken_links", "Broken-Link-Check (HTTP)", 0.0, fmt.Sprintf("Alle %d geprüften Links erreichbar.", total), "")
+	det := map[string]string{
+		"geprueft":              strconv.Itoa(total),
+		"defekt":                joinOrNone(brokenList),
+		"nicht_pruefbar":        joinOrNone(unreachableList),
+		"nicht_abgerufen":       joinOrNone(skipped),
+		"nicht_abgerufen_grund": "Abmelde- und Bestätigungslinks werden bewusst nicht geöffnet, weil ein Aufruf sie auslösen würde.",
 	}
-	return warn("broken_links", "Broken-Link-Check (HTTP)", -0.4*float64(broken)/float64(total+1),
-		fmt.Sprintf("%d von %d Links nicht erreichbar (HTTP-Fehler oder Timeout).", broken, total),
-		"Defekte Links aus der Mail entfernen oder korrigieren.")
+
+	if broken == 0 && unreachable == 0 {
+		msg := fmt.Sprintf("Alle %d geprüften Links sind erreichbar.", total)
+		if len(skipped) > 0 {
+			msg += fmt.Sprintf(" %d Abmelde- oder Bestätigungslink(s) wurden absichtlich nicht geöffnet.", len(skipped))
+		}
+		return withDetails(pass("broken_links", "Erreichbarkeit der Links", 0.0, msg, ""), det)
+	}
+	if broken == 0 {
+		// Only unreachable ones: nothing was established about the sender's links.
+		return withDetails(info("broken_links", "Erreichbarkeit der Links", 0,
+			fmt.Sprintf("%d von %d Links ließen sich von hier aus nicht abrufen (Zeitüberschreitung oder Abweisung durch einen Schutzdienst). Das ist kein Beleg für einen defekten Link — im Browser funktionieren solche Adressen meist einwandfrei.", unreachable, total),
+			"Kein Handlungsbedarf. Wenn Sie sichergehen möchten, öffnen Sie die betroffenen Adressen einmal selbst im Browser."), det)
+	}
+	summary := fmt.Sprintf("%d von %d Links antworten mit einem Fehler und sind damit für Empfänger nicht erreichbar.", broken, total)
+	if unreachable > 0 {
+		summary += fmt.Sprintf(" Weitere %d ließen sich von hier aus nicht abrufen und sind nicht bewertet.", unreachable)
+	}
+	return withDetails(warn("broken_links", "Erreichbarkeit der Links", -0.4*float64(broken)/float64(total+1),
+		summary,
+		"Die betroffenen Adressen korrigieren oder aus der Nachricht entfernen. Die genauen Links und ihre Fehlercodes stehen unten in den technischen Details."), det)
+}
+
+// actionLinkPattern matches links that do something when opened rather than
+// merely showing a page: unsubscribe, opt-out and confirmation links.
+var actionLinkPattern = regexp.MustCompile(`(?i)(unsub|un-sub|abmeld|abbestell|optout|opt-out|austrag|confirm|bestaetig|bestätig|double-?opt|verify|activate|aktivier)`)
+
+// isActionLink reports whether opening a link would trigger something.
+//
+// Checking a newsletter's links used to include its unsubscribe link, and
+// outside RFC 8058 those act on a plain GET — the check unsubscribed the very
+// address being tested and then reported the link as working.
+func isActionLink(u string) bool {
+	return actionLinkPattern.MatchString(u)
+}
+
+// probeLink performs one request and returns its status code.
+func probeLink(ctx context.Context, client *http.Client, method, u string) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, method, u, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; sender.report link-check/1.0)")
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode, nil
+}
+
+// statusNote turns a probe outcome into something a reader can act on.
+func statusNote(status int) string {
+	switch status {
+	case 0:
+		return "keine Antwort oder Zeitüberschreitung"
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return fmt.Sprintf("HTTP %d – vom Schutzdienst der Zielseite abgewiesen, nicht defekt", status)
+	case http.StatusTooManyRequests:
+		return "HTTP 429 – Zugriffsgrenze der Zielseite erreicht"
+	default:
+		return fmt.Sprintf("HTTP %d", status)
+	}
 }
 
 func htmlHeuristics(htmlBody string) []model.CheckResult {
