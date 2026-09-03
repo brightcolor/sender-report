@@ -115,6 +115,25 @@ MX  mx-test.example.org   10  → sender.example.org
   tags and `sitemap.xml` are correct.
 - SMTP is **not** an open relay: it only accepts existing, active test mailboxes.
 
+### Your own recursive resolver is a requirement, not an extra
+
+Every check here is a DNS question — SPF, DKIM, DMARC, MX, PTR, DNSSEC, DANE, and above all
+the blocklists. The compose file therefore ships an `unbound` container and points both
+`sender-report` and `rspamd` at it. **Do not replace it with a public resolver.**
+
+- **Spamhaus, URIBL and SURBL refuse queries arriving through shared resolvers** such as
+  `8.8.8.8` or `1.1.1.1`. They reply with an error code in `127.255.255.0/24`, which means
+  neither "listed" nor "clean" — the reputation half of every report stops working. Since
+  v1.29.0 the report says so instead of reporting a clean result, but the checks still
+  produce no verdict.
+- **Docker's built-in resolver** (`127.0.0.11`) is a forwarder. It rate-limits under the
+  query volume Rspamd generates and cannot return DNSKEY or TLSA records, so DNSSEC and DANE
+  report nothing useful.
+
+If you already run a recursive resolver, point the `dns:` entries at it and drop the
+`unbound` service. If you run neither, expect the blocklist, DNSSEC and DANE checks to be
+unanswerable — the report will label them as such rather than passing them.
+
 Examples: `deploy/examples/nginx.conf` · `Caddyfile` · `docker-compose.rspamd.yml` ·
 `docker-compose.spamassassin.yml`.
 

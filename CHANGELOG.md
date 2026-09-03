@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.30.0] - 2026-09-04
+
+### Added
+- **Eigener rekursiver DNS-Resolver im Compose-Setup** — `unbound` läuft jetzt als
+  eigener Dienst unter einer festen Adresse, und sowohl `sender-report` als auch `rspamd`
+  richten ihre Namensauflösung per `dns:` darauf aus. Das ist keine Kür, sondern
+  Voraussetzung: Spamhaus, URIBL und SURBL beantworten keine Anfragen, die über
+  öffentliche Resolver wie 8.8.8.8 oder 1.1.1.1 kommen — sie antworten mit einem
+  Fehlercode aus `127.255.255.0/24`. Der Reputationsteil jeder Prüfung fiel damit aus.
+  Der Docker-eigene Resolver (127.0.0.11) ist ebenfalls ungeeignet: er drosselt bei der
+  Abfragemenge, die Rspamd erzeugt, und liefert keine DNSKEY- oder TLSA-Einträge, die
+  DNSSEC und DANE benötigen.
+- **Zähler für nicht beantwortete DNS-Abfragen** — `/readyz` gibt jetzt
+  `dns_lookup_failures_total` aus. Ein Resolver-Ausfall hinterließ bisher keinerlei Spur:
+  keine Logzeile, keine Kennzahl, und der Healthcheck blieb grün. Der Dienst wird dabei
+  bewusst **nicht** als „nicht bereit" gemeldet — ein Neustart behebt keinen externen
+  DNS-Ausfall, er würde den Betrieb nur zusätzlich stören.
+- **README-Abschnitt zur Betriebsvoraussetzung DNS** — erklärt, warum ein eigener
+  Resolver nötig ist, was bei öffentlichen und bei Docker-internen Resolvern schiefgeht,
+  und was zu tun ist, wenn bereits ein eigener Resolver betrieben wird.
+
+### Changed
+- **Die gepinnten öffentlichen Nameserver in `rspamd/local.d/options.inc` sind entfallen** —
+  sie waren gegen die Schwächen des Docker-Resolvers gesetzt worden und haben dabei das
+  größere Problem eingehandelt: Blocklisten weisen genau diese Server ab. Die Datei
+  dokumentiert jetzt beide Fallen und überlässt die Auflösung dem Resolver aus dem
+  Compose-Setup.
+
 ## [1.29.0] - 2026-09-04
 
 ### Fixed

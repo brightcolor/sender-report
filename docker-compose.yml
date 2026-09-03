@@ -1,5 +1,36 @@
 services:
 
+  # ── Rekursiver DNS-Resolver ──────────────────────────────────────────────
+  # Betriebsvoraussetzung, kein Extra. Alles, was dieses Werkzeug tut, hängt an
+  # DNS-Abfragen: SPF, DKIM, DMARC, MX, PTR, DNSSEC, DANE und vor allem die
+  # Blocklisten. Ohne eigenen Resolver landen diese Abfragen bei einem
+  # Weiterleiter — dem Docker-internen 127.0.0.11 oder einem öffentlichen
+  # Dienst wie 8.8.8.8. Beides bringt zwei Probleme mit sich:
+  #
+  #   1. Spamhaus, URIBL und SURBL beantworten keine Anfragen, die über
+  #      öffentliche Resolver kommen. Sie antworten mit einem Fehlercode, und
+  #      der Reputationsteil der Prüfung fällt dann komplett aus.
+  #   2. Docker-DNS drosselt bei vielen Abfragen und kann keine DNSKEY- oder
+  #      TLSA-Einträge liefern, die DNSSEC und DANE brauchen.
+  #
+  # Unbound fragt stattdessen selbst bei den zuständigen Nameservern nach.
+  unbound:
+    image: mvance/unbound:latest
+    container_name: sender-report-dns
+    restart: unless-stopped
+    mem_limit: 128m
+    networks:
+      srnet:
+        # Feste Adresse, weil die anderen Dienste sie unter 'dns:' eintragen
+        # müssen — dort sind Dienstnamen nicht erlaubt.
+        ipv4_address: 172.28.0.53
+    healthcheck:
+      test: ["CMD-SHELL", "drill @127.0.0.1 example.org A || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   # ── Sender-Report ────────────────────────────────────────────────────────
   sender-report:
     image: ${SENDER_REPORT_IMAGE:-ghcr.io/brightcolor/sender-report:latest}
@@ -23,6 +54,14 @@ services:
       # TLS-Zertifikate für HTTPS — nur nötig wenn ENABLE_TLS=true:
       # - ./certs:/certs:ro
     restart: unless-stopped
+    # Alle DNS-Abfragen über den eigenen Resolver, siehe Kommentar bei 'unbound'.
+    dns:
+      - 172.28.0.53
+    networks:
+      - srnet
+    depends_on:
+      unbound:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz"]
       interval: 30s
@@ -39,7 +78,17 @@ services:
     container_name: rspamd
     restart: unless-stopped
     mem_limit: 256m
-    # Local overrides: controller access + pinned DNS resolvers (8.8.8.8 / 1.1.1.1).
+    # Ohne diese Zeile landen rspamds Blocklisten-Abfragen beim Docker-Resolver
+    # oder bei den in options.inc eingetragenen öffentlichen Servern — und
+    # Spamhaus lehnt genau die ab.
+    dns:
+      - 172.28.0.53
+    networks:
+      - srnet
+    depends_on:
+      unbound:
+        condition: service_started
+    # Local overrides: controller access and DNS timeouts.
     volumes:
       - ./rspamd/local.d:/etc/rspamd/local.d:ro
     # Kein Port-Expose nötig — sender-report erreicht rspamd intern über
@@ -63,3 +112,13 @@ services:
   #   restart: unless-stopped
   #   mem_limit: 512m
   #   # Port 783 nur intern — kein Expose nach außen nötig.
+
+# ── Netzwerk ───────────────────────────────────────────────────────────────
+# Eigenes Subnetz mit fester Adressvergabe, damit der Resolver unter einer
+# bekannten IP erreichbar ist: 'dns:' akzeptiert nur Adressen, keine Dienstnamen.
+networks:
+  srnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24

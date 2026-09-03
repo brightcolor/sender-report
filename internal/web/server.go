@@ -697,8 +697,15 @@ func (s *Server) setLang(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ready(w http.ResponseWriter, _ *http.Request) {
+	// The DNS failure counter is reported here but does not make the service
+	// unready on purpose: a restart cannot fix a resolver outage, it would only
+	// take the service down on top of it. What was missing was visibility — an
+	// outage used to show up nowhere except as odd results inside individual
+	// reports, with a green healthcheck and no log line. A number climbing here
+	// means this server's resolver needs attention, not the senders' domains.
+	failures := analyzer.DNSFailureCount()
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ready"))
+	_, _ = fmt.Fprintf(w, "ready\ndns_lookup_failures_total %d\n", failures)
 }
 
 func (s *Server) metricsPage(w http.ResponseWriter, r *http.Request) {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync/atomic"
 
 	"golang.org/x/net/idna"
 
@@ -40,6 +41,19 @@ const (
 // unresolvable marks a name that cannot be asked about at all.
 var errUnresolvableName = errors.New("domain name cannot be represented in DNS")
 
+// dnsFailures counts lookups that could not be answered since process start.
+//
+// Without it a resolver outage left no trace anywhere: the reports said "not
+// checkable" to whoever happened to read them, but the operator saw a green
+// healthcheck and no log line. Exposed through DNSFailureCount for /readyz and
+// the metrics page, so a broken resolver is visible from outside.
+var dnsFailures atomic.Uint64
+
+// DNSFailureCount returns how many DNS lookups could not be answered since the
+// process started. A number climbing with every report means this server's
+// resolver is not working, not that senders' domains are misconfigured.
+func DNSFailureCount() uint64 { return dnsFailures.Load() }
+
 // classifyDNSError maps a resolver error onto the three states above.
 //
 // net.DNSError.IsNotFound is the only flag that signals an authoritative
@@ -55,6 +69,7 @@ func classifyDNSError(err error) dnsStatus {
 	if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
 		return dnsAbsent
 	}
+	dnsFailures.Add(1)
 	return dnsUnavailable
 }
 
