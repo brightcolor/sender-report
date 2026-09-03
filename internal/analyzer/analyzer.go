@@ -266,23 +266,18 @@ func dmarcRecordRecheck(ctx context.Context, fromDomain string, in RecheckInput)
 	if fromDomain == "" {
 		return info("dmarc", "DMARC", 0, "Keine From-Domain für den DMARC-Recheck ermittelbar.", "")
 	}
-	recs, st := lookupTXT(ctx, "_dmarc."+fromDomain)
-	if st == dnsUnavailable {
+	dm := lookupDMARCRecord(ctx, fromDomain)
+	if dm.Status == dnsUnavailable {
 		return unresolved("dmarc", "DMARC", "Der DMARC-Eintrag")
 	}
-	policy := ""
-	found := false
-	for _, r := range recs {
-		lr := strings.ToLower(strings.TrimSpace(r))
-		if strings.HasPrefix(lr, "v=dmarc1") {
-			found = true
-			policy = extractTagValue(lr, "p")
-		}
-	}
-	if !found {
+	if len(dm.Records) == 0 {
 		return fail("dmarc", "DMARC", 0, fmt.Sprintf("Kein DMARC-Record für %s gefunden.", fromDomain), "_dmarc."+fromDomain+" TXT mit v=DMARC1 veröffentlichen.")
 	}
-	return recheckUnconfirmed("dmarc", "DMARC", in, fmt.Sprintf("DMARC-Record für %s ist vorhanden (p=%s). Ob DMARC tatsächlich besteht, hängt zusätzlich am Alignment — also daran, ob die per SPF oder DKIM geprüfte Domain zur sichtbaren Absenderdomain passt. Das zeigt sich erst an einer echten Zustellung.", fromDomain, emptyFallback(policy, "none")))
+	where := fmt.Sprintf("für %s", fromDomain)
+	if dm.ViaOrg {
+		where = fmt.Sprintf("für %s (geerbt von der Hauptdomain %s)", fromDomain, dm.Domain)
+	}
+	return recheckUnconfirmed("dmarc", "DMARC", in, fmt.Sprintf("DMARC-Record %s ist vorhanden (p=%s). Ob DMARC tatsächlich besteht, hängt zusätzlich am Alignment — also daran, ob die per SPF oder DKIM geprüfte Domain zur sichtbaren Absenderdomain passt. Das zeigt sich erst an einer echten Zustellung.", where, emptyFallback(dm.Policy, "none")))
 }
 
 // dmarcPolicyRecheck re-fetches the DMARC record and re-evaluates the policy
@@ -292,20 +287,11 @@ func dmarcPolicyRecheck(ctx context.Context, fromDomain string) model.CheckResul
 	if fromDomain == "" {
 		return info("dmarc_policy", "DMARC-Policy-Stärke", 0, "Keine From-Domain für den Recheck ermittelbar.", "")
 	}
-	recs, st := lookupTXT(ctx, "_dmarc."+fromDomain)
-	if st == dnsUnavailable {
+	dm := lookupDMARCRecord(ctx, fromDomain)
+	if dm.Status == dnsUnavailable {
 		return unresolved("dmarc_policy", "DMARC-Policy-Stärke", "Der DMARC-Eintrag")
 	}
-	var dmarcRecs []string
-	policy := ""
-	for _, r := range recs {
-		lr := strings.ToLower(strings.TrimSpace(r))
-		if strings.HasPrefix(lr, "v=dmarc1") {
-			dmarcRecs = append(dmarcRecs, strings.TrimSpace(r))
-			policy = extractTagValue(lr, "p")
-		}
-	}
-	return dmarcPolicyCheck(dmarcRecs, policy)
+	return dmarcPolicyCheck(dm.Records, dm.Policy)
 }
 
 func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisReport) {
@@ -460,23 +446,39 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	dmarcRecords := make([]string, 0)
 	dmarcPolicy := ""
 	dmarcLookup := dnsOK
+	dmarcViaOrg := false
+	dmarcAt := fromDomain
 	if fromDomain != "" {
-		dmarcTXT, st := lookupTXT(ctx, "_dmarc."+fromDomain)
-		dmarcLookup = st
-		for _, rec := range dmarcTXT {
-			lr := strings.ToLower(rec)
-			if strings.HasPrefix(lr, "v=dmarc1") {
-				dmarcRecords = append(dmarcRecords, strings.TrimSpace(rec))
-				dmarcPolicy = extractTagValue(lr, "p")
-			}
+		dm := lookupDMARCRecord(ctx, fromDomain)
+		dmarcRecords = dm.Records
+		dmarcPolicy = dm.Policy
+		dmarcLookup = dm.Status
+		dmarcViaOrg = dm.ViaOrg
+		if dm.Domain != "" {
+			dmarcAt = dm.Domain
 		}
 	}
-	alignedSPF := envelopeDomain != "" && fromDomain != "" && (envelopeDomain == fromDomain || strings.HasSuffix(envelopeDomain, "."+fromDomain) || strings.HasSuffix(fromDomain, "."+envelopeDomain))
-	dkimDomain := domainFromDKIM(headers.Get("DKIM-Signature"))
-	alignedDKIM := dkimDomain != "" && fromDomain != "" && (dkimDomain == fromDomain || strings.HasSuffix(dkimDomain, "."+fromDomain))
+	alignedSPF := relaxedAligned(envelopeDomain, fromDomain)
+	dkimDomains := dkimSigningDomains(headers)
+	dkimDomain := firstNonEmpty(dkimDomains...)
+	alignedDKIM := false
+	for _, d := range dkimDomains {
+		if relaxedAligned(d, fromDomain) {
+			alignedDKIM = true
+			// Report the aligned signature, not merely the first one.
+			dkimDomain = d
+			break
+		}
+	}
 
+	// When the policy comes from the organisational domain, say so: the reader
+	// would otherwise look for a record on the subdomain and not find one.
+	dmarcOrigin := ""
+	if dmarcViaOrg {
+		dmarcOrigin = fmt.Sprintf(" Der Eintrag steht nicht auf %s selbst, sondern auf der Hauptdomain %s und gilt von dort aus mit.", fromDomain, dmarcAt)
+	}
 	if dmarcResult == "pass" {
-		report.Checks = append(report.Checks, pass("dmarc", "DMARC", 0.4, "DMARC laut Authentication-Results bestanden.", ""))
+		report.Checks = append(report.Checks, pass("dmarc", "DMARC", 0.4, "DMARC laut Authentication-Results bestanden."+dmarcOrigin, ""))
 	} else if len(dmarcRecords) > 0 {
 		if alignedSPF || alignedDKIM {
 			if isForwarded && !alignedSPF && alignedDKIM {
@@ -499,7 +501,15 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	} else if dmarcLookup == dnsUnavailable {
 		report.Checks = append(report.Checks, unresolved("dmarc", "DMARC", "Der DMARC-Eintrag der Domain "+fromDomain))
 	} else {
-		report.Checks = append(report.Checks, fail("dmarc", "DMARC", -1.2, "Kein DMARC-Record für die From-Domain gefunden.", "_dmarc.<domain> TXT mit v=DMARC1 veröffentlichen."))
+		// Name both places that were checked, so nobody publishes a second record
+		// on the subdomain when one on the main domain would do.
+		searched := "_dmarc." + fromDomain
+		if org := registrableDomain(fromDomain); org != "" && org != fromDomain {
+			searched += " und _dmarc." + org
+		}
+		report.Checks = append(report.Checks, fail("dmarc", "DMARC", -1.2,
+			fmt.Sprintf("Kein DMARC-Record gefunden. Gesucht wurde unter %s.", searched),
+			fmt.Sprintf("Einen TXT-Eintrag `_dmarc.%s` mit `v=DMARC1; p=none; rua=mailto:dmarc@%s` anlegen. Auf der Hauptdomain angelegt gilt er auch für alle Subdomains.", emptyFallback(registrableDomain(fromDomain), "ihre-domain.de"), emptyFallback(registrableDomain(fromDomain), "ihre-domain.de"))))
 	}
 
 	primaryDomain := firstNonEmpty(fromDomain, envelopeDomain)
@@ -1594,6 +1604,41 @@ func daneCheck(ctx context.Context, domain string) model.CheckResult {
 // ── Group C: opt-in third-party reputation checks (off by default) ──────────
 
 // registrableDomain returns the eTLD+1 (e.g. example.co.uk) for a hostname.
+// relaxedAligned reports whether an authenticated domain aligns with the From
+// domain under DMARC's relaxed mode (RFC 7489 §3.1.1): both must share the same
+// organisational domain.
+//
+// The previous test was a pair of HasSuffix comparisons, which got two things
+// wrong in opposite directions. It missed the common case — bounce domain
+// bounce.example.org against From domain mail.example.org, siblings under the
+// same organisation — and it accepted "notexample.org" as aligned with
+// "example.org", because that string does end in the other one.
+func relaxedAligned(authDomain, fromDomain string) bool {
+	a := registrableDomain(authDomain)
+	f := registrableDomain(fromDomain)
+	return a != "" && f != "" && a == f
+}
+
+// dkimSigningDomains returns the d= domain of every DKIM-Signature header.
+//
+// mail.Header.Get returns only the first, so a mail signed by both the sending
+// platform and the customer's own domain — the standard setup at every ESP —
+// was judged on whichever signature happened to come first. When that was the
+// platform's, the report claimed no DKIM alignment while DMARC passed two lines
+// above it.
+func dkimSigningDomains(headers mail.Header) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, sig := range headers["Dkim-Signature"] {
+		d := domainFromDKIM(sig)
+		if d != "" && !seen[d] {
+			seen[d] = true
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
 func registrableDomain(domain string) string {
 	d := normDomain(domain)
 	if d == "" {
@@ -3368,6 +3413,66 @@ type parsedBody struct {
 	Charset     string
 }
 
+// maxMIMEDepth bounds the recursion in walkMIMEParts. Real mail nests three or
+// four levels at most; the limit is there so a crafted message cannot drive the
+// parser down indefinitely.
+const maxMIMEDepth = 10
+
+// walkMIMEParts descends through a multipart body and collects text, HTML,
+// attachments and images from every level.
+//
+// The previous loop ran over the top level only: a part that was itself a
+// multipart matched none of the branches and was dropped, along with everything
+// inside it. That is not an exotic shape but the two most common ones there are —
+// multipart/alternative wrapping a multipart/related (HTML with embedded images)
+// and multipart/mixed wrapping a multipart/alternative (any mail with an
+// attachment). For both, no HTML ever reached the checks, so every HTML-based
+// check reported all-clear on an empty string and three checks disappeared from
+// the report altogether.
+func walkMIMEParts(pb *parsedBody, body []byte, boundary string, depth int) {
+	if boundary == "" || depth > maxMIMEDepth {
+		return
+	}
+	mr := multipart.NewReader(strings.NewReader(string(body)), boundary)
+	for {
+		part, perr := mr.NextPart()
+		if perr != nil {
+			return
+		}
+		pbytes, _ := readLimited(part, 2*1024*1024)
+		ptype, pparams, _ := mime.ParseMediaType(part.Header.Get("Content-Type"))
+		switch {
+		case strings.HasPrefix(ptype, "multipart/"):
+			// A container contributes nothing itself; its children do.
+			walkMIMEParts(pb, pbytes, pparams["boundary"], depth+1)
+		case ptype == "text/plain":
+			pb.PartCount++
+			pb.HasTextPart = true
+			pb.Text += decodeBody(part.Header, pbytes)
+			// The charset of a multipart mail lives on its parts, not on the
+			// top-level header, so the first body part that declares one wins.
+			if pb.Charset == "" {
+				pb.Charset = strings.ToLower(pparams["charset"])
+			}
+		case ptype == "text/html":
+			pb.PartCount++
+			pb.HasHTMLPart = true
+			h := decodeBody(part.Header, pbytes)
+			pb.HTML += h
+			pb.Images += strings.Count(strings.ToLower(h), "<img")
+			if pb.Charset == "" {
+				pb.Charset = strings.ToLower(pparams["charset"])
+			}
+		default:
+			pb.PartCount++
+			if pparams["name"] != "" || part.FileName() != "" {
+				pb.Attachments++
+			}
+		}
+		_ = part.Close()
+	}
+}
+
 func inspectBody(headers mail.Header, body []byte) ([]model.CheckResult, parsedBody) {
 	out := make([]model.CheckResult, 0)
 	pb := parsedBody{AllText: string(body)}
@@ -3386,30 +3491,7 @@ func inspectBody(headers mail.Header, body []byte) ([]model.CheckResult, parsedB
 			out = append(out, fail("mime_boundary", "Multipart-Aufbau", -1.0, "Multipart ohne Boundary.", "MIME-Boundary korrekt setzen."))
 			return out, pb
 		}
-		mr := multipart.NewReader(strings.NewReader(string(body)), boundary)
-		for {
-			part, perr := mr.NextPart()
-			if perr != nil {
-				break
-			}
-			pb.PartCount++
-			pbytes, _ := readLimited(part, 2*1024*1024)
-			ptype, pparams, _ := mime.ParseMediaType(part.Header.Get("Content-Type"))
-			if ptype == "text/plain" {
-				pb.HasTextPart = true
-				pb.Text += decodeBody(part.Header, pbytes)
-			}
-			if ptype == "text/html" {
-				pb.HasHTMLPart = true
-				h := decodeBody(part.Header, pbytes)
-				pb.HTML += h
-				pb.Images += strings.Count(strings.ToLower(h), "<img")
-			}
-			if filename := pparams["name"]; filename != "" || part.FileName() != "" {
-				pb.Attachments++
-			}
-			_ = part.Close()
-		}
+		walkMIMEParts(&pb, body, boundary, 0)
 	} else {
 		if mediatype == "text/plain" {
 			pb.HasTextPart = true

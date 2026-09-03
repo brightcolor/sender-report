@@ -268,12 +268,18 @@ func evaluateSPF(ctx context.Context, remoteIP net.IP, helo, envelopeFrom string
 		return "none", domain, "missing sender domain or remote ip"
 	}
 	seen := make(map[string]struct{})
-	res, matchedBy := checkSPFDomain(ctx, remoteIP, domain, 0, seen)
+	lookups := 0
+	res, matchedBy := checkSPFDomain(ctx, remoteIP, domain, 0, seen, &lookups)
 	detail = fmt.Sprintf("domain=%s mechanism=%s", domain, emptyFallback(matchedBy, "none"))
 	return res, domain, detail
 }
 
-func checkSPFDomain(ctx context.Context, remoteIP net.IP, domain string, depth int, seen map[string]struct{}) (string, string) {
+// spfLookupBudget is the RFC 7208 §4.6.4 limit on DNS-querying mechanisms per
+// SPF evaluation. It is a property of the whole evaluation, not of one nesting
+// level, which is why it lives in a counter passed down rather than in depth.
+const spfLookupBudget = 10
+
+func checkSPFDomain(ctx context.Context, remoteIP net.IP, domain string, depth int, seen map[string]struct{}, lookups *int) (string, string) {
 	if depth > 10 {
 		return "permerror", "depth-limit"
 	}
@@ -325,7 +331,7 @@ func checkSPFDomain(ctx context.Context, remoteIP net.IP, domain string, depth i
 			qualifier = tok[0]
 			tok = tok[1:]
 		}
-		matched, errRes := matchSPFMechanism(ctx, remoteIP, domain, tok, depth, seen)
+		matched, errRes := matchSPFMechanism(ctx, remoteIP, domain, tok, depth, seen, lookups)
 		if errRes != "" {
 			return errRes, nameOrToken(tok)
 		}
@@ -335,7 +341,12 @@ func checkSPFDomain(ctx context.Context, remoteIP net.IP, domain string, depth i
 	}
 
 	if redirect != "" {
-		res, mech := checkSPFDomain(ctx, remoteIP, redirect, depth+1, seen)
+		// redirect= counts against the same budget (RFC 7208 §4.6.4).
+		*lookups++
+		if *lookups > spfLookupBudget {
+			return "permerror", "lookup-limit"
+		}
+		res, mech := checkSPFDomain(ctx, remoteIP, redirect, depth+1, seen, lookups)
 		if mech == "" {
 			mech = "redirect"
 		}
@@ -369,8 +380,22 @@ func lookupSPFRecord(ctx context.Context, domain string) (record string, status 
 	return "", "none"
 }
 
-func matchSPFMechanism(ctx context.Context, remoteIP net.IP, currentDomain, mechanism string, depth int, seen map[string]struct{}) (bool, string) {
+func matchSPFMechanism(ctx context.Context, remoteIP net.IP, currentDomain, mechanism string, depth int, seen map[string]struct{}, lookups *int) (bool, string) {
 	name, value, cidr := parseSPFMechanism(mechanism)
+
+	// RFC 7208 §4.6.4: include, a, mx, ptr and exists each cost one DNS lookup,
+	// and at most ten are allowed across the whole evaluation. Receivers enforce
+	// this, so a record that exceeds it fails in the real world — while this
+	// evaluator, which bounded only nesting depth, happily followed a long flat
+	// chain of includes and reported a pass.
+	switch name {
+	case "include", "a", "mx", "ptr", "exists":
+		*lookups++
+		if *lookups > spfLookupBudget {
+			return false, "permerror"
+		}
+	}
+
 	switch name {
 	case "all":
 		return true, ""
@@ -378,7 +403,7 @@ func matchSPFMechanism(ctx context.Context, remoteIP net.IP, currentDomain, mech
 		if value == "" {
 			return false, "permerror"
 		}
-		res, _ := checkSPFDomain(ctx, remoteIP, value, depth+1, seen)
+		res, _ := checkSPFDomain(ctx, remoteIP, value, depth+1, seen, lookups)
 		if res == "pass" {
 			return true, ""
 		}
@@ -418,6 +443,17 @@ func matchSPFMechanism(ctx context.Context, remoteIP net.IP, currentDomain, mech
 		}
 		return len(ips) > 0, ""
 	case "ptr":
+		// RFC 7208 §5.5: without a value the mechanism uses the current domain.
+		// Leaving it empty made the suffix comparison below trivially true for
+		// every PTR name, so `v=spf1 mx ptr -all` authorised every IP on the
+		// internet — the exact opposite of what such a record is meant to say.
+		target := strings.ToLower(strings.TrimSpace(value))
+		if target == "" {
+			target = strings.ToLower(strings.TrimSpace(currentDomain))
+		}
+		if target == "" {
+			return false, ""
+		}
 		ptrs, err := net.DefaultResolver.LookupAddr(ctx, remoteIP.String())
 		if err != nil {
 			if analyzer.DNSLookupFailed(err) {
@@ -427,14 +463,39 @@ func matchSPFMechanism(ctx context.Context, remoteIP net.IP, currentDomain, mech
 		}
 		for _, host := range ptrs {
 			host = strings.TrimSuffix(strings.ToLower(host), ".")
-			if strings.HasSuffix(host, strings.ToLower(strings.TrimSpace(value))) {
+			if !ptrNameUnderDomain(host, target) {
+				continue
+			}
+			// RFC 7208 §5.5 requires the PTR name to resolve back to the
+			// connecting IP; without that check anyone who controls the reverse
+			// zone of their own address could claim any domain.
+			if matched, errRes := hostResolvesToIP(ctx, host, remoteIP, -1); matched {
 				return true, ""
+			} else if errRes != "" {
+				return false, errRes
 			}
 		}
 		return false, ""
 	default:
 		return false, ""
 	}
+}
+
+// ptrNameUnderDomain reports whether a reverse-DNS name belongs to a domain:
+// it must be the domain itself or a subdomain of it, on a label boundary.
+//
+// Two bugs lived in the plain suffix comparison this replaces. With an empty
+// domain it was trivially true for every name, so `v=spf1 mx ptr -all`
+// authorised the entire internet. And without the boundary, "notexample.org"
+// counted as belonging to "example.org" — anyone could register a name ending
+// in someone else's domain and pass their ptr mechanism.
+func ptrNameUnderDomain(host, domain string) bool {
+	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+	domain = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(domain)), ".")
+	if host == "" || domain == "" {
+		return false
+	}
+	return host == domain || strings.HasSuffix(host, "."+domain)
 }
 
 func parseSPFMechanism(mech string) (name, value string, cidr int) {

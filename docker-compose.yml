@@ -44,9 +44,12 @@ services:
       - ./rspamd/local.d:/etc/rspamd/local.d:ro
     # Kein Port-Expose nötig — sender-report erreicht rspamd intern über
     # den Docker-Netzwerknamen 'rspamd'.
-    # Optionales Rspamd-Web-UI (read-only, kein Passwort):
+    # Optionales Rspamd-Web-UI. Der Controller ist NICHT read-only: über ihn
+    # lassen sich Trainingsdaten und Einstellungen ändern. Nur an localhost
+    # binden und in rspamd/local.d/worker-controller.inc ein Passwort setzen,
+    # sonst steht er offen im Netz.
     # ports:
-    #   - "11334:11334"
+    #   - "127.0.0.1:11334:11334"
 
   # ── SpamAssassin (optional, auskommentiert) ───────────────────────────────
   # Um SpamAssassin zusätzlich zu Rspamd zu aktivieren:

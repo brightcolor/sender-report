@@ -4,6 +4,58 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.28.0] - 2026-09-04
+
+### Fixed
+- **Verschachtelte MIME-Struktur wurde nicht ausgepackt — die Inhaltsprüfungen liefen ins
+  Leere** — der Parser durchlief nur die oberste MIME-Ebene. Ein Teil, der selbst wieder
+  `multipart/…` war, passte in keinen Zweig und wurde samt seinem gesamten Inhalt
+  verworfen. Das betrifft nicht seltene Sonderfälle, sondern die zwei häufigsten
+  Aufbauten überhaupt: `multipart/alternative` mit einem `multipart/related` darin (HTML
+  mit eingebetteten Bildern) und `multipart/mixed` mit einem `multipart/alternative`
+  darin (jede Mail mit Anhang). Bei beiden erreichte kein HTML die Prüfungen — alle
+  HTML-basierten Checks meldeten Entwarnung für einen leeren Text, und drei Prüfungen
+  verschwanden ganz aus dem Report. Der Parser steigt jetzt rekursiv ab (begrenzt auf
+  zehn Ebenen). Auch der Zeichensatz wird jetzt aus den Teilen gelesen, wo er bei
+  mehrteiligen Mails steht, statt nur aus der obersten Kopfzeile.
+- **SPF: `ptr` ohne Wert autorisierte jede beliebige IP-Adresse** — RFC 7208 §5.5 sieht
+  vor, dass der Mechanismus ohne Angabe die aktuelle Domain verwendet. Diese Vorgabe
+  fehlte, wodurch der Namensvergleich gegen eine leere Zeichenkette lief und für jeden
+  PTR-Namen zutraf. Ein Record wie `v=spf1 mx ptr -all` erlaubte damit dem gesamten
+  Internet den Versand — das Gegenteil seiner Aussage. Zusätzlich wird der Name jetzt an
+  der Label-Grenze geprüft (`notexample.org` galt als Teil von `example.org`) und muss
+  laut RFC auf die sendende IP zurück auflösen.
+- **SPF: das Lookup-Budget wurde nicht geprüft** — begrenzt war nur die Verschachtelungs-
+  tiefe. RFC 7208 §4.6.4 erlaubt jedoch insgesamt zehn DNS-Abfragen je Auswertung
+  (`include`, `a`, `mx`, `ptr`, `exists`, `redirect` zusammen). Eine lange, flache Kette
+  von `include`s überschritt das Limit, ohne erkannt zu werden: echte Empfänger werten
+  das als `permerror`, dieses Werkzeug meldete `pass`.
+- **DMARC wurde nur unter der exakten Absenderdomain gesucht** — RFC 7489 §6.6.3 sieht
+  zwei Schritte vor: erst die From-Domain, und falls dort kein Eintrag steht, die
+  Hauptdomain. Nur der erste Schritt war umgesetzt. Damit galt der übliche und empfohlene
+  Aufbau „Absender auf einer Subdomain, DMARC einmal auf der Hauptdomain" als „kein
+  DMARC-Record" — der größte Einzelabzug des Reports für eine korrekte Konfiguration.
+  Für Subdomains gilt jetzt das `sp=`-Tag, wo es gesetzt ist. Der Report sagt außerdem,
+  von welcher Domain die Regel stammt, und nennt bei einem fehlenden Eintrag beide
+  geprüften Stellen samt fertigem Beispieleintrag.
+- **Alignment traf den Normalfall nicht und ließ einen Angriffsfall durch** — die Prüfung
+  verglich Domainenden. Dadurch galten Geschwister-Subdomains (`bounce.example.org` und
+  `mail.example.org`) als nicht zusammengehörig, obwohl sie zur selben Domain gehören,
+  während `notexample.org` als zu `example.org` gehörig durchging. Verglichen wird jetzt
+  die Hauptdomain beider Seiten.
+- **Nur die erste DKIM-Signatur wurde ausgewertet** — bei Mails, die sowohl vom
+  Versanddienstleister als auch von der eigenen Domain signiert sind (Standard bei jedem
+  Dienstleister), entschied die Reihenfolge im Kopfbereich über das Ergebnis. Stand die
+  Signatur des Dienstleisters vorn, behauptete der Report „kein DKIM-Alignment", während
+  zwei Zeilen darüber „DMARC bestanden" stand. Jetzt werden alle Signaturen gelesen und
+  die passende ausgewiesen.
+
+### Changed
+- **Hinweis zum Rspamd-Web-UI in `docker-compose.yml` korrigiert** — der auskommentierte
+  Vorschlag war als „read-only, kein Passwort" beschriftet und band den Port an alle
+  Schnittstellen. Der Controller ist nicht schreibgeschützt. Der Hinweis bindet jetzt an
+  `127.0.0.1` und weist auf das nötige Passwort hin.
+
 ## [1.27.0] - 2026-09-03
 
 ### Fixed

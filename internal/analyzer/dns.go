@@ -187,6 +187,75 @@ func lookupAddr(ctx context.Context, ip string) ([]string, dnsStatus) {
 	return names, dnsOK
 }
 
+// dmarcLookup is the result of resolving a From domain's DMARC policy.
+type dmarcLookupResult struct {
+	Records []string // the raw v=DMARC1 records found
+	Policy  string   // the policy that applies to this From domain
+	Domain  string   // where the record was actually found
+	ViaOrg  bool     // true when it came from the organisational domain
+	Status  dnsStatus
+}
+
+// lookupDMARCRecord finds the DMARC policy for a From domain.
+//
+// RFC 7489 §6.6.3 defines a two-step lookup: the From domain first, and if it
+// publishes no record, its organisational domain. Only the first step was
+// implemented, so the ordinary setup "From on a subdomain, DMARC published once
+// on the main domain" was reported as "no DMARC record" — the single largest
+// deduction in the report, for a configuration that is not only valid but
+// recommended. When the policy comes from the organisational domain, a
+// subdomain is governed by sp= where that tag is present.
+func lookupDMARCRecord(ctx context.Context, fromDomain string) dmarcLookupResult {
+	fromDomain = normDomain(fromDomain)
+	if fromDomain == "" {
+		return dmarcLookupResult{Status: dnsAbsent}
+	}
+
+	if res, ok := dmarcRecordsAt(ctx, fromDomain); ok {
+		res.Policy = extractTagValue(strings.ToLower(res.Records[0]), "p")
+		return res
+	} else if res.Status == dnsUnavailable {
+		return res
+	}
+
+	org := registrableDomain(fromDomain)
+	if org == "" || org == fromDomain {
+		return dmarcLookupResult{Domain: fromDomain, Status: dnsAbsent}
+	}
+	res, ok := dmarcRecordsAt(ctx, org)
+	if !ok {
+		return res
+	}
+	res.ViaOrg = true
+	lower := strings.ToLower(res.Records[0])
+	// For a subdomain the sp= tag wins where it is set; otherwise p= applies.
+	if sp := extractTagValue(lower, "sp"); sp != "" {
+		res.Policy = sp
+	} else {
+		res.Policy = extractTagValue(lower, "p")
+	}
+	return res
+}
+
+// dmarcRecordsAt fetches the v=DMARC1 records published at one domain.
+func dmarcRecordsAt(ctx context.Context, domain string) (dmarcLookupResult, bool) {
+	recs, st := lookupTXT(ctx, "_dmarc."+domain)
+	out := dmarcLookupResult{Domain: domain, Status: st}
+	if st != dnsOK {
+		return out, false
+	}
+	for _, r := range recs {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(r)), "v=dmarc1") {
+			out.Records = append(out.Records, strings.TrimSpace(r))
+		}
+	}
+	if len(out.Records) == 0 {
+		out.Status = dnsAbsent
+		return out, false
+	}
+	return out, true
+}
+
 // unresolvedNote is the sentence appended to every check that ended in
 // dnsUnavailable, kept in one place so the wording stays identical everywhere.
 const unresolvedNote = "Das sagt nichts über Ihre Einstellungen aus — der Eintrag kann durchaus vorhanden sein. Wir konnten ihn in diesem Moment nur nicht abfragen."
