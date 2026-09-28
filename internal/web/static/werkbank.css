@@ -453,6 +453,7 @@
   --bs-dropdown-link-hover-color: var(--wb-ink);
   --bs-dropdown-link-active-bg: var(--wb-yellow);
   --bs-dropdown-link-active-color: var(--wb-ink);
+  --bs-dropdown-header-color: var(--wb-text-quiet);
   box-shadow: var(--wb-shadow-pop);
   padding: .375rem;
 }

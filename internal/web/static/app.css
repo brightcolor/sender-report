@@ -71,6 +71,25 @@ body,
   margin-right: auto;
 }
 
+/* ── Navbar on small screens ────────────────────────────────────────────── */
+/* The templates move page actions into the "Mehr" menu below sm (secondary
+   ones below md). Should the row still not fit, e.g. with a larger text size,
+   the buttons wrap onto a second line instead of being clipped. */
+@media (max-width: 767.98px) {
+  .app-header > .container-fluid { flex-wrap: wrap; row-gap: .5rem; }
+  .app-header .navbar-nav { flex-wrap: wrap; justify-content: flex-end; }
+}
+/* Phones: the menu button shows its icon only, and menus open right-aligned
+   under the header, so they stay on screen whichever button opened them. */
+@media (max-width: 575.98px) {
+  .app-header .navbar-brand { margin-right: .5rem; }
+  .app-header .navbar-nav { gap: .375rem !important; }
+  .app-header .mp-more-btn::after { display: none; }
+  .app-header .mp-more-btn .bi { font-size: 1.15em; line-height: 1; }
+  .app-header .navbar-nav .dropdown { position: static; }
+  .app-header .navbar-nav .dropdown-menu[data-bs-popper] { right: .75rem; left: auto; }
+}
+
 /* ── Steps bar (Startseite) ─────────────────────────────────────────────── */
 .mp-steps-bar {
   display: flex;

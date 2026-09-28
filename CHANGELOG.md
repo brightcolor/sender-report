@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.40.0] - 2026-09-28
+
+### Fixed
+- **Auf dem Handy sind alle Knöpfe der Kopfleiste erreichbar** — die Leiste lief bisher
+  über den rechten Bildschirmrand hinaus: Im Report ließen sich „Mail simulieren“, „PDF“
+  und „Neuer Test“ nicht antippen, auf den übrigen Seiten „Startseite“, „Zurück“ oder die
+  Wahl der Darstellung. Unter 576 px Breite stehen die Aktionen einer Seite jetzt im Menü
+  hinter dem Knopf ☰, auch im Simulator; bis 767 px behält der Report „PDF“ und „Neuer
+  Test“ in der Leiste. Die Menüs öffnen sich auf dem Handy rechtsbündig unter der Leiste.
+  Ab 768 px sieht die Kopfleiste aus wie bisher.
+- **Werkbank: Überschrift im Darstellungsmenü mit ausreichendem Kontrast** — „Darstellung“
+  stand mit 4,1:1 auf dem Papiergrund und erreicht jetzt 5,9:1 (WCAG AA).
+
 ## [1.39.0] - 2026-09-28
 
 ### Added

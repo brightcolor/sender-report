@@ -73,8 +73,9 @@
           <span class="badge text-bg-primary">{{.Domain}}</span>
         </li>
         <li class="nav-item dropdown">
-          <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-            {{t .Lang "nav.more"}}
+          <button class="btn btn-outline-secondary btn-sm dropdown-toggle mp-more-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                  aria-label="{{t .Lang "nav.more"}}" title="{{t .Lang "nav.more"}}">
+            <i class="bi bi-list d-sm-none" aria-hidden="true"></i><span class="d-none d-sm-inline">{{t .Lang "nav.more"}}</span>
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>{{t .Lang "nav.about"}} sender.report</a></li>
