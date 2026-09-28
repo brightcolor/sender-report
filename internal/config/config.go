@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -62,7 +63,15 @@ type Config struct {
 	IPTAlertSMTPUser     string        // IPT_ALERT_SMTP_USER (optional)
 	IPTAlertSMTPPass     string        // IPT_ALERT_SMTP_PASS (optional)
 	IPTAlertIncludeRaw   bool          // IPT_ALERT_INCLUDE_RAW_ERRORS (default true)
+	// Web interface
+	UIDefaultTheme string // UI_DEFAULT_THEME — display option for visitors who have not picked one (see UIThemes)
 }
+
+// UIThemes lists the display options of the web interface: "auto" follows the
+// visitor's system setting, "light" and "dark" are the two colour modes and
+// "werkbank" is the workbench look on top of the light mode. Visitors switch
+// in the navbar menu; UI_DEFAULT_THEME picks what they see first.
+var UIThemes = []string{"auto", "light", "dark", "werkbank"}
 
 func Load() (Config, error) {
 	cfg := Config{
@@ -114,6 +123,7 @@ func Load() (Config, error) {
 		IPTAlertSMTPUser:     getEnv("IPT_ALERT_SMTP_USER", ""),
 		IPTAlertSMTPPass:     getEnv("IPT_ALERT_SMTP_PASS", ""),
 		IPTAlertIncludeRaw:   getEnvBool("IPT_ALERT_INCLUDE_RAW_ERRORS", true),
+		UIDefaultTheme:       strings.ToLower(getEnv("UI_DEFAULT_THEME", "auto")),
 	}
 
 	if cfg.EnableTLS && (cfg.TLSCertFile == "" || cfg.TLSKeyFile == "") {
@@ -127,6 +137,9 @@ func Load() (Config, error) {
 	}
 	if cfg.MailboxTTL <= 0 || cfg.RetentionTTL <= 0 || cfg.CleanupInterval <= 0 {
 		return cfg, fmt.Errorf("TTL and cleanup intervals must be > 0")
+	}
+	if !slices.Contains(UIThemes, cfg.UIDefaultTheme) {
+		return cfg, fmt.Errorf("UI_DEFAULT_THEME=%q is not a display option of the web interface; set it to one of %s, or remove it to follow the visitor's system setting", cfg.UIDefaultTheme, strings.Join(UIThemes, ", "))
 	}
 	return cfg, nil
 }

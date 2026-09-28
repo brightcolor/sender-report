@@ -467,4 +467,5 @@ upstream license banners; their copyright and permission notices apply:
 | jsPDF | 2.5.1 | MIT — Copyright James Hall, yWorks GmbH and contributors |
 | TweetNaCl.js | — | Public domain, The Unlicense — Copyright Dmitry Chestnykh |
 | Inter (font) | — | SIL Open Font License 1.1 — see `internal/web/static/vendor/inter/LICENSE.txt` |
+| Anton, Atkinson Hyperlegible, IBM Plex Mono (fonts, Werkbank display option) | — | SIL Open Font License 1.1 — see `internal/web/static/vendor/werkbank/OFL.txt` |
 

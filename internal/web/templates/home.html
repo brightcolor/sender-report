@@ -1,6 +1,6 @@
 {{define "home"}}
 <!doctype html>
-<html lang="{{.Lang}}" data-bs-theme="light">
+<html lang="{{.Lang}}" data-bs-theme="light" data-default-theme="{{defaultTheme}}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -44,13 +44,14 @@
   }
   </script>
 
-  <script>(function(){try{var p=localStorage.getItem('sr:theme')||'auto';var d=p==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.bsTheme=d;document.documentElement.dataset.themePreference=p;}catch(e){document.documentElement.dataset.bsTheme='light';}})()</script>
+  {{template "theme-boot" .}}
   <link rel="stylesheet" href="/static/vendor/bootstrap.min.css">
   <link rel="stylesheet" href="/static/vendor/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/static/vendor/overlayscrollbars.min.css">
   <link rel="stylesheet" href="/static/vendor/adminlte.min.css">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
   <link rel="stylesheet" href="/static/app.css?v={{appVersion}}" />
+  <link rel="stylesheet" href="/static/werkbank.css?v={{appVersion}}" />
 </head>
 <body class="layout-fixed mp-page-home">
 <div class="app-wrapper">
@@ -93,11 +94,7 @@
             {{end}}
           </form>
         </li>
-        <li class="nav-item">
-          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="{{t .Lang "nav.theme_toggle"}}">
-            <i class="theme-icon bi bi-circle-half"></i>
-          </button>
-        </li>
+        {{template "theme-menu" .}}
       </ul>
     </div>
   </nav>

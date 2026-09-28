@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -106,6 +107,47 @@ func TestLoadRejectsTLSWithoutCertificatePaths(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected error when ENABLE_TLS is true without TLS cert/key paths")
+	}
+}
+
+func TestLoadDefaultsUIThemeToAuto(t *testing.T) {
+	t.Setenv("UI_DEFAULT_THEME", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.UIDefaultTheme != "auto" {
+		t.Fatalf("expected UI_DEFAULT_THEME default auto, got %q", cfg.UIDefaultTheme)
+	}
+}
+
+func TestLoadAcceptsEveryUITheme(t *testing.T) {
+	for _, raw := range []string{"auto", "light", "dark", "werkbank", " Werkbank ", "DARK"} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv("UI_DEFAULT_THEME", raw)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load returned error for %q: %v", raw, err)
+			}
+			want := strings.ToLower(strings.TrimSpace(raw))
+			if cfg.UIDefaultTheme != want {
+				t.Fatalf("expected UI_DEFAULT_THEME %q, got %q", want, cfg.UIDefaultTheme)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsUnknownUITheme(t *testing.T) {
+	t.Setenv("UI_DEFAULT_THEME", "sepia")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for unknown UI_DEFAULT_THEME")
+	}
+	msg := err.Error()
+	for _, part := range []string{"UI_DEFAULT_THEME", `"sepia"`, "auto, light, dark, werkbank"} {
+		if !strings.Contains(msg, part) {
+			t.Fatalf("error message %q should mention %q", msg, part)
+		}
 	}
 }
 

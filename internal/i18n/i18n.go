@@ -80,7 +80,14 @@ var de = map[string]string{
 	"nav.report":         "Report",
 	"nav.more":           "Mehr",
 	"nav.about_checks":   "Was wird geprüft?",
-	"nav.theme_toggle":   "Theme wechseln",
+	"nav.theme_toggle":   "Darstellung wählen",
+
+	// ── Display options (theme menu) ──────────────────────────────────────────
+	"theme.menu_title": "Darstellung",
+	"theme.auto":       "System",
+	"theme.light":      "Hell",
+	"theme.dark":       "Dunkel",
+	"theme.werkbank":   "Werkbank",
 
 	// ── Home page ─────────────────────────────────────────────────────────────
 	"home.title":         "E-Mail-Zustellbarkeit testen",
@@ -255,7 +262,14 @@ var en = map[string]string{
 	"nav.report":         "Report",
 	"nav.more":           "More",
 	"nav.about_checks":   "What gets checked?",
-	"nav.theme_toggle":   "Toggle theme",
+	"nav.theme_toggle":   "Choose appearance",
+
+	// ── Display options (theme menu) ──────────────────────────────────────────
+	"theme.menu_title": "Appearance",
+	"theme.auto":       "System",
+	"theme.light":      "Light",
+	"theme.dark":       "Dark",
+	"theme.werkbank":   "Workbench",
 
 	// ── Home page ─────────────────────────────────────────────────────────────
 	"home.title":         "Test your email deliverability",

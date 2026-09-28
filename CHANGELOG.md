@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.39.0] - 2026-09-28
+
+### Added
+- **Dritte Darstellung „Werkbank“ neben Hell und Dunkel** — der Knopf in der Kopfleiste
+  öffnet jetzt ein Menü mit System, Hell, Dunkel und Werkbank. Werkbank setzt auf einen
+  warmen Papiergrund mit weißen Karten, Titeln und großen Zahlen in Anton-Versalien,
+  Fließtext in Atkinson Hyperlegible und Adressen in IBM Plex Mono; Zustände laufen über
+  Limette (bestanden), Gelb (Warnung) und Pink (Fehler), jeweils mit ihrem Wort. Die
+  Schriften liegen auf dem eigenen Server und werden erst geladen, wenn jemand Werkbank
+  wählt. Die Wahl bleibt im Browser gespeichert; Menü, Beschriftung und Fokus sind per
+  Tastatur bedienbar. Alle Texte erreichen mindestens WCAG AA.
+- **`UI_DEFAULT_THEME`** legt fest, was neue Besucher zuerst sehen: `auto` (folgt dem
+  System, Vorgabe), `light`, `dark` oder `werkbank`. Ein unbekannter Wert hält den Start
+  mit einer Meldung an, die die erlaubten Werte nennt.
+
+### Fixed
+- **Die Seite „Über“ brach nach dem Abschnitt zum Mail-Simulator ab** — seit 1.22.0 fehlte
+  der Seite ein Wert, nach dem die Vorlage fragt. Der Server antwortete trotzdem mit
+  Status 200 und schickte die halbe Seite mit „template error“ am Ende: Prüfliste, FAQ,
+  Fußzeile und Skripte fehlten. Die Seite wird wieder vollständig ausgeliefert; ein Test
+  prüft, dass „Über“ und „Datenschutz“ bis zum Ende rendern.
+
 ## [1.38.0] - 2026-09-04
 
 ### Fixed

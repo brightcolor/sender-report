@@ -3,6 +3,8 @@ package web
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -436,4 +438,138 @@ func TestTechLabelsFollowTheLanguage(t *testing.T) {
 			t.Error("German table lost its captions")
 		}
 	})
+}
+
+// TestThemeMenuRendersConfiguredDefault renders a page with a UI_DEFAULT_THEME
+// other than the default: the server hands the value to the pre-paint script
+// through <html data-default-theme>, and the navbar menu offers all display
+// options in the page language.
+func TestThemeMenuRendersConfiguredDefault(t *testing.T) {
+	t.Chdir(filepath.Join("..", ".."))
+	cases := []struct {
+		theme, lang string
+		labels      []string
+	}{
+		{"werkbank", "de", []string{"System", "Hell", "Dunkel", "Werkbank"}},
+		{"dark", "en", []string{"System", "Light", "Dark", "Workbench"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.theme+"/"+tc.lang, func(t *testing.T) {
+			srv := newPageTestServer(t, tc.theme)
+			body := renderPage(t, srv.aboutPage, "/about", tc.lang)
+			if !strings.Contains(body, `data-default-theme="`+tc.theme+`"`) {
+				t.Errorf("page does not carry the configured default %q", tc.theme)
+			}
+			for _, choice := range config.UIThemes {
+				if !strings.Contains(body, `data-theme-choice="`+choice+`"`) {
+					t.Errorf("menu lacks the option %q", choice)
+				}
+			}
+			for _, label := range tc.labels {
+				if !strings.Contains(body, ">"+label+"</button>") {
+					t.Errorf("menu lacks the %s label %q", tc.lang, label)
+				}
+			}
+			if strings.Index(body, "/static/werkbank.css") < strings.Index(body, "/static/app.css") {
+				t.Error("werkbank.css must load after app.css, otherwise app.css wins")
+			}
+		})
+	}
+}
+
+// TestStaticPagesRenderCompletely renders the pages that need no mailbox. The
+// about page stopped halfway with "template error" from v1.22.0 on, because
+// its data lacked a field the template asks for; the status stayed 200, so
+// only the cut-off body showed it.
+func TestStaticPagesRenderCompletely(t *testing.T) {
+	t.Chdir(filepath.Join("..", ".."))
+	srv := newPageTestServer(t, "auto")
+	pages := []struct {
+		path    string
+		handler http.HandlerFunc
+	}{
+		{"/about", srv.aboutPage},
+		{"/privacy", srv.privacyPage},
+	}
+	for _, p := range pages {
+		for _, lang := range []string{"de", "en"} {
+			renderPage(t, p.handler, p.path, lang)
+		}
+	}
+}
+
+// newPageTestServer builds a server without a store; enough for the pages
+// that render from configuration alone. The caller must run from the repo
+// root, where New finds the templates.
+func newPageTestServer(t *testing.T, theme string) *Server {
+	t.Helper()
+	srv, err := New(config.Config{UIDefaultTheme: theme, WebRateLimitPerMin: 60, WebBurstPer10Sec: 20}, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	return srv
+}
+
+// renderPage calls a page handler and fails unless the page rendered to the
+// end: a template error after the first byte still answers 200.
+func renderPage(t *testing.T, handler http.HandlerFunc, path, lang string) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Accept-Language", lang)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+	body := strings.TrimSpace(rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%s (%s) answered %d", path, lang, rec.Code)
+	}
+	if strings.Contains(body, "template error") || !strings.HasSuffix(body, "</html>") {
+		tail := body
+		if len(tail) > 120 {
+			tail = tail[len(tail)-120:]
+		}
+		t.Fatalf("%s (%s) did not render completely, it ends with %q", path, lang, tail)
+	}
+	return body
+}
+
+// TestEveryPageOffersTheDisplayOptions keeps every page on the shared theme
+// partials: operator default, pre-paint script, stylesheet and navbar menu.
+// A page without them would ignore the visitor's choice.
+func TestEveryPageOffersTheDisplayOptions(t *testing.T) {
+	want := []string{"about.html", "home.html", "mailbox.html", "privacy.html", "report.html", "simulate.html"}
+	pages, err := filepath.Glob(filepath.Join("templates", "*.html"))
+	if err != nil {
+		t.Fatalf("glob templates: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, page := range pages {
+		name := filepath.Base(page)
+		if name == "_partials.html" {
+			continue
+		}
+		seen[name] = true
+		raw, err := os.ReadFile(page)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		src := string(raw)
+		for _, part := range []string{
+			`data-default-theme="{{defaultTheme}}"`,
+			`{{template "theme-boot" .}}`,
+			`{{template "theme-menu" .}}`,
+			`/static/werkbank.css?v={{appVersion}}`,
+		} {
+			if !strings.Contains(src, part) {
+				t.Errorf("%s lacks %s", name, part)
+			}
+		}
+		if strings.Index(src, "/static/werkbank.css") < strings.Index(src, "/static/app.css") {
+			t.Errorf("%s loads werkbank.css before app.css", name)
+		}
+	}
+	for _, name := range want {
+		if !seen[name] {
+			t.Errorf("expected page %s among the templates", name)
+		}
+	}
 }

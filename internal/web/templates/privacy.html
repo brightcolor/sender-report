@@ -1,18 +1,19 @@
 {{define "privacy"}}
 <!doctype html>
-<html lang="{{.Lang}}" data-bs-theme="light">
+<html lang="{{.Lang}}" data-bs-theme="light" data-default-theme="{{defaultTheme}}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="description" content="Datenschutzerklärung für {{.AppName}}" />
   <title>Datenschutz – {{.AppName}}</title>
-  <script>(function(){try{var p=localStorage.getItem('sr:theme')||'auto';var d=p==='auto'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.bsTheme=d;document.documentElement.dataset.themePreference=p;}catch(e){document.documentElement.dataset.bsTheme='light';}})()</script>
+  {{template "theme-boot" .}}
   <link rel="stylesheet" href="/static/vendor/bootstrap.min.css">
   <link rel="stylesheet" href="/static/vendor/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/static/vendor/overlayscrollbars.min.css">
   <link rel="stylesheet" href="/static/vendor/adminlte.min.css">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
   <link rel="stylesheet" href="/static/app.css?v={{appVersion}}" />
+  <link rel="stylesheet" href="/static/werkbank.css?v={{appVersion}}" />
 </head>
 <body class="layout-fixed">
 <div class="app-wrapper">
@@ -55,11 +56,7 @@
             {{end}}
           </form>
         </li>
-        <li class="nav-item">
-          <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button" title="{{t .Lang "nav.theme_toggle"}}">
-            <i class="theme-icon bi bi-circle-half"></i>
-          </button>
-        </li>
+        {{template "theme-menu" .}}
         <li class="nav-item">
           <a class="btn btn-primary btn-sm" href="/">
             <i class="bi bi-arrow-left me-1"></i>Zurück
@@ -254,7 +251,7 @@
                   <tr>
                     <td><code>sr:theme</code></td>
                     <td>localStorage</td>
-                    <td>Speichert die Farbschema-Einstellung (hell/dunkel/auto) für die Benutzeroberfläche.</td>
+                    <td>Speichert die gewählte Darstellung (System, Hell, Dunkel oder Werkbank) für die Benutzeroberfläche.</td>
                     <td>Unbegrenzt (bis manuelle Löschung)</td>
                     <td><span class="badge text-bg-secondary">Nicht erforderlich</span><br><small class="text-secondary">funktional/Komfort</small></td>
                   </tr>
@@ -328,7 +325,8 @@
             <h3>2.6 Externe Ressourcen</h3>
             <p>
               Alle CSS- und JavaScript-Bibliotheken (Bootstrap, Bootstrap Icons, OverlayScrollbars,
-              AdminLTE, TweetNaCl, jsPDF) werden <strong>vom eigenen Server</strong> ausgeliefert. Es
+              AdminLTE, TweetNaCl, jsPDF) und alle Schriften (Inter, für die Darstellung „Werkbank“
+              Anton, Atkinson Hyperlegible und IBM Plex Mono) werden <strong>vom eigenen Server</strong> ausgeliefert. Es
               werden keine externen CDN-Verbindungen hergestellt und keine IP-Adressen an Dritte
               übermittelt. Auch der PDF-Export eines Berichts wird vollständig <strong>in deinem
               Browser</strong> erzeugt – dabei werden keine Daten an den Server zurückgesendet.
@@ -372,7 +370,7 @@
                   <td>Art. 6 Abs. 1 lit. a – Einwilligung (nur nach Zustimmung)</td>
                 </tr>
                 <tr>
-                  <td>Farbschema-Präferenz (localStorage)</td>
+                  <td>Gewählte Darstellung (localStorage)</td>
                   <td>Art. 6 Abs. 1 lit. f – berechtigtes Interesse an Benutzerkomfort</td>
                 </tr>
               </tbody>

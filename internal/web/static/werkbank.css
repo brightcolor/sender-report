@@ -1,0 +1,717 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   sender.report — "Werkbank" display option
+
+   The bright color workbench look as a third display option next to light
+   and dark: warm paper ground, white cards with round corners, yellow main
+   action, Anton in capitals for titles and big numbers, Atkinson Hyperlegible
+   for text, IBM Plex Mono for addresses and raw data, the four-colour band on
+   top. Everything is scoped to [data-sr-skin="werkbank"] on <html>; the theme
+   switch sets data-bs-theme="light" alongside it.
+
+   Colours: app.css paints text and icons with var(--bs-X) and tints and
+   fills with rgba(var(--bs-X-rgb), a). Here --bs-X is a text-safe tone (AA on
+   paper and white) and --bs-X-rgb the palette fill (lime, yellow, pink,
+   cyan), so both uses come out right without touching app.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Faces (loaded only when the option is active) ──────────────────────── */
+@font-face {
+  font-family: "Anton";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/vendor/werkbank/anton-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/vendor/werkbank/atkinson-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/vendor/werkbank/atkinson-400-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/static/vendor/werkbank/atkinson-700.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/static/vendor/werkbank/atkinson-700-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/vendor/werkbank/plexmono-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ── Tokens and Bootstrap variables ─────────────────────────────────────── */
+[data-sr-skin="werkbank"] {
+  /* Palette (bright color design tokens, workbench variant) */
+  --wb-ink: #111111;
+  --wb-paper: #f2f0eb;
+  --wb-white: #ffffff;
+  --wb-cyan: #1dc3f3;
+  --wb-yellow: #fed329;
+  --wb-yellow-deep: #e9bc0c;
+  --wb-magenta: #ee318a;
+  --wb-pink: #d61f7a;
+  --wb-pink-deep: #b81765;
+  --wb-lime: #bfd535;
+  --wb-lime-deep: #8fa80f;
+  --wb-violet: #aa4b88;
+  --wb-surface: #ffffff;
+  --wb-head: #f7f6f2;
+  --wb-hover: #f1efe9;
+  --wb-fill: #e3e0d8;
+  --wb-rule: #e3e0d8;
+  --wb-rule-loud: #9e9a90;
+  --wb-field-edge: #8e8a80;
+  --wb-text: #1a1a1a;
+  --wb-text-quiet: #5e5b55;
+  --wb-link: #b3146a;
+  --wb-focus: #0a86ad;
+  --wb-ok-text: #4e6a00;
+  --wb-warn-text: #7a5b00;
+  --wb-bad-text: #b3146a;
+  --wb-info-text: color-mix(in srgb, var(--wb-cyan) 55%, var(--wb-ink));
+  --wb-font-display: "Anton", Impact, "Arial Narrow", system-ui, sans-serif;
+  --wb-font-text: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --wb-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --wb-band: linear-gradient(90deg, var(--wb-magenta) 0 25%, var(--wb-cyan) 25% 50%, var(--wb-lime) 50% 75%, var(--wb-yellow) 75% 100%);
+  --wb-shadow: 0 1px 2px rgba(17, 17, 17, .05), 0 6px 20px rgba(17, 17, 17, .05);
+  --wb-shadow-pop: 0 8px 28px rgba(17, 17, 17, .16);
+  --wb-focus-ring: 0 0 0 .2rem rgba(10, 134, 173, .3);
+
+  /* Ground and type */
+  --bs-body-font-family: var(--wb-font-text);
+  --bs-font-sans-serif: var(--wb-font-text);
+  --bs-font-monospace: var(--wb-font-mono);
+  --bs-body-color: var(--wb-text);
+  --bs-body-color-rgb: 26, 26, 26;
+  --bs-body-bg: var(--wb-paper);
+  --bs-body-bg-rgb: 242, 240, 235;
+  --bs-emphasis-color: var(--wb-ink);
+  --bs-emphasis-color-rgb: 17, 17, 17;
+  --bs-secondary-color: var(--wb-text-quiet);
+  --bs-secondary-color-rgb: 94, 91, 85;
+  --bs-secondary-bg: var(--wb-fill);
+  --bs-secondary-bg-rgb: 227, 224, 216;
+  --bs-tertiary-color: var(--wb-text-quiet);
+  --bs-tertiary-color-rgb: 94, 91, 85;
+  --bs-tertiary-bg: var(--wb-head);
+  --bs-tertiary-bg-rgb: 247, 246, 242;
+  --bs-heading-color: var(--wb-ink);
+  --bs-link-color: var(--wb-link);
+  --bs-link-color-rgb: 179, 20, 106;
+  --bs-link-hover-color: var(--wb-ink);
+  --bs-link-hover-color-rgb: 17, 17, 17;
+  --bs-code-color: var(--wb-link);
+  --bs-highlight-bg: color-mix(in srgb, var(--wb-yellow) 40%, var(--wb-white));
+  --bs-highlight-color: var(--wb-ink);
+  --bs-border-color: var(--wb-rule);
+  --bs-border-color-translucent: rgba(17, 17, 17, .12);
+  --bs-border-radius: .75rem;
+  --bs-border-radius-sm: .5rem;
+  --bs-border-radius-lg: .75rem;
+  --bs-border-radius-xl: 1rem;
+  --bs-border-radius-xxl: 1.25rem;
+  --bs-box-shadow: var(--wb-shadow);
+  --bs-box-shadow-sm: 0 1px 2px rgba(17, 17, 17, .06);
+  --bs-box-shadow-lg: var(--wb-shadow-pop);
+  --bs-focus-ring-color: rgba(10, 134, 173, .3);
+
+  /* Status: the colour is a text-safe tone, the triplet the palette fill */
+  --bs-primary: var(--wb-link);
+  --bs-primary-rgb: 254, 211, 41;
+  --bs-secondary: var(--wb-text-quiet);
+  --bs-secondary-rgb: 94, 91, 85;
+  --bs-success: var(--wb-ok-text);
+  --bs-success-rgb: 191, 213, 53;
+  --bs-info: var(--wb-info-text);
+  --bs-info-rgb: 29, 195, 243;
+  --bs-warning: var(--wb-warn-text);
+  --bs-warning-rgb: 254, 211, 41;
+  --bs-danger: var(--wb-bad-text);
+  --bs-danger-rgb: 214, 31, 122;
+  --bs-light: var(--wb-head);
+  --bs-light-rgb: 247, 246, 242;
+  --bs-dark: var(--wb-ink);
+  --bs-dark-rgb: 17, 17, 17;
+
+  --bs-primary-text-emphasis: var(--wb-ink);
+  --bs-primary-bg-subtle: color-mix(in srgb, var(--wb-yellow) 26%, var(--wb-white));
+  --bs-primary-border-subtle: color-mix(in srgb, var(--wb-yellow) 60%, var(--wb-white));
+  --bs-success-text-emphasis: var(--wb-ok-text);
+  --bs-success-bg-subtle: color-mix(in srgb, var(--wb-lime) 22%, var(--wb-white));
+  --bs-success-border-subtle: color-mix(in srgb, var(--wb-lime) 55%, var(--wb-white));
+  --bs-info-text-emphasis: var(--wb-info-text);
+  --bs-info-bg-subtle: color-mix(in srgb, var(--wb-cyan) 14%, var(--wb-white));
+  --bs-info-border-subtle: color-mix(in srgb, var(--wb-cyan) 45%, var(--wb-white));
+  --bs-warning-text-emphasis: var(--wb-warn-text);
+  --bs-warning-bg-subtle: color-mix(in srgb, var(--wb-yellow) 26%, var(--wb-white));
+  --bs-warning-border-subtle: color-mix(in srgb, var(--wb-yellow) 60%, var(--wb-white));
+  --bs-danger-text-emphasis: var(--wb-bad-text);
+  --bs-danger-bg-subtle: color-mix(in srgb, var(--wb-pink) 13%, var(--wb-white));
+  --bs-danger-border-subtle: color-mix(in srgb, var(--wb-pink) 40%, var(--wb-white));
+  --bs-secondary-text-emphasis: var(--wb-text);
+  --bs-secondary-bg-subtle: var(--wb-hover);
+  --bs-secondary-border-subtle: var(--wb-rule);
+  --bs-light-text-emphasis: var(--wb-text);
+  --bs-light-bg-subtle: var(--wb-head);
+  --bs-light-border-subtle: var(--wb-rule);
+  --bs-dark-text-emphasis: var(--wb-ink);
+  --bs-dark-bg-subtle: var(--wb-fill);
+  --bs-dark-border-subtle: var(--wb-rule-loud);
+
+  color-scheme: light;
+}
+
+/* ── Four-colour band on top ────────────────────────────────────────────── */
+[data-sr-skin="werkbank"] body::before {
+  content: "";
+  position: fixed;
+  z-index: 1090;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--wb-band);
+  pointer-events: none;
+}
+
+/* ── Faces: app.css sets Inter with !important ──────────────────────────── */
+[data-sr-skin="werkbank"] body,
+[data-sr-skin="werkbank"] .navbar,
+[data-sr-skin="werkbank"] .accordion-button,
+[data-sr-skin="werkbank"] .card,
+[data-sr-skin="werkbank"] .btn,
+[data-sr-skin="werkbank"] .info-box,
+[data-sr-skin="werkbank"] .small-box {
+  font-family: var(--wb-font-text) !important;
+}
+
+[data-sr-skin="werkbank"] body {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Anton in capitals for page, card and section titles and big numbers.
+   Line height 1.1 keeps the umlaut dots clear. */
+[data-sr-skin="werkbank"] h1,
+[data-sr-skin="werkbank"] .h1,
+[data-sr-skin="werkbank"] .h2,
+[data-sr-skin="werkbank"] .card-title,
+[data-sr-skin="werkbank"] .mp-group-title,
+[data-sr-skin="werkbank"] .modal-title,
+[data-sr-skin="werkbank"] .mp-privacy-body h2,
+[data-sr-skin="werkbank"] .mp-widget-card > .card-header > .fw-semibold {
+  font-family: var(--wb-font-display) !important;
+  font-weight: 400 !important;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  line-height: 1.1;
+  color: var(--wb-ink);
+}
+
+[data-sr-skin="werkbank"] .card-title,
+[data-sr-skin="werkbank"] .mp-widget-card > .card-header > .fw-semibold {
+  font-size: 1.05rem;
+}
+
+[data-sr-skin="werkbank"] .mp-group-title {
+  font-size: 1.15rem;
+}
+
+[data-sr-skin="werkbank"] .card-title > .bi,
+[data-sr-skin="werkbank"] .modal-title > .bi {
+  font-size: .95em;
+}
+
+[data-sr-skin="werkbank"] .mp-stat-value,
+[data-sr-skin="werkbank"] .mp-ring-value,
+[data-sr-skin="werkbank"] .mp-score-mini strong {
+  font-family: var(--wb-font-display) !important;
+  font-weight: 400 !important;
+  letter-spacing: .02em;
+}
+
+/* Addresses, links to share and raw data in the code face. */
+[data-sr-skin="werkbank"] .mp-addr-text,
+[data-sr-skin="werkbank"] .mp-share-text,
+[data-sr-skin="werkbank"] .mp-prev-mb-addr,
+[data-sr-skin="werkbank"] .mp-raw-pre,
+[data-sr-skin="werkbank"] .mp-sym-name,
+[data-sr-skin="werkbank"] code,
+[data-sr-skin="werkbank"] kbd,
+[data-sr-skin="werkbank"] pre {
+  font-family: var(--wb-font-mono) !important;
+}
+
+/* Text utilities read the triplet, which is a fill here: text-safe tones instead. */
+[data-sr-skin="werkbank"] .text-primary { color: var(--wb-link) !important; }
+[data-sr-skin="werkbank"] .text-success { color: var(--wb-ok-text) !important; }
+[data-sr-skin="werkbank"] .text-warning { color: var(--wb-warn-text) !important; }
+[data-sr-skin="werkbank"] .text-danger { color: var(--wb-bad-text) !important; }
+[data-sr-skin="werkbank"] .text-info { color: var(--wb-info-text) !important; }
+[data-sr-skin="werkbank"] .link-primary { color: var(--wb-link) !important; }
+
+/* Ink on yellow, lime and cyan fills; white on pink and slate. */
+[data-sr-skin="werkbank"] .text-bg-primary,
+[data-sr-skin="werkbank"] .text-bg-warning,
+[data-sr-skin="werkbank"] .text-bg-success,
+[data-sr-skin="werkbank"] .text-bg-info,
+[data-sr-skin="werkbank"] .badge.bg-primary,
+[data-sr-skin="werkbank"] .badge.bg-warning,
+[data-sr-skin="werkbank"] .badge.bg-success,
+[data-sr-skin="werkbank"] .badge.bg-info {
+  color: var(--wb-ink) !important;
+}
+
+[data-sr-skin="werkbank"] .text-bg-danger,
+[data-sr-skin="werkbank"] .badge.bg-danger,
+[data-sr-skin="werkbank"] .text-bg-secondary,
+[data-sr-skin="werkbank"] .badge.bg-secondary {
+  color: var(--wb-white) !important;
+}
+
+[data-sr-skin="werkbank"] .text-bg-danger,
+[data-sr-skin="werkbank"] .bg-danger {
+  background-color: var(--wb-pink) !important;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+[data-sr-skin="werkbank"] .app-header.navbar {
+  background-color: var(--wb-surface) !important;
+  box-shadow: 0 1px 0 var(--wb-rule) !important;
+}
+
+[data-sr-skin="werkbank"] .app-header .navbar-brand {
+  font-weight: 700;
+}
+
+/* ── Cards and boxes ────────────────────────────────────────────────────── */
+[data-sr-skin="werkbank"] .card {
+  --bs-card-border-radius: .75rem;
+  --bs-card-inner-border-radius: calc(.75rem - 1px);
+  --bs-card-border-color: var(--wb-rule);
+  --bs-card-bg: var(--wb-surface);
+  --bs-card-cap-bg: var(--wb-surface);
+  box-shadow: var(--wb-shadow);
+}
+
+[data-sr-skin="werkbank"] .card-header {
+  border-bottom-color: var(--wb-rule);
+}
+
+[data-sr-skin="werkbank"] .info-box {
+  border-radius: .75rem;
+  background-color: var(--wb-surface);
+  border-color: var(--wb-rule) !important;
+}
+
+[data-sr-skin="werkbank"] .info-box-icon {
+  border-radius: .5rem;
+}
+
+[data-sr-skin="werkbank"] .info-box-icon.text-bg-secondary {
+  background-color: var(--wb-ink) !important;
+  color: var(--wb-yellow) !important;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+[data-sr-skin="werkbank"] .btn {
+  --bs-btn-font-weight: 700;
+  --bs-btn-border-radius: .5rem;
+  --bs-btn-focus-box-shadow: var(--wb-focus-ring);
+}
+
+[data-sr-skin="werkbank"] .btn-sm {
+  --bs-btn-border-radius: .5rem;
+}
+
+[data-sr-skin="werkbank"] .btn-primary {
+  --bs-btn-color: var(--wb-ink);
+  --bs-btn-bg: var(--wb-yellow);
+  --bs-btn-border-color: var(--wb-yellow-deep);
+  --bs-btn-hover-color: var(--wb-ink);
+  --bs-btn-hover-bg: var(--wb-yellow-deep);
+  --bs-btn-hover-border-color: var(--wb-yellow-deep);
+  --bs-btn-active-color: var(--wb-ink);
+  --bs-btn-active-bg: var(--wb-yellow-deep);
+  --bs-btn-active-border-color: var(--wb-yellow-deep);
+  --bs-btn-disabled-color: var(--wb-ink);
+  --bs-btn-disabled-bg: var(--wb-yellow);
+  --bs-btn-disabled-border-color: var(--wb-yellow-deep);
+}
+
+[data-sr-skin="werkbank"] .btn-success {
+  --bs-btn-color: var(--wb-ink);
+  --bs-btn-bg: var(--wb-lime);
+  --bs-btn-border-color: var(--wb-lime-deep);
+  --bs-btn-hover-color: var(--wb-ink);
+  --bs-btn-hover-bg: var(--wb-lime-deep);
+  --bs-btn-hover-border-color: var(--wb-lime-deep);
+  --bs-btn-active-color: var(--wb-ink);
+  --bs-btn-active-bg: var(--wb-lime-deep);
+  --bs-btn-active-border-color: var(--wb-lime-deep);
+  --bs-btn-disabled-color: var(--wb-ink);
+  --bs-btn-disabled-bg: var(--wb-lime);
+  --bs-btn-disabled-border-color: var(--wb-lime-deep);
+}
+
+[data-sr-skin="werkbank"] .btn-danger {
+  --bs-btn-color: var(--wb-white);
+  --bs-btn-bg: var(--wb-pink);
+  --bs-btn-border-color: var(--wb-pink);
+  --bs-btn-hover-color: var(--wb-white);
+  --bs-btn-hover-bg: var(--wb-pink-deep);
+  --bs-btn-hover-border-color: var(--wb-pink-deep);
+  --bs-btn-active-color: var(--wb-white);
+  --bs-btn-active-bg: var(--wb-pink-deep);
+  --bs-btn-active-border-color: var(--wb-pink-deep);
+}
+
+/* Secondary actions: outline in the text colour, filled under the pointer.
+   The warning button ("new mailbox") joins them: yellow is the main action here. */
+[data-sr-skin="werkbank"] .btn-outline-secondary,
+[data-sr-skin="werkbank"] .btn-outline-primary,
+[data-sr-skin="werkbank"] .btn-outline-dark,
+[data-sr-skin="werkbank"] .btn-warning,
+[data-sr-skin="werkbank"] .btn-secondary {
+  --bs-btn-color: var(--wb-text);
+  --bs-btn-bg: var(--wb-surface);
+  --bs-btn-border-color: var(--wb-text-quiet);
+  --bs-btn-hover-color: var(--wb-white);
+  --bs-btn-hover-bg: var(--wb-text);
+  --bs-btn-hover-border-color: var(--wb-text);
+  --bs-btn-active-color: var(--wb-white);
+  --bs-btn-active-bg: var(--wb-ink);
+  --bs-btn-active-border-color: var(--wb-ink);
+  --bs-btn-disabled-color: var(--wb-text-quiet);
+  --bs-btn-disabled-bg: var(--wb-surface);
+  --bs-btn-disabled-border-color: var(--wb-rule);
+}
+
+[data-sr-skin="werkbank"] .btn-link {
+  --bs-btn-color: var(--wb-link);
+  --bs-btn-hover-color: var(--wb-ink);
+}
+
+/* ── Forms ──────────────────────────────────────────────────────────────── */
+[data-sr-skin="werkbank"] .form-control,
+[data-sr-skin="werkbank"] .form-select {
+  background-color: var(--wb-surface);
+  border-color: var(--wb-field-edge);
+  border-radius: .5rem;
+}
+
+[data-sr-skin="werkbank"] .form-control:focus,
+[data-sr-skin="werkbank"] .form-select:focus {
+  border-color: var(--wb-focus);
+  box-shadow: var(--wb-focus-ring);
+}
+
+[data-sr-skin="werkbank"] .form-check-input {
+  border-color: var(--wb-field-edge);
+}
+
+[data-sr-skin="werkbank"] .form-check-input:checked {
+  background-color: var(--wb-ink);
+  border-color: var(--wb-ink);
+}
+
+[data-sr-skin="werkbank"] .form-check-input:focus {
+  border-color: var(--wb-focus);
+  box-shadow: var(--wb-focus-ring);
+}
+
+/* ── Menus, accordions, tables, pagination ─────────────────────────────── */
+[data-sr-skin="werkbank"] .dropdown-menu {
+  --bs-dropdown-border-radius: .75rem;
+  --bs-dropdown-inner-border-radius: calc(.75rem - 1px);
+  --bs-dropdown-border-color: var(--wb-rule);
+  --bs-dropdown-box-shadow: var(--wb-shadow-pop);
+  --bs-dropdown-link-hover-bg: var(--wb-hover);
+  --bs-dropdown-link-hover-color: var(--wb-ink);
+  --bs-dropdown-link-active-bg: var(--wb-yellow);
+  --bs-dropdown-link-active-color: var(--wb-ink);
+  box-shadow: var(--wb-shadow-pop);
+  padding: .375rem;
+}
+
+[data-sr-skin="werkbank"] .dropdown-item {
+  border-radius: .5rem;
+}
+
+[data-sr-skin="werkbank"] .accordion {
+  --bs-accordion-border-color: var(--wb-rule);
+  --bs-accordion-active-bg: var(--wb-head);
+  --bs-accordion-active-color: var(--wb-ink);
+  --bs-accordion-btn-focus-box-shadow: var(--wb-focus-ring);
+}
+
+[data-sr-skin="werkbank"] .table {
+  --bs-table-hover-bg: var(--wb-hover);
+  --bs-table-striped-bg: var(--wb-head);
+}
+
+[data-sr-skin="werkbank"] .table > thead > tr > th {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--wb-text-quiet);
+  background-color: var(--wb-head);
+}
+
+[data-sr-skin="werkbank"] .pagination {
+  --bs-pagination-color: var(--wb-link);
+  --bs-pagination-hover-color: var(--wb-ink);
+  --bs-pagination-active-bg: var(--wb-ink);
+  --bs-pagination-active-border-color: var(--wb-ink);
+  --bs-pagination-active-color: var(--wb-white);
+  --bs-pagination-focus-box-shadow: var(--wb-focus-ring);
+}
+
+[data-sr-skin="werkbank"] .nav-pills {
+  --bs-nav-pills-link-active-bg: var(--wb-yellow);
+  --bs-nav-pills-link-active-color: var(--wb-ink);
+}
+
+[data-sr-skin="werkbank"] .nav-tabs .nav-link.active {
+  box-shadow: inset 0 -3px 0 var(--wb-magenta);
+  font-weight: 700;
+}
+
+[data-sr-skin="werkbank"] .progress {
+  --bs-progress-bg: var(--wb-fill);
+  --bs-progress-bar-bg: var(--wb-magenta);
+  --bs-progress-bar-color: var(--wb-ink);
+}
+
+[data-sr-skin="werkbank"] .modal {
+  --bs-modal-border-radius: .75rem;
+  --bs-modal-inner-border-radius: calc(.75rem - 1px);
+  --bs-modal-border-color: var(--wb-rule);
+  --bs-modal-box-shadow: var(--wb-shadow-pop);
+}
+
+[data-sr-skin="werkbank"] .tooltip {
+  --bs-tooltip-bg: var(--wb-ink);
+  --bs-tooltip-color: var(--wb-white);
+  --bs-tooltip-border-radius: .5rem;
+}
+
+[data-sr-skin="werkbank"] .badge {
+  border-radius: 50rem;
+  font-weight: 700;
+}
+
+/* Alerts: a 4 px edge in the status colour on a quiet tint. */
+[data-sr-skin="werkbank"] .alert {
+  border-radius: .5rem;
+  box-shadow: inset 4px 0 0 var(--wb-alert-edge, var(--wb-rule-loud));
+}
+[data-sr-skin="werkbank"] .alert-info { --wb-alert-edge: var(--wb-cyan); }
+[data-sr-skin="werkbank"] .alert-success { --wb-alert-edge: var(--wb-lime); }
+[data-sr-skin="werkbank"] .alert-warning { --wb-alert-edge: var(--wb-yellow); }
+[data-sr-skin="werkbank"] .alert-danger { --wb-alert-edge: var(--wb-pink); }
+
+/* ── sender.report building blocks ──────────────────────────────────────── */
+
+/* Numbered steps on the start page: ink circles, yellow digits, the arrows
+   between them in the quiet text tone. */
+[data-sr-skin="werkbank"] .mp-step-num {
+  background: var(--wb-ink) !important;
+  color: var(--wb-yellow) !important;
+}
+
+[data-sr-skin="werkbank"] .mp-step-arrow {
+  color: var(--wb-text-quiet);
+}
+
+/* The strip of figures: white, Anton numbers in ink. */
+[data-sr-skin="werkbank"] .mp-stats-bar {
+  background: var(--wb-surface);
+  border-color: var(--wb-rule);
+  border-radius: .75rem;
+  box-shadow: var(--wb-shadow);
+}
+
+[data-sr-skin="werkbank"] .mp-stat-icon {
+  color: var(--wb-magenta) !important;
+}
+
+/* The address to copy: paper box, code face, yellow tint under the pointer. */
+[data-sr-skin="werkbank"] .mp-addr-box,
+[data-sr-skin="werkbank"] .mp-share-box {
+  background-color: var(--wb-head);
+  border-color: var(--wb-rule);
+}
+
+[data-sr-skin="werkbank"] .mp-addr-box:hover,
+[data-sr-skin="werkbank"] .mp-share-box:hover {
+  background-color: color-mix(in srgb, var(--wb-yellow) 14%, var(--wb-white));
+  border-color: var(--wb-yellow-deep);
+  box-shadow: none;
+}
+
+[data-sr-skin="werkbank"] .mp-addr-box:hover .mp-addr-copy-hint,
+[data-sr-skin="werkbank"] .mp-share-box:hover .mp-addr-copy-hint {
+  color: var(--wb-ink);
+}
+
+/* Copied: lime, like every "done" in the palette. */
+[data-sr-skin="werkbank"] .mp-addr-box.mp-copied,
+[data-sr-skin="werkbank"] .mp-share-box.mp-copied {
+  background-color: color-mix(in srgb, var(--wb-lime) 22%, var(--wb-white));
+  border-color: var(--wb-lime-deep);
+  box-shadow: none;
+}
+
+[data-sr-skin="werkbank"] .mp-addr-box.mp-copied .mp-addr-copy-hint,
+[data-sr-skin="werkbank"] .mp-share-box.mp-copied .mp-addr-copy-hint {
+  color: var(--wb-ok-text);
+}
+
+/* Score ring: app.css draws it from --mp-score-color with a hard edge. Here
+   the ring takes the palette fill and the number its text-safe tone. */
+[data-sr-skin="werkbank"] .mp-score-hero {
+  --mp-score-color: rgb(var(--mp-hero-rgb));
+  --wb-score-text: var(--wb-ink);
+}
+[data-sr-skin="werkbank"] .mp-score-hero.status-pass { --wb-score-text: var(--wb-ok-text); }
+[data-sr-skin="werkbank"] .mp-score-hero.status-warn { --wb-score-text: var(--wb-warn-text); }
+[data-sr-skin="werkbank"] .mp-score-hero.status-fail { --wb-score-text: var(--wb-bad-text); }
+
+[data-sr-skin="werkbank"] .mp-ring-value {
+  color: var(--wb-score-text);
+  font-size: 2.75rem;
+  letter-spacing: .01em;
+}
+
+/* Filter buttons of the report: active in the colour of their status. */
+[data-sr-skin="werkbank"] .mp-filter-btn {
+  border-radius: 50rem;
+}
+
+[data-sr-skin="werkbank"] .mp-filter-btn.active {
+  background: var(--wb-yellow);
+  border-color: var(--wb-yellow-deep);
+  color: var(--wb-ink);
+}
+
+[data-sr-skin="werkbank"] .mp-filter-btn.pass.active { background: var(--wb-lime); border-color: var(--wb-lime-deep); color: var(--wb-ink); }
+[data-sr-skin="werkbank"] .mp-filter-btn.warn.active { background: var(--wb-yellow); border-color: var(--wb-yellow-deep); color: var(--wb-ink); }
+[data-sr-skin="werkbank"] .mp-filter-btn.fail.active { background: var(--wb-pink); border-color: var(--wb-pink); color: var(--wb-white); }
+[data-sr-skin="werkbank"] .mp-filter-btn.info.active { background: var(--wb-cyan); border-color: var(--wb-cyan); color: var(--wb-ink); }
+
+/* Waiting for the mail: magenta while waiting, dark gold when it arrived, green when ready. */
+[data-sr-skin="werkbank"] .mp-spinner-svg,
+[data-sr-skin="werkbank"] .mp-inbox-env-icon {
+  color: var(--wb-magenta);
+}
+[data-sr-skin="werkbank"] .mp-inbox-anim[data-state="received"] .mp-inbox-env-icon { color: var(--wb-warn-text); }
+[data-sr-skin="werkbank"] .mp-inbox-anim[data-state="ready"] .mp-inbox-env-icon { color: var(--wb-ok-text); }
+
+/* Score card: solid surfaces; the status shows in the edge, the ring and the
+   pills. The result pills sit on white chips. */
+[data-sr-skin="werkbank"] .mp-score-hero::before {
+  content: none;
+}
+
+/* About page hero: plain paper under the headline. */
+[data-sr-skin="werkbank"] .mp-hero-section {
+  background: none;
+}
+
+[data-sr-skin="werkbank"] .mp-pill {
+  background-color: var(--wb-surface);
+}
+[data-sr-skin="werkbank"] .mp-pill.pass { border-color: var(--wb-lime); }
+[data-sr-skin="werkbank"] .mp-pill.warn { border-color: var(--wb-yellow-deep); }
+[data-sr-skin="werkbank"] .mp-pill.fail { border-color: var(--wb-pink); }
+[data-sr-skin="werkbank"] .mp-pill.info { border-color: var(--wb-cyan); }
+
+/* Status edges of the report in the full palette fill: score card, check
+   groups and single checks. */
+[data-sr-skin="werkbank"] .card.mp-score-hero {
+  border-left: 4px solid rgb(var(--mp-hero-rgb));
+}
+
+[data-sr-skin="werkbank"] .mp-group-card {
+  border-left: 4px solid rgb(var(--mp-grp-rgb));
+}
+
+/* Group header: one calm tint of the status colour. The glow of app.css
+   reaches 26 % pink at its strongest point, too dark for the small labels.
+   The status chip carries the colour at full strength, with its word. */
+[data-sr-skin="werkbank"] .mp-group-header {
+  background: rgba(var(--mp-grp-rgb), .1);
+  border-bottom: 1px solid var(--wb-rule);
+}
+
+[data-sr-skin="werkbank"] .mp-group-status.pass { background: var(--wb-lime); color: var(--wb-ink); }
+[data-sr-skin="werkbank"] .mp-group-status.warn { background: var(--wb-yellow); color: var(--wb-ink); }
+[data-sr-skin="werkbank"] .mp-group-status.fail { background: var(--wb-pink); color: var(--wb-white); }
+
+/* Counters in the group header: white chips, the number in its status tone. */
+[data-sr-skin="werkbank"] .mp-grp-badge {
+  background-color: var(--wb-surface);
+  border: 1px solid var(--wb-rule);
+}
+
+[data-sr-skin="werkbank"] .mp-check-item.fail { border-left-color: var(--wb-pink) !important; }
+[data-sr-skin="werkbank"] .mp-check-item.warn { border-left-color: var(--wb-yellow-deep) !important; }
+[data-sr-skin="werkbank"] .mp-check-item.pass { border-left-color: var(--wb-lime) !important; }
+[data-sr-skin="werkbank"] .mp-check-item.info { border-left-color: var(--wb-cyan) !important; }
+
+/* The one inline colour in the templates: the key warning in the PDF dialog. */
+[data-sr-skin="werkbank"] small[style*="#fd7e14"] {
+  color: var(--wb-warn-text) !important;
+}
+
+/* The theme menu marks the active choice. */
+[data-sr-skin="werkbank"] .mp-theme-menu .dropdown-item.active {
+  background-color: var(--wb-yellow);
+  color: var(--wb-ink);
+}
+
+/* ── Focus and motion ───────────────────────────────────────────────────── */
+[data-sr-skin="werkbank"] :focus-visible {
+  outline: 2px solid var(--wb-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-sr-skin="werkbank"] *,
+  [data-sr-skin="werkbank"] *::before,
+  [data-sr-skin="werkbank"] *::after {
+    transition: none !important;
+  }
+}
+
+/* Printing keeps the neutral print layout of app.css. */
+@media print {
+  [data-sr-skin="werkbank"] body::before {
+    display: none;
+  }
+}

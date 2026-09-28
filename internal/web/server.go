@@ -475,6 +475,7 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"fmtScore":           fmtScore,
 		"t":                  func(lang, key string) string { return i18n.T(i18n.Lang(lang), key) },
 		"appVersion":         func() string { return version.Version },
+		"defaultTheme":       func() string { return cfg.UIDefaultTheme },
 		// The analyzer stores an English variant of every check's name, summary,
 		// explanation and advice alongside the German one, precisely so a report
 		// can be rendered in either language without re-analysing it. Nothing
@@ -1191,15 +1192,17 @@ func (s *Server) aboutPage(w http.ResponseWriter, r *http.Request) {
 		host = h
 	}
 	s.render(w, "about", struct {
-		AppName   string
-		Domain    string
-		PublicURL string
-		Lang      string
+		AppName              string
+		Domain               string
+		PublicURL            string
+		Lang                 string
+		EnableInboxPlacement bool
 	}{
-		AppName:   s.cfg.AppName,
-		Domain:    host,
-		PublicURL: s.publicBaseURL(r),
-		Lang:      string(i18n.Detect(r)),
+		AppName:              s.cfg.AppName,
+		Domain:               host,
+		PublicURL:            s.publicBaseURL(r),
+		Lang:                 string(i18n.Detect(r)),
+		EnableInboxPlacement: s.seeds != nil,
 	})
 }
 

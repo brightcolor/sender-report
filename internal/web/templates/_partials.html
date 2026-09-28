@@ -33,3 +33,32 @@
   <span class="text-secondary">{{appVersion}}</span>
 </footer>
 {{end}}
+
+{{/* Applies the stored display option before the first paint, so no page
+     flashes in the wrong colours. Options: auto (follows the system), light,
+     dark and werkbank (light mode plus the workbench skin from werkbank.css).
+     New visitors get the operator default from <html data-default-theme>
+     (UI_DEFAULT_THEME). app.js keeps the same rules for the menu. */}}
+{{define "theme-boot"}}
+<script>(function(){var h=document.documentElement,c=['auto','light','dark','werkbank'],f=h.dataset.defaultTheme,p=null;if(c.indexOf(f)<0)f='auto';try{p=localStorage.getItem('sr:theme');}catch(e){}if(c.indexOf(p)<0)p=f;h.dataset.bsTheme=p==='dark'||(p==='auto'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';h.dataset.themePreference=p;if(p==='werkbank')h.dataset.srSkin='werkbank';})()</script>
+{{end}}
+
+{{/* Display menu in the navbar: System, Hell, Dunkel, Werkbank. app.js marks
+     the active entry and shows its icon on the button. */}}
+{{define "theme-menu"}}
+<li class="nav-item dropdown mp-theme-menu">
+  <button class="btn btn-outline-secondary btn-sm mp-theme-btn" id="theme-toggle" type="button"
+          data-bs-toggle="dropdown" aria-expanded="false"
+          data-theme-label="{{t .Lang "theme.menu_title"}}"
+          title="{{t .Lang "nav.theme_toggle"}}" aria-label="{{t .Lang "nav.theme_toggle"}}">
+    <i class="theme-icon bi bi-circle-half" aria-hidden="true"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><h6 class="dropdown-header">{{t .Lang "theme.menu_title"}}</h6></li>
+    <li><button class="dropdown-item small" type="button" data-theme-choice="auto" data-theme-icon="bi-circle-half"><i class="bi bi-circle-half me-2" aria-hidden="true"></i>{{t .Lang "theme.auto"}}</button></li>
+    <li><button class="dropdown-item small" type="button" data-theme-choice="light" data-theme-icon="bi-sun-fill"><i class="bi bi-sun-fill me-2" aria-hidden="true"></i>{{t .Lang "theme.light"}}</button></li>
+    <li><button class="dropdown-item small" type="button" data-theme-choice="dark" data-theme-icon="bi-moon-fill"><i class="bi bi-moon-fill me-2" aria-hidden="true"></i>{{t .Lang "theme.dark"}}</button></li>
+    <li><button class="dropdown-item small" type="button" data-theme-choice="werkbank" data-theme-icon="bi-palette-fill"><i class="bi bi-palette-fill me-2" aria-hidden="true"></i>{{t .Lang "theme.werkbank"}}</button></li>
+  </ul>
+</li>
+{{end}}

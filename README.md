@@ -61,7 +61,9 @@ small VPS.
   (works for encrypted reports too).
 - **Opt-in reputation checks** — domain age (RDAP) and domain/link blocklists, enabled per
   mailbox by the user, informed and on demand.
-- **Live statistics** on the home page (via SSE), **dark mode**, mobile-friendly.
+- **Live statistics** on the home page (via SSE), mobile-friendly, with four display options
+  in the navbar: **System**, **Light**, **Dark** and **Werkbank** (a warm paper look with bold
+  display type). The choice stays in the browser; `UI_DEFAULT_THEME` sets it for new visitors.
 - **Small & self-contained** — one Go binary (HTTP + SMTP + analysis + cleanup), SQLite,
   Docker Compose.
 
@@ -157,6 +159,7 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | `ENABLE_DOMAIN_AGE`, `ENABLE_DOMAIN_BLOCKLIST`, `DOMAIN_BLOCKLIST_PROVIDERS` | force third-party checks on globally (default off) |
 | `ENABLE_INBOX_PLACEMENT`, `SEED_ACCOUNTS_FILE` | inbox placement testing via operator-configured seed accounts (default off) |
 | `ALERT_WEBHOOK_URL` | webhook on processing failures |
+| `UI_DEFAULT_THEME` | display option for new visitors: `auto` (follows the system, default), `light`, `dark` or `werkbank` |
 
 > The third-party checks (domain age, blocklists) contact external providers with
 > **domain names** (never mail content) and are off by default. Each user can enable them per

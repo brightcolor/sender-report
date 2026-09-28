@@ -6,50 +6,78 @@ let mailboxEventSource = null;
 let _mbAddressCopied = false;
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
+// Four display options: "auto" follows the system, "light" and "dark" are the
+// Bootstrap colour modes, "werkbank" is the workbench look (werkbank.css) on
+// top of the light mode. New visitors get the operator default from
+// <html data-default-theme> (UI_DEFAULT_THEME); a choice in the menu is kept
+// in localStorage. The "theme-boot" partial applies the same rules before the
+// first paint.
+
+const THEME_CHOICES = ['auto', 'light', 'dark', 'werkbank'];
+const THEME_STORAGE_KEY = 'sr:theme';
+
+function defaultThemePreference() {
+  const configured = document.documentElement.dataset.defaultTheme;
+  return THEME_CHOICES.includes(configured) ? configured : 'auto';
+}
+
+function storedThemePreference() {
+  let stored = null;
+  try { stored = localStorage.getItem(THEME_STORAGE_KEY); } catch (_) {}
+  return THEME_CHOICES.includes(stored) ? stored : defaultThemePreference();
+}
 
 function resolveThemePreference(preference) {
-  if (preference === 'dark' || preference === 'light') return preference;
+  if (preference === 'dark') return 'dark';
+  if (preference === 'light' || preference === 'werkbank') return 'light';
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+function themeChoiceLabel(choice) {
+  return document.querySelector(`[data-theme-choice="${choice}"]`)?.textContent.trim() || choice;
+}
+
 function applyThemePreference(preference) {
-  const selected = preference || localStorage.getItem('sr:theme') || 'auto';
+  const selected = THEME_CHOICES.includes(preference) ? preference : storedThemePreference();
   const resolved = resolveThemePreference(selected);
-  document.documentElement.dataset.bsTheme = resolved;
-  document.documentElement.dataset.themePreference = selected;
-  const btn  = document.getElementById('theme-toggle');
-  const icon = btn?.querySelector('.theme-icon');
-  if (icon) {
-    // Ikon + Tooltip je nach aktivem Modus
-    if (selected === 'dark') {
-      icon.className = 'theme-icon bi bi-moon-fill';
-      icon.textContent = '';
-      if (btn) btn.title = 'Dunkles Theme aktiv – klicken für helles Theme';
-    } else if (selected === 'light') {
-      icon.className = 'theme-icon bi bi-sun-fill';
-      icon.textContent = '';
-      if (btn) btn.title = 'Helles Theme aktiv – klicken für System-Theme';
-    } else {
-      icon.className = 'theme-icon bi bi-circle-half';
-      icon.textContent = '';
-      if (btn) btn.title = 'System-Theme (' + (resolved === 'dark' ? 'dunkel' : 'hell') + ') – klicken für dunkles Theme';
-    }
-  }
+  const root = document.documentElement;
+  root.dataset.bsTheme = resolved;
+  root.dataset.themePreference = selected;
+  if (selected === 'werkbank') root.dataset.srSkin = 'werkbank';
+  else delete root.dataset.srSkin;
+
+  // Menu entries carry their icon and their translated name, so the button
+  // shows the active option in the page language.
+  const items = document.querySelectorAll('[data-theme-choice]');
+  items.forEach((item) => {
+    const active = item.dataset.themeChoice === selected;
+    item.classList.toggle('active', active);
+    if (active) item.setAttribute('aria-current', 'true');
+    else item.removeAttribute('aria-current');
+  });
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  const activeItem = document.querySelector(`[data-theme-choice="${selected}"]`);
+  const icon = btn.querySelector('.theme-icon');
+  if (icon && activeItem?.dataset.themeIcon) icon.className = 'theme-icon bi ' + activeItem.dataset.themeIcon;
+  let label = themeChoiceLabel(selected);
+  if (selected === 'auto') label += ' (' + themeChoiceLabel(resolved) + ')';
+  const title = (btn.dataset.themeLabel ? btn.dataset.themeLabel + ': ' : '') + label;
+  btn.title = title;
+  btn.setAttribute('aria-label', title);
 }
 
 function setupThemeToggle() {
-  applyThemePreference(localStorage.getItem('sr:theme') || 'auto');
-  document.getElementById('theme-toggle')?.addEventListener('click', () => {
-    // Always flip to the opposite of the currently *visible* theme. So from the
-    // default "auto" (resolved via the system) the very first click switches the
-    // actually shown theme — e.g. system=dark → first click = light.
-    const resolved = resolveThemePreference(localStorage.getItem('sr:theme') || 'auto');
-    const next = resolved === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('sr:theme', next);
-    applyThemePreference(next);
+  applyThemePreference(storedThemePreference());
+  document.querySelectorAll('[data-theme-choice]').forEach((item) => {
+    item.addEventListener('click', () => {
+      const choice = item.dataset.themeChoice;
+      try { localStorage.setItem(THEME_STORAGE_KEY, choice); } catch (_) {}
+      applyThemePreference(choice);
+    });
   });
   window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    if ((localStorage.getItem('sr:theme') || 'auto') === 'auto') applyThemePreference('auto');
+    if (storedThemePreference() === 'auto') applyThemePreference('auto');
   });
 }
 

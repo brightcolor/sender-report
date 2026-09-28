@@ -100,6 +100,9 @@ var All = []VarDef{
 	{Key: "PRIVACY_OPERATOR_EMAIL", Default: "", Comment: "Contact email of the operator"},
 	{Key: "PRIVACY_HIDE_TEMPLATE_NOTE", Default: "false", Comment: "Set to true to hide the 'this is a template' notice once operator details are filled in"},
 
+	// ── Web interface ─────────────────────────────────────────────────────────
+	{Group: "Web interface", Key: "UI_DEFAULT_THEME", Default: "auto", Comment: "Display option for visitors who have not picked one: auto (follows the system), light, dark or werkbank"},
+
 	// ── Env migration ─────────────────────────────────────────────────────────
 	{Group: "Env migration", Key: "ENV_FILE", Default: "/config/.env", Comment: "Path inside the container to the mounted .env file; enables automatic migration on startup"},
 }
