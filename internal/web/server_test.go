@@ -295,6 +295,45 @@ func TestReportScoreHeroClassThreshold(t *testing.T) {
 	}
 }
 
+// TestPlacementTestAnswersOnlyForItsMailbox starts a placement test for one
+// mailbox and asks for it through that mailbox and through another one. Both
+// routes answer only for the mailbox that started the test.
+func TestPlacementTestAnswersOnlyForItsMailbox(t *testing.T) {
+	restoreWD := chdirToRepoRoot(t)
+	defer restoreWD()
+
+	srv, st, mb, _, _ := prepareWebTestFixture(t)
+	ctx := context.Background()
+	other, err := st.CreateMailbox(ctx, "q7wd2m4xp", "q7wd2m4xp@example.test", "", "127.0.0.1", time.Hour)
+	if err != nil {
+		t.Fatalf("create second mailbox: %v", err)
+	}
+	const ptToken = "a1b2c3"
+	if err := st.CreatePlacementTest(ctx, mb.ID, ptToken, nil, time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("create placement test: %v", err)
+	}
+
+	// The events route streams until the test ends; the deadline closes the
+	// stream, so a route that answers with it still returns its status here.
+	status := func(path string) int {
+		reqCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		req := httptest.NewRequest(http.MethodGet, path, nil).WithContext(reqCtx)
+		rr := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rr, req)
+		return rr.Code
+	}
+	if got := status("/api/mailboxes/" + mb.Token + "/ipt/" + ptToken); got != http.StatusOK {
+		t.Errorf("result through its own mailbox: status %d, want 200", got)
+	}
+	if got := status("/api/mailboxes/" + other.Token + "/ipt/" + ptToken); got != http.StatusNotFound {
+		t.Errorf("result through another mailbox: status %d, want 404", got)
+	}
+	if got := status("/api/mailboxes/" + other.Token + "/ipt/" + ptToken + "/events"); got != http.StatusNotFound {
+		t.Errorf("events through another mailbox: status %d, want 404", got)
+	}
+}
+
 // TestReportScriptDataIsJSONEncoded renders a report whose message carries
 // markup characters. html/template writes the values into the page script as
 // JSON, with <, > and & as unicode escapes.

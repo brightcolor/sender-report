@@ -24,6 +24,10 @@ All notable changes to this project will be documented in this file.
   unbekannter Modus, ein ungültiger oder doppelter Name und eine Tageszahl, die keine
   ganze Zahl von 1 bis 400 ist, halten den Start mit einer Meldung an, die die erlaubten
   Werte nennt.
+- **Platzierungstests gehören zu ihrem Postfach** — Ergebnis und Fortschritt eines
+  Platzierungstests (`/api/mailboxes/{token}/ipt/{pt}` und `…/events`) liefert der Server
+  nur über das Postfach, das den Test gestartet hat; für jedes andere Postfach antwortet
+  er mit 404.
 - **Der Sprachwechsel führt auf eine Seite dieser Instanz zurück** — `POST /lang` leitet
   auf Pfad und Query der aufrufenden Seite um, immer auf dem eigenen Host.
 - **Die HTTPS-Umleitung führt auf den Host aus `PUBLIC_BASE_URL`** — mit `FORCE_HTTPS`

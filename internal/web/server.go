@@ -2876,7 +2876,13 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 // iptEventsAPI streams placement test progress via SSE.
 // Route: GET /api/mailboxes/{token}/ipt/{pt}/events
 func (s *Server) iptEventsAPI(w http.ResponseWriter, r *http.Request, mailboxToken, ptToken string) {
-	if _, err := s.store.GetMailboxByToken(r.Context(), mailboxToken); err != nil {
+	mb, err := s.store.GetMailboxByToken(r.Context(), mailboxToken)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	// A placement test is only visible through the mailbox that started it.
+	if pt, err := s.store.GetPlacementTest(r.Context(), ptToken); err != nil || pt.MailboxID != mb.ID {
 		http.NotFound(w, r)
 		return
 	}
@@ -2897,6 +2903,9 @@ func (s *Server) iptEventsAPI(w http.ResponseWriter, r *http.Request, mailboxTok
 		pt, err := s.store.GetPlacementTest(r.Context(), ptToken)
 		if err != nil {
 			return false, err
+		}
+		if pt.MailboxID != mb.ID {
+			return false, errors.New("placement test belongs to another mailbox")
 		}
 		raw, _ := json.Marshal(pt)
 		if string(raw) != lastPayload {
@@ -2938,12 +2947,14 @@ func (s *Server) iptEventsAPI(w http.ResponseWriter, r *http.Request, mailboxTok
 // iptResultAPI returns the current state of a placement test as JSON.
 // Route: GET /api/mailboxes/{token}/ipt/{pt}
 func (s *Server) iptResultAPI(w http.ResponseWriter, r *http.Request, mailboxToken, ptToken string) {
-	if _, err := s.store.GetMailboxByToken(r.Context(), mailboxToken); err != nil {
+	mb, err := s.store.GetMailboxByToken(r.Context(), mailboxToken)
+	if err != nil {
 		jsonResp(w, http.StatusNotFound, map[string]string{"error": "mailbox not found"})
 		return
 	}
+	// A placement test is only visible through the mailbox that started it.
 	pt, err := s.store.GetPlacementTest(r.Context(), ptToken)
-	if err != nil {
+	if err != nil || pt.MailboxID != mb.ID {
 		jsonResp(w, http.StatusNotFound, map[string]string{"error": "test not found"})
 		return
 	}
