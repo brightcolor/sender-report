@@ -2,9 +2,17 @@ const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
+// The notices ship with the Linux container image, and the set of linked
+// modules depends on the target platform. NOTICES_GOOS / NOTICES_GOARCH pick
+// another target; the defaults match the image.
+const target = {
+  GOOS: process.env.NOTICES_GOOS || "linux",
+  GOARCH: process.env.NOTICES_GOARCH || "amd64",
+};
+
 const raw = execSync(
   'go list -deps -f "{{with .Module}}{{.Path}}|{{.Version}}|{{.Dir}}{{end}}" ./...',
-  { encoding: "utf8", maxBuffer: 1 << 26 }
+  { encoding: "utf8", maxBuffer: 1 << 26, env: { ...process.env, ...target } }
 );
 
 const seen = {};
@@ -72,6 +80,7 @@ out.push("| OverlayScrollbars | 2.10.0 | MIT — Copyright Rene Haas, KingSora |
 out.push("| jsPDF | 2.5.1 | MIT — Copyright James Hall, yWorks GmbH and contributors |");
 out.push("| TweetNaCl.js | — | Public domain, The Unlicense — Copyright Dmitry Chestnykh |");
 out.push("| Inter (font) | — | SIL Open Font License 1.1 — see `internal/web/static/vendor/inter/LICENSE.txt` |");
+out.push("| Anton, Atkinson Hyperlegible, IBM Plex Mono (fonts, Werkbank display option) | — | SIL Open Font License 1.1 — see `internal/web/static/vendor/werkbank/OFL.txt` |");
 out.push(NL);
 
 fs.writeFileSync("THIRD_PARTY_NOTICES.md", out.join("\n") + "\n");
