@@ -4,6 +4,50 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+- **Der Container läuft als Benutzer `app`** — das Image legt `USER app` fest; uid 100
+  und gid 101 stehen jetzt fest im Dockerfile. Vor dem Öffnen der Datenbank prüft der
+  Server, ob er `DATA_DIR`, das Verzeichnis von `DB_PATH` und vorhandene
+  Datenbankdateien schreiben kann. Andernfalls stoppt er mit einer Meldung, die Pfad,
+  uid, gid und den passenden `chown`-Befehl nennt. Bestehende Installationen haben ein
+  `./data`, das bereits `app` gehört. Neue Installationen übergeben `./data` einmal mit
+  `sudo chown -R 100:101 ./data`; `scripts/quickstart.sh` erledigt das selbst. Ein als
+  root gestarteter Container (`user: root`) übergibt `DATA_DIR` an `app` und startet den
+  Server als `app`.
+- **Cookies tragen `HttpOnly`, `SameSite=Lax` und über HTTPS `Secure`** — das gilt für
+  das Sprach- und das Postfach-Cookie. `COOKIE_SECURE` steuert `Secure`: `auto`
+  (Vorgabe) setzt es bei Anfragen über HTTPS, direkt oder über einen Proxy aus
+  `TRUSTED_PROXY_CIDRS`, und auf jeder Anfrage, sobald `PUBLIC_BASE_URL` mit `https://`
+  beginnt; `always` setzt es immer, `never` passt zu Testumgebungen mit reinem HTTP.
+  Namen und Lebensdauer sind Einstellungen: `LANG_COOKIE_NAME` (`sr_lang`),
+  `LANG_COOKIE_DAYS` (365, höchstens 400) und `MAILBOX_COOKIE_NAME` (`sr_mailbox`). Ein
+  unbekannter Modus, ein ungültiger oder doppelter Name und eine Tageszahl, die keine
+  ganze Zahl von 1 bis 400 ist, halten den Start mit einer Meldung an, die die erlaubten
+  Werte nennt.
+- **Der Sprachwechsel führt auf eine Seite dieser Instanz zurück** — `POST /lang` leitet
+  auf Pfad und Query der aufrufenden Seite um, immer auf dem eigenen Host.
+- **Die HTTPS-Umleitung führt auf den Host aus `PUBLIC_BASE_URL`** — mit `FORCE_HTTPS`
+  ist das Ziel der Host aus `PUBLIC_BASE_URL`, ohne diese Einstellung der Host der
+  Anfrage in der Form `host[:port]`. Hat er eine andere Form, antwortet der Server mit
+  400 und dem Hinweis, die öffentliche Adresse zu verwenden.
+- **Seitenskripte bekommen ihre Daten von `html/template`** — Report und Startseite
+  setzen Werte direkt in ihre Skripte; `html/template` schreibt sie dort als JSON und
+  maskiert `<`, `>` und `&`. Die ausgelieferten Seiten bleiben byteweise gleich.
+- **Go 1.26 und `golang.org/x/crypto` 0.56.0** — x/crypto 0.56.0 setzt Go 1.26 voraus;
+  `go.mod`, das Build-Image (`golang:1.26-alpine`) und die README ziehen mit. Die mit
+  0.56.0 behobenen Lücken betreffen `x/crypto/ssh`, das sender.report nicht einbindet.
+- **CI: Das `GITHUB_TOKEN` liest nur, Actions sind auf Commits festgelegt** — `ci.yml`
+  gibt dem Token `contents: read`, der Container-Job bekommt zusätzlich
+  `packages: write`. Alle Actions in `ci.yml` und `release.yml` stehen auf einer
+  Commit-SHA, die Version als Kommentar daneben.
+
+### Changed
+- **`GET /lang` erklärt den Sprachwechsel** — die Antwort (405 mit `Allow: POST`)
+  verweist in der Sprache des Besuchers auf den Umschalter oben auf der Seite.
+- **Die Datenschutzseite nennt beide Cookies** — die Tabelle der Browser-Speicher führt
+  jetzt auch das Sprach-Cookie und zeigt bei beiden Cookies den eingestellten Namen,
+  die Attribute und beim Sprach-Cookie die Lebensdauer.
+
 ## [1.40.1] - 2026-10-05
 
 ### Security
