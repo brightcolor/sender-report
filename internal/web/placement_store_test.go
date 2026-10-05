@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/brightcolor/sender-report/internal/config"
+	"github.com/brightcolor/sender-report/internal/model"
 )
 
 func TestNewPlacementTestsGetTheConfiguredTokenLength(t *testing.T) {
@@ -45,6 +46,47 @@ func TestNewPlacementTestsGetTheConfiguredTokenLength(t *testing.T) {
 				t.Errorf("result route: status %d, want 200", rr.Code)
 			}
 		})
+	}
+}
+
+// TestReportPlacementDialogCarriesItsMailbox renders a report with placement
+// tests switched on: the script of the placement dialog takes the mailbox
+// token from the page data, for plain and for encrypted reports alike.
+func TestReportPlacementDialogCarriesItsMailbox(t *testing.T) {
+	srv, st := newStoreTestServer(t, nil)
+	ctx := context.Background()
+	for _, publicKey := range []string{"", "cHVibGljLWtleS1mb3ItdGhlLXRlc3Q"} {
+		token := "rep0rtb0x" + strconv.Itoa(len(publicKey))
+		mb, err := st.CreateMailbox(ctx, token, token+"@example.test", publicKey, "127.0.0.1", time.Hour)
+		if err != nil {
+			t.Fatalf("create mailbox: %v", err)
+		}
+		msg, err := st.SaveMessage(ctx, model.Message{
+			MailboxID: mb.ID, SMTPFrom: "sender@example.org", RCPTTo: mb.Address, RemoteIP: "203.0.113.20",
+			HELO: "mx.example.org", ReceivedAt: time.Now().UTC(), RawSource: "Subject: Demo\r\n\r\nHallo",
+			HeaderBlock: "Subject: Demo", Subject: "Demo", SizeBytes: 24,
+		})
+		if err != nil {
+			t.Fatalf("save message: %v", err)
+		}
+		if _, err := st.SaveReport(ctx, model.AnalysisReport{
+			MessageID: msg.ID, CreatedAt: time.Now().UTC(), Score: 8, ScoreLabel: "Good",
+			Checks: []model.CheckResult{{ID: "spf", Name: "SPF", Status: "pass", Summary: "ok"}},
+		}); err != nil {
+			t.Fatalf("save report: %v", err)
+		}
+
+		rr := serve(srv, http.MethodGet, "/report/"+mb.Token+"?msg="+messageReference(mb.Token, msg.ID), "", "203.0.113.11", "de")
+		if rr.Code != http.StatusOK {
+			t.Fatalf("report %q: status %d", token, rr.Code)
+		}
+		body := rr.Body.String()
+		if !strings.Contains(body, `var IPT_MB_TOKEN = "`+token+`";`) {
+			t.Errorf("report %q: the placement dialog script lacks the mailbox token", token)
+		}
+		if !strings.Contains(body, "mp-ipt-r-start-btn") {
+			t.Errorf("report %q: the placement dialog is missing", token)
+		}
 	}
 }
 
