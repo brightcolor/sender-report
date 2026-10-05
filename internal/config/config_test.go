@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -298,6 +299,68 @@ func TestLoadNamesTheSettingOutsideItsBounds(t *testing.T) {
 			_, err := Load()
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error = %v, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadDefaultsHTTPSExemptPathsToTheHealthChecks(t *testing.T) {
+	t.Setenv("FORCE_HTTPS_EXEMPT_PATHS", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if strings.Join(cfg.ForceHTTPSExemptPaths, ",") != "/healthz,/readyz" {
+		t.Fatalf("FORCE_HTTPS_EXEMPT_PATHS default = %q, want /healthz and /readyz", cfg.ForceHTTPSExemptPaths)
+	}
+}
+
+func TestLoadParsesHTTPSExemptPaths(t *testing.T) {
+	cases := []struct{ raw, want string }{
+		{" /livez , /probe/ ", "/livez|/probe/"},
+		{"/healthz", "/healthz"},
+		{"/status/v1.json,/k8s/live", "/status/v1.json|/k8s/live"},
+		{"none", ""},
+		{" NONE ", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.raw, func(t *testing.T) {
+			t.Setenv("FORCE_HTTPS_EXEMPT_PATHS", tc.raw)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load returned error: %v", err)
+			}
+			if got := strings.Join(cfg.ForceHTTPSExemptPaths, "|"); got != tc.want {
+				t.Fatalf("FORCE_HTTPS_EXEMPT_PATHS=%q gave %q, want %q", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsUnusableHTTPSExemptPaths(t *testing.T) {
+	t.Run("the root path", func(t *testing.T) {
+		t.Setenv("FORCE_HTTPS_EXEMPT_PATHS", "/healthz,/")
+		_, err := Load()
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		for _, part := range []string{"FORCE_HTTPS_EXEMPT_PATHS", `"/"`, "every page", "FORCE_HTTPS=false"} {
+			if !strings.Contains(err.Error(), part) {
+				t.Errorf("error message %q should mention %q", err.Error(), part)
+			}
+		}
+	})
+	for _, entry := range []string{"healthz", "/a b", "/healthz?x=1", "/healthz#top", "//healthz", "/a//b", "/a/../b", "/./healthz", "/probe/..", "/a%2Fb", "*"} {
+		t.Run(entry, func(t *testing.T) {
+			t.Setenv("FORCE_HTTPS_EXEMPT_PATHS", "/healthz,"+entry)
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("FORCE_HTTPS_EXEMPT_PATHS entry %q accepted", entry)
+			}
+			for _, part := range []string{"FORCE_HTTPS_EXEMPT_PATHS", strconv.Quote(entry), "start with /", "none"} {
+				if !strings.Contains(err.Error(), part) {
+					t.Errorf("error message %q should mention %q", err.Error(), part)
+				}
 			}
 		})
 	}

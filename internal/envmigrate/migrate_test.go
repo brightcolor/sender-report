@@ -10,14 +10,15 @@ import (
 	"github.com/brightcolor/sender-report/internal/config"
 )
 
-// requestSettings are the settings whose defaults live in package config.
-var requestSettings = map[string]string{
+// configDefaults are the settings whose defaults live in package config.
+var configDefaults = map[string]string{
 	"PAYLOAD_RATE_LIMIT_PER_MIN": strconv.Itoa(config.DefaultPayloadRateLimitPerMin),
 	"IPT_RATE_LIMIT_PER_HOUR":    strconv.Itoa(config.DefaultIPTRateLimitPerHour),
+	"FORCE_HTTPS_EXEMPT_PATHS":   config.DefaultForceHTTPSExemptPaths,
 }
 
 func TestAllCarriesTheDefaultsFromConfig(t *testing.T) {
-	for key, want := range requestSettings {
+	for key, want := range configDefaults {
 		found := false
 		for _, v := range All {
 			if v.Key == key {
@@ -42,7 +43,7 @@ func TestEnvExampleCarriesTheDefaultsFromConfig(t *testing.T) {
 		t.Fatalf("read .env.example: %v", err)
 	}
 	lines := strings.Split(string(raw), "\n")
-	for key, want := range requestSettings {
+	for key, want := range configDefaults {
 		line := key + "=" + want
 		found := false
 		for _, l := range lines {
@@ -78,7 +79,7 @@ func TestMigrateFileAppendsMissingSettingsAndKeepsValues(t *testing.T) {
 	if !strings.HasPrefix(content, "PAYLOAD_RATE_LIMIT_PER_MIN=12\n") || strings.Count(content, "PAYLOAD_RATE_LIMIT_PER_MIN=") != 1 {
 		t.Errorf("the value set in the file changed:\n%s", content)
 	}
-	if !strings.Contains(content, "\nIPT_RATE_LIMIT_PER_HOUR="+requestSettings["IPT_RATE_LIMIT_PER_HOUR"]+"\n") {
+	if !strings.Contains(content, "\nIPT_RATE_LIMIT_PER_HOUR="+configDefaults["IPT_RATE_LIMIT_PER_HOUR"]+"\n") {
 		t.Errorf("IPT_RATE_LIMIT_PER_HOUR was not appended with its default:\n%s", content)
 	}
 }

@@ -164,6 +164,7 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | `SMTP_DOMAIN` | domain of generated addresses; empty = request host |
 | `HTTP_PORT` / `SMTP_PORT` | host ports (container: `:8080` / `:2525`) |
 | `ENABLE_TLS`, `TLS_CERT_FILE`, `TLS_KEY_FILE`, `FORCE_HTTPS` | built-in TLS / redirect |
+| `FORCE_HTTPS_EXEMPT_PATHS` | paths that answer over plain HTTP although `FORCE_HTTPS` is set, so the container healthcheck reaches them regardless of `PUBLIC_BASE_URL` (default `/healthz,/readyz`; an entry ending in `/` covers the paths below it, `none` redirects every path) |
 | `TRUSTED_PROXY_CIDRS` | only these proxy CIDRs may set `X-Forwarded-*` |
 | `MAILBOX_TTL`, `DATA_RETENTION_TTL`, `CLEANUP_INTERVAL` | lifetime & cleanup |
 | `MAX_MESSAGE_BYTES`, `MAX_ACTIVE_MAILBOXES_PER_IP/_GLOBAL` | limits |

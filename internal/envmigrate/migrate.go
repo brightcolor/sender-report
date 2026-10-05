@@ -54,6 +54,8 @@ var All = []VarDef{
 	{Key: "TLS_CERT_FILE", Default: "", Comment: "Path to TLS certificate (required when ENABLE_TLS=true)"},
 	{Key: "TLS_KEY_FILE", Default: "", Comment: "Path to TLS private key (required when ENABLE_TLS=true)"},
 	{Key: "FORCE_HTTPS", Default: "false", Comment: "Redirect plain HTTP to HTTPS"},
+	{Key: "FORCE_HTTPS_EXEMPT_PATHS", Default: config.DefaultForceHTTPSExemptPaths,
+		Comment: "Paths that answer over plain HTTP although FORCE_HTTPS is set; an entry ending in / covers the paths below it, " + config.NoExemptPaths + " redirects every path"},
 
 	// ── Docker / Compose ─────────────────────────────────────────────────────
 	{Group: "Docker / Compose", Key: "SENDER_REPORT_IMAGE", Default: "ghcr.io/brightcolor/sender-report:latest", Comment: "Container image used by docker-compose"},

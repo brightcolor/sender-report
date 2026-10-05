@@ -695,13 +695,15 @@ func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 
 // withHTTPSRedirect sends plain-HTTP requests to the same path over HTTPS
 // (FORCE_HTTPS). The target host is the host of PUBLIC_BASE_URL when that is
-// set, the request host otherwise.
+// set, the request host otherwise. The paths in FORCE_HTTPS_EXEMPT_PATHS
+// answer over plain HTTP as well, so a healthcheck inside the container
+// reaches /healthz on http://127.0.0.1 regardless of PUBLIC_BASE_URL.
 func (s *Server) withHTTPSRedirect(next http.Handler) http.Handler {
 	if !s.cfg.ForceHTTPS {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.requestScheme(r) == "https" {
+		if s.requestScheme(r) == "https" || s.httpsExempt(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -716,6 +718,37 @@ func (s *Server) withHTTPSRedirect(next http.Handler) http.Handler {
 		target := url.URL{Scheme: "https", Host: host, Path: r.URL.Path, RawPath: r.URL.RawPath, RawQuery: r.URL.RawQuery}
 		http.Redirect(w, r, target.String(), http.StatusPermanentRedirect)
 	})
+}
+
+// httpsExempt reports whether a request for path answers over plain HTTP
+// although FORCE_HTTPS is set: path equals an entry of
+// FORCE_HTTPS_EXEMPT_PATHS or lies below an entry that ends in a slash. A
+// path with empty, "." or ".." segments never qualifies.
+func (s *Server) httpsExempt(path string) bool {
+	if !cleanRequestPath(path) {
+		return false
+	}
+	for _, p := range s.cfg.ForceHTTPSExemptPaths {
+		if path == p || (strings.HasSuffix(p, "/") && strings.HasPrefix(path, p)) {
+			return true
+		}
+	}
+	return false
+}
+
+// cleanRequestPath reports whether p is an absolute path without empty, "."
+// or ".." segments; a trailing slash is allowed.
+func cleanRequestPath(p string) bool {
+	if !strings.HasPrefix(p, "/") {
+		return false
+	}
+	segs := strings.Split(p[1:], "/")
+	for i, seg := range segs {
+		if seg == "." || seg == ".." || (seg == "" && i < len(segs)-1) {
+			return false
+		}
+	}
+	return true
 }
 
 // hostPortPattern matches a host name, an IPv4 address or a bracketed IPv6

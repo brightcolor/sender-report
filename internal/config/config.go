@@ -76,6 +76,9 @@ type Config struct {
 	LangCookieName    string // LANG_COOKIE_NAME — cookie with the language picked in the switcher
 	LangCookieDays    int    // LANG_COOKIE_DAYS — how many days the browser keeps that choice
 	MailboxCookieName string // MAILBOX_COOKIE_NAME — cookie with the mailbox created without JavaScript
+	// FORCE_HTTPS_EXEMPT_PATHS — paths that answer over plain HTTP although
+	// FORCE_HTTPS is set; an entry ending in / covers the paths below it.
+	ForceHTTPSExemptPaths []string
 }
 
 // UIThemes lists the display options of the web interface: "auto" follows the
@@ -105,6 +108,20 @@ const (
 	DefaultIPTRateLimitPerHour    = 3
 	MaxIPTRateLimitPerHour        = 60
 )
+
+// DefaultForceHTTPSExemptPaths lists the paths that answer over plain HTTP
+// although FORCE_HTTPS is set: the health and readiness checks, so a
+// healthcheck inside the container reaches them on http://127.0.0.1
+// regardless of PUBLIC_BASE_URL.
+const DefaultForceHTTPSExemptPaths = "/healthz,/readyz"
+
+// NoExemptPaths as FORCE_HTTPS_EXEMPT_PATHS redirects every path. An empty
+// value stands for the default, as with every setting.
+const NoExemptPaths = "none"
+
+// exemptPathPattern accepts an absolute path of one or more segments with an
+// optional trailing slash, made of the characters RFC 3986 allows in a path.
+var exemptPathPattern = regexp.MustCompile(`^(/[A-Za-z0-9._~!$&'()*+,;=:@-]+)+/?$`)
 
 // cookieNamePattern accepts cookie names that every browser and proxy passes
 // through unchanged.
@@ -179,10 +196,14 @@ func Load() (Config, error) {
 		LangCookieName:           getEnv("LANG_COOKIE_NAME", "sr_lang"),
 		LangCookieDays:           langCookieDays,
 		MailboxCookieName:        getEnv("MAILBOX_COOKIE_NAME", "sr_mailbox"),
+		ForceHTTPSExemptPaths:    splitPathList(getEnv("FORCE_HTTPS_EXEMPT_PATHS", DefaultForceHTTPSExemptPaths)),
 	}
 
 	if cfg.EnableTLS && (cfg.TLSCertFile == "" || cfg.TLSKeyFile == "") {
 		return cfg, fmt.Errorf("TLS_CERT_FILE and TLS_KEY_FILE must be set when ENABLE_TLS=true")
+	}
+	if err := checkHTTPSExemptPaths(cfg.ForceHTTPSExemptPaths); err != nil {
+		return cfg, err
 	}
 	if cfg.MaxMessageBytes < 512*1024 {
 		return cfg, fmt.Errorf("MAX_MESSAGE_BYTES=%d is below 524288 (512 KiB); set a larger value, or remove it to use the default", cfg.MaxMessageBytes)
@@ -224,6 +245,31 @@ func Load() (Config, error) {
 		return cfg, err
 	}
 	return cfg, nil
+}
+
+// checkHTTPSExemptPaths validates FORCE_HTTPS_EXEMPT_PATHS: every entry is an
+// absolute path without empty, "." or ".." segments, and "/" alone, which
+// would cover every page, is refused.
+func checkHTTPSExemptPaths(paths []string) error {
+	for _, p := range paths {
+		if p == "/" {
+			return fmt.Errorf(`FORCE_HTTPS_EXEMPT_PATHS contains "/", which covers every page and would serve the whole site over plain HTTP; list single paths such as /healthz, or set FORCE_HTTPS=false`)
+		}
+		if !exemptPathPattern.MatchString(p) || hasDotSegment(p) {
+			return fmt.Errorf("FORCE_HTTPS_EXEMPT_PATHS contains %q, which is not a usable path; list paths such as /healthz that start with / and hold no spaces, ?, #, %%, // or . and .. segments, or set %s to redirect every path", p, NoExemptPaths)
+		}
+	}
+	return nil
+}
+
+// hasDotSegment reports whether the path p has a "." or ".." segment.
+func hasDotSegment(p string) bool {
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "." || seg == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 // checkRequestLimits validates the per-IP limits for report payloads and
@@ -329,6 +375,15 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return d
+}
+
+// splitPathList reads a comma-separated list of paths; the value none
+// (NoExemptPaths) stands for an empty list.
+func splitPathList(s string) []string {
+	if strings.EqualFold(strings.TrimSpace(s), NoExemptPaths) {
+		return []string{}
+	}
+	return splitCSV(s)
 }
 
 func splitCSV(s string) []string {
