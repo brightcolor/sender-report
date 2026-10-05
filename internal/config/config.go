@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -65,6 +66,11 @@ type Config struct {
 	IPTAlertIncludeRaw   bool          // IPT_ALERT_INCLUDE_RAW_ERRORS (default true)
 	// Web interface
 	UIDefaultTheme string // UI_DEFAULT_THEME — display option for visitors who have not picked one (see UIThemes)
+	// Cookies
+	CookieSecure      string // COOKIE_SECURE — when cookies carry the Secure attribute (see CookieSecureModes)
+	LangCookieName    string // LANG_COOKIE_NAME — cookie with the language picked in the switcher
+	LangCookieDays    int    // LANG_COOKIE_DAYS — how many days the browser keeps that choice
+	MailboxCookieName string // MAILBOX_COOKIE_NAME — cookie with the mailbox created without JavaScript
 }
 
 // UIThemes lists the display options of the web interface: "auto" follows the
@@ -73,7 +79,24 @@ type Config struct {
 // in the navbar menu; UI_DEFAULT_THEME picks what they see first.
 var UIThemes = []string{"auto", "light", "dark", "werkbank"}
 
+// CookieSecureModes lists the values of COOKIE_SECURE. "auto" marks cookies
+// Secure on requests that arrived over HTTPS, directly or through a trusted
+// proxy, and on every request once PUBLIC_BASE_URL starts with https://.
+// "always" marks every cookie Secure, "never" suits plain-HTTP test setups.
+var CookieSecureModes = []string{"auto", "always", "never"}
+
+// MaxCookieDays is the longest lifetime browsers grant a cookie.
+const MaxCookieDays = 400
+
+// cookieNamePattern accepts cookie names that every browser and proxy passes
+// through unchanged.
+var cookieNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
+
 func Load() (Config, error) {
+	langCookieDays, err := getEnvIntChecked("LANG_COOKIE_DAYS", 365)
+	if err != nil {
+		return Config{}, err
+	}
 	cfg := Config{
 		AppName:                  getEnv("APP_NAME", "sender.report"),
 		HTTPListenAddr:           getEnv("HTTP_LISTEN_ADDR", ":8080"),
@@ -124,6 +147,10 @@ func Load() (Config, error) {
 		IPTAlertSMTPPass:     getEnv("IPT_ALERT_SMTP_PASS", ""),
 		IPTAlertIncludeRaw:   getEnvBool("IPT_ALERT_INCLUDE_RAW_ERRORS", true),
 		UIDefaultTheme:       strings.ToLower(getEnv("UI_DEFAULT_THEME", "auto")),
+		CookieSecure:         strings.ToLower(getEnv("COOKIE_SECURE", "auto")),
+		LangCookieName:       getEnv("LANG_COOKIE_NAME", "sr_lang"),
+		LangCookieDays:       langCookieDays,
+		MailboxCookieName:    getEnv("MAILBOX_COOKIE_NAME", "sr_mailbox"),
 	}
 
 	if cfg.EnableTLS && (cfg.TLSCertFile == "" || cfg.TLSKeyFile == "") {
@@ -141,7 +168,33 @@ func Load() (Config, error) {
 	if !slices.Contains(UIThemes, cfg.UIDefaultTheme) {
 		return cfg, fmt.Errorf("UI_DEFAULT_THEME=%q is not a display option of the web interface; set it to one of %s, or remove it to follow the visitor's system setting", cfg.UIDefaultTheme, strings.Join(UIThemes, ", "))
 	}
+	if err := checkCookieSettings(cfg); err != nil {
+		return cfg, err
+	}
 	return cfg, nil
+}
+
+// checkCookieSettings validates COOKIE_SECURE, the cookie names and the
+// lifetime of the language cookie.
+func checkCookieSettings(cfg Config) error {
+	if !slices.Contains(CookieSecureModes, cfg.CookieSecure) {
+		return fmt.Errorf("COOKIE_SECURE=%q is not one of %s; auto marks cookies Secure on HTTPS requests and whenever PUBLIC_BASE_URL starts with https://", cfg.CookieSecure, strings.Join(CookieSecureModes, ", "))
+	}
+	for _, c := range []struct{ key, name string }{
+		{"LANG_COOKIE_NAME", cfg.LangCookieName},
+		{"MAILBOX_COOKIE_NAME", cfg.MailboxCookieName},
+	} {
+		if !cookieNamePattern.MatchString(c.name) {
+			return fmt.Errorf("%s=%q cannot serve as a cookie name; use 1 to 64 letters, digits, '-', '_' or '.'", c.key, c.name)
+		}
+	}
+	if cfg.LangCookieName == cfg.MailboxCookieName {
+		return fmt.Errorf("LANG_COOKIE_NAME and MAILBOX_COOKIE_NAME are both %q; give the two cookies different names", cfg.LangCookieName)
+	}
+	if cfg.LangCookieDays < 1 || cfg.LangCookieDays > MaxCookieDays {
+		return fmt.Errorf("LANG_COOKIE_DAYS=%d is outside 1 to %d; browsers keep a cookie for at most %d days", cfg.LangCookieDays, MaxCookieDays, MaxCookieDays)
+	}
+	return nil
 }
 
 func getEnv(key, fallback string) string {
@@ -162,6 +215,20 @@ func getEnvInt(key string, fallback int) int {
 		return fallback
 	}
 	return n
+}
+
+// getEnvIntChecked reads a whole number like getEnvInt and reports a value
+// that is none, where getEnvInt falls back to the default.
+func getEnvIntChecked(key string, fallback int) (int, error) {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("%s=%q is not a whole number; set a value like %d", key, v, fallback)
+	}
+	return n, nil
 }
 
 func getEnvInt64(key string, fallback int64) int64 {

@@ -160,7 +160,7 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | Variable | Purpose |
 |---|---|
 | `SENDER_REPORT_IMAGE` | container image (pin a version for production) |
-| `PUBLIC_BASE_URL` | public URL; empty = derive from the request |
+| `PUBLIC_BASE_URL` | public URL; empty = derive from the request. With `FORCE_HTTPS` its host is the redirect target |
 | `SMTP_DOMAIN` | domain of generated addresses; empty = request host |
 | `HTTP_PORT` / `SMTP_PORT` | host ports (container: `:8080` / `:2525`) |
 | `ENABLE_TLS`, `TLS_CERT_FILE`, `TLS_KEY_FILE`, `FORCE_HTTPS` | built-in TLS / redirect |
@@ -174,6 +174,8 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | `ENABLE_INBOX_PLACEMENT`, `SEED_ACCOUNTS_FILE` | inbox placement testing via operator-configured seed accounts (default off) |
 | `ALERT_WEBHOOK_URL` | webhook on processing failures |
 | `UI_DEFAULT_THEME` | display option for new visitors: `auto` (follows the system, default), `light`, `dark` or `werkbank` |
+| `COOKIE_SECURE` | Secure attribute of cookies: `auto` (default; HTTPS requests and an `https://` `PUBLIC_BASE_URL`), `always` or `never` (plain-HTTP test setups) |
+| `LANG_COOKIE_NAME`, `LANG_COOKIE_DAYS`, `MAILBOX_COOKIE_NAME` | cookie names (`sr_lang`, `sr_mailbox`) and the days the language choice is kept (365, at most 400) |
 
 > The third-party checks (domain age, blocklists) contact external providers with
 > **domain names** (never mail content) and are off by default. Each user can enable them per
@@ -199,6 +201,7 @@ Mount the cert directory as a volume (`./certs:/certs:ro`). Behind a proxy use
 - Rate limits (web & SMTP), maximum message size, per-IP mailbox limits.
 - TTL-based data lifecycle (automatic deletion).
 - No external CDNs/trackers — all assets are served locally.
+- Cookies carry `HttpOnly`, `SameSite=Lax` and, over HTTPS, `Secure`.
 - The container runs as the unprivileged user `app`; binary, templates and static
   files belong to root.
 

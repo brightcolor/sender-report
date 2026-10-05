@@ -103,6 +103,12 @@ var All = []VarDef{
 	// ── Web interface ─────────────────────────────────────────────────────────
 	{Group: "Web interface", Key: "UI_DEFAULT_THEME", Default: "auto", Comment: "Display option for visitors who have not picked one: auto (follows the system), light, dark or werkbank"},
 
+	// ── Cookies ───────────────────────────────────────────────────────────────
+	{Group: "Cookies", Key: "COOKIE_SECURE", Default: "auto", Comment: "Secure attribute of cookies: auto (HTTPS requests and an https:// PUBLIC_BASE_URL), always or never"},
+	{Key: "LANG_COOKIE_NAME", Default: "sr_lang", Comment: "Cookie with the language picked in the switcher"},
+	{Key: "LANG_COOKIE_DAYS", Default: "365", Comment: "Days the browser keeps the language choice (1 to 400)"},
+	{Key: "MAILBOX_COOKIE_NAME", Default: "sr_mailbox", Comment: "Cookie with the mailbox created without JavaScript"},
+
 	// ── Env migration ─────────────────────────────────────────────────────────
 	{Group: "Env migration", Key: "ENV_FILE", Default: "/config/.env", Comment: "Path inside the container to the mounted .env file; enables automatic migration on startup"},
 }
