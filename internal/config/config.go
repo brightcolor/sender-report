@@ -32,8 +32,12 @@ type Config struct {
 	WebBurstPer10Sec     int
 	SMTPRateLimitPerHour int
 	SMTPBurstPerMin      int
-	EnableRBLChecks      bool
-	RBLProviders         []string
+	// PAYLOAD_RATE_LIMIT_PER_MIN — encrypted reports one IP address may fetch
+	// per minute; rechecks and simulator runs each count separately against
+	// the same number.
+	PayloadRateLimitPerMin int
+	EnableRBLChecks        bool
+	RBLProviders           []string
 	// Group C — opt-in third-party reputation checks (contact external services
 	// with the sender/link domain; off by default for privacy).
 	EnableDomainAge          bool
@@ -64,6 +68,7 @@ type Config struct {
 	IPTAlertSMTPUser     string        // IPT_ALERT_SMTP_USER (optional)
 	IPTAlertSMTPPass     string        // IPT_ALERT_SMTP_PASS (optional)
 	IPTAlertIncludeRaw   bool          // IPT_ALERT_INCLUDE_RAW_ERRORS (default true)
+	IPTRateLimitPerHour  int           // IPT_RATE_LIMIT_PER_HOUR — placement tests one IP address may start per hour
 	// Web interface
 	UIDefaultTheme string // UI_DEFAULT_THEME — display option for visitors who have not picked one (see UIThemes)
 	// Cookies
@@ -88,12 +93,33 @@ var CookieSecureModes = []string{"auto", "always", "never"}
 // MaxCookieDays is the longest lifetime browsers grant a cookie.
 const MaxCookieDays = 400
 
+// Defaults and upper bounds of the per-IP request limits; the lower bound of
+// each is 1. The window is part of each setting's name:
+// PAYLOAD_RATE_LIMIT_PER_MIN counts per minute, IPT_RATE_LIMIT_PER_HOUR per
+// hour. Each placement test logs in to the seed accounts of every selected
+// provider throughout its run, so the upper bound of IPT_RATE_LIMIT_PER_HOUR
+// also protects those accounts from being locked by their provider.
+const (
+	DefaultPayloadRateLimitPerMin = 30
+	MaxPayloadRateLimitPerMin     = 600
+	DefaultIPTRateLimitPerHour    = 3
+	MaxIPTRateLimitPerHour        = 60
+)
+
 // cookieNamePattern accepts cookie names that every browser and proxy passes
 // through unchanged.
 var cookieNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
 
 func Load() (Config, error) {
 	langCookieDays, err := getEnvIntChecked("LANG_COOKIE_DAYS", 365)
+	if err != nil {
+		return Config{}, err
+	}
+	payloadRateLimit, err := getEnvIntChecked("PAYLOAD_RATE_LIMIT_PER_MIN", DefaultPayloadRateLimitPerMin)
+	if err != nil {
+		return Config{}, err
+	}
+	iptRateLimit, err := getEnvIntChecked("IPT_RATE_LIMIT_PER_HOUR", DefaultIPTRateLimitPerHour)
 	if err != nil {
 		return Config{}, err
 	}
@@ -119,6 +145,7 @@ func Load() (Config, error) {
 		WebBurstPer10Sec:         getEnvInt("WEB_BURST_PER_10_SEC", 20),
 		SMTPRateLimitPerHour:     getEnvInt("SMTP_RATE_LIMIT_PER_HOUR", 200),
 		SMTPBurstPerMin:          getEnvInt("SMTP_BURST_PER_MIN", 40),
+		PayloadRateLimitPerMin:   payloadRateLimit,
 		EnableRBLChecks:          getEnvBool("ENABLE_RBL_CHECKS", false),
 		RBLProviders:             splitCSV(getEnv("RBL_PROVIDERS", "zen.spamhaus.org,bl.spamcop.net,b.barracudacentral.org,psbl.surriel.com,dnsbl.dronebl.org,bl.blocklist.de")),
 		EnableDomainAge:          getEnvBool("ENABLE_DOMAIN_AGE", false),
@@ -137,33 +164,58 @@ func Load() (Config, error) {
 		PrivacyOperatorAddress:   getEnv("PRIVACY_OPERATOR_ADDRESS", ""),
 		PrivacyOperatorEmail:     getEnv("PRIVACY_OPERATOR_EMAIL", ""),
 		PrivacyHideTemplateNote:  getEnvBool("PRIVACY_HIDE_TEMPLATE_NOTE", false),
-		EnableInboxPlacement: getEnvBool("ENABLE_INBOX_PLACEMENT", false),
-		SeedAccountsFile:     getEnv("SEED_ACCOUNTS_FILE", ""),
-		IPTCheckInterval:     getEnvDuration("IPT_CHECK_INTERVAL", 6*time.Hour),
-		IPTAlertEmail:        getEnv("IPT_ALERT_EMAIL", ""),
-		IPTAlertSMTPAddr:     getEnv("IPT_ALERT_SMTP_ADDR", ""),
-		IPTAlertSMTPFrom:     getEnv("IPT_ALERT_SMTP_FROM", ""),
-		IPTAlertSMTPUser:     getEnv("IPT_ALERT_SMTP_USER", ""),
-		IPTAlertSMTPPass:     getEnv("IPT_ALERT_SMTP_PASS", ""),
-		IPTAlertIncludeRaw:   getEnvBool("IPT_ALERT_INCLUDE_RAW_ERRORS", true),
-		UIDefaultTheme:       strings.ToLower(getEnv("UI_DEFAULT_THEME", "auto")),
-		CookieSecure:         strings.ToLower(getEnv("COOKIE_SECURE", "auto")),
-		LangCookieName:       getEnv("LANG_COOKIE_NAME", "sr_lang"),
-		LangCookieDays:       langCookieDays,
-		MailboxCookieName:    getEnv("MAILBOX_COOKIE_NAME", "sr_mailbox"),
+		EnableInboxPlacement:     getEnvBool("ENABLE_INBOX_PLACEMENT", false),
+		SeedAccountsFile:         getEnv("SEED_ACCOUNTS_FILE", ""),
+		IPTCheckInterval:         getEnvDuration("IPT_CHECK_INTERVAL", 6*time.Hour),
+		IPTAlertEmail:            getEnv("IPT_ALERT_EMAIL", ""),
+		IPTAlertSMTPAddr:         getEnv("IPT_ALERT_SMTP_ADDR", ""),
+		IPTAlertSMTPFrom:         getEnv("IPT_ALERT_SMTP_FROM", ""),
+		IPTAlertSMTPUser:         getEnv("IPT_ALERT_SMTP_USER", ""),
+		IPTAlertSMTPPass:         getEnv("IPT_ALERT_SMTP_PASS", ""),
+		IPTAlertIncludeRaw:       getEnvBool("IPT_ALERT_INCLUDE_RAW_ERRORS", true),
+		IPTRateLimitPerHour:      iptRateLimit,
+		UIDefaultTheme:           strings.ToLower(getEnv("UI_DEFAULT_THEME", "auto")),
+		CookieSecure:             strings.ToLower(getEnv("COOKIE_SECURE", "auto")),
+		LangCookieName:           getEnv("LANG_COOKIE_NAME", "sr_lang"),
+		LangCookieDays:           langCookieDays,
+		MailboxCookieName:        getEnv("MAILBOX_COOKIE_NAME", "sr_mailbox"),
 	}
 
 	if cfg.EnableTLS && (cfg.TLSCertFile == "" || cfg.TLSKeyFile == "") {
 		return cfg, fmt.Errorf("TLS_CERT_FILE and TLS_KEY_FILE must be set when ENABLE_TLS=true")
 	}
 	if cfg.MaxMessageBytes < 512*1024 {
-		return cfg, fmt.Errorf("MAX_MESSAGE_BYTES too low, must be >= 524288")
+		return cfg, fmt.Errorf("MAX_MESSAGE_BYTES=%d is below 524288 (512 KiB); set a larger value, or remove it to use the default", cfg.MaxMessageBytes)
 	}
-	if cfg.MaxActivePerIP <= 0 || cfg.MaxActiveGlobal <= 0 || cfg.WebRateLimitPerMin <= 0 || cfg.WebBurstPer10Sec <= 0 || cfg.SMTPRateLimitPerHour <= 0 || cfg.SMTPBurstPerMin <= 0 {
-		return cfg, fmt.Errorf("rate and mailbox limits must be > 0")
+	for _, l := range []struct {
+		key   string
+		value int
+	}{
+		{"MAX_ACTIVE_MAILBOXES_PER_IP", cfg.MaxActivePerIP},
+		{"MAX_ACTIVE_MAILBOXES_GLOBAL", cfg.MaxActiveGlobal},
+		{"WEB_RATE_LIMIT_PER_MIN", cfg.WebRateLimitPerMin},
+		{"WEB_BURST_PER_10_SEC", cfg.WebBurstPer10Sec},
+		{"SMTP_RATE_LIMIT_PER_HOUR", cfg.SMTPRateLimitPerHour},
+		{"SMTP_BURST_PER_MIN", cfg.SMTPBurstPerMin},
+	} {
+		if l.value <= 0 {
+			return cfg, fmt.Errorf("%s=%d is below 1; set a whole number of at least 1, or remove it to use the default", l.key, l.value)
+		}
 	}
-	if cfg.MailboxTTL <= 0 || cfg.RetentionTTL <= 0 || cfg.CleanupInterval <= 0 {
-		return cfg, fmt.Errorf("TTL and cleanup intervals must be > 0")
+	if err := checkRequestLimits(cfg); err != nil {
+		return cfg, err
+	}
+	for _, d := range []struct {
+		key   string
+		value time.Duration
+	}{
+		{"MAILBOX_TTL", cfg.MailboxTTL},
+		{"DATA_RETENTION_TTL", cfg.RetentionTTL},
+		{"CLEANUP_INTERVAL", cfg.CleanupInterval},
+	} {
+		if d.value <= 0 {
+			return cfg, fmt.Errorf("%s=%s is not a positive duration; set a value like 30m or 24h, or remove it to use the default", d.key, d.value)
+		}
 	}
 	if !slices.Contains(UIThemes, cfg.UIDefaultTheme) {
 		return cfg, fmt.Errorf("UI_DEFAULT_THEME=%q is not a display option of the web interface; set it to one of %s, or remove it to follow the visitor's system setting", cfg.UIDefaultTheme, strings.Join(UIThemes, ", "))
@@ -172,6 +224,18 @@ func Load() (Config, error) {
 		return cfg, err
 	}
 	return cfg, nil
+}
+
+// checkRequestLimits validates the per-IP limits for report payloads and
+// placement tests against their bounds.
+func checkRequestLimits(cfg Config) error {
+	if cfg.PayloadRateLimitPerMin < 1 || cfg.PayloadRateLimitPerMin > MaxPayloadRateLimitPerMin {
+		return fmt.Errorf("PAYLOAD_RATE_LIMIT_PER_MIN=%d is outside 1 to %d; it sets how many encrypted reports one IP address may fetch per minute, and as many rechecks and simulator runs; remove it to use %d", cfg.PayloadRateLimitPerMin, MaxPayloadRateLimitPerMin, DefaultPayloadRateLimitPerMin)
+	}
+	if cfg.IPTRateLimitPerHour < 1 || cfg.IPTRateLimitPerHour > MaxIPTRateLimitPerHour {
+		return fmt.Errorf("IPT_RATE_LIMIT_PER_HOUR=%d is outside 1 to %d; it sets how many placement tests one IP address may start per hour; remove it to use %d", cfg.IPTRateLimitPerHour, MaxIPTRateLimitPerHour, DefaultIPTRateLimitPerHour)
+	}
+	return nil
 }
 
 // checkCookieSettings validates COOKIE_SECURE, the cookie names and the

@@ -216,6 +216,93 @@ func TestLoadRejectsInvalidCookieSettings(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultsRequestLimits(t *testing.T) {
+	t.Setenv("PAYLOAD_RATE_LIMIT_PER_MIN", "")
+	t.Setenv("IPT_RATE_LIMIT_PER_HOUR", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.PayloadRateLimitPerMin != 30 || cfg.IPTRateLimitPerHour != 3 {
+		t.Fatalf("unexpected request limit defaults: payload=%d ipt=%d", cfg.PayloadRateLimitPerMin, cfg.IPTRateLimitPerHour)
+	}
+}
+
+func TestLoadParsesRequestLimits(t *testing.T) {
+	t.Setenv("PAYLOAD_RATE_LIMIT_PER_MIN", " 45 ")
+	t.Setenv("IPT_RATE_LIMIT_PER_HOUR", "7")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.PayloadRateLimitPerMin != 45 || cfg.IPTRateLimitPerHour != 7 {
+		t.Fatalf("unexpected request limits: payload=%d ipt=%d", cfg.PayloadRateLimitPerMin, cfg.IPTRateLimitPerHour)
+	}
+	for _, tc := range []struct{ key, value string }{
+		{"PAYLOAD_RATE_LIMIT_PER_MIN", "1"},
+		{"PAYLOAD_RATE_LIMIT_PER_MIN", "600"},
+		{"IPT_RATE_LIMIT_PER_HOUR", "1"},
+		{"IPT_RATE_LIMIT_PER_HOUR", "60"},
+	} {
+		t.Run(tc.key+"="+tc.value, func(t *testing.T) {
+			t.Setenv(tc.key, tc.value)
+			if _, err := Load(); err != nil {
+				t.Errorf("%s=%s rejected: %v", tc.key, tc.value, err)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsInvalidRequestLimits(t *testing.T) {
+	cases := []struct {
+		key, value string
+		parts      []string
+	}{
+		{"PAYLOAD_RATE_LIMIT_PER_MIN", "0", []string{"PAYLOAD_RATE_LIMIT_PER_MIN=0", "1 to 600", "encrypted reports", "use 30"}},
+		{"PAYLOAD_RATE_LIMIT_PER_MIN", "601", []string{"PAYLOAD_RATE_LIMIT_PER_MIN=601", "1 to 600"}},
+		{"PAYLOAD_RATE_LIMIT_PER_MIN", "thirty", []string{"PAYLOAD_RATE_LIMIT_PER_MIN", `"thirty"`, "whole number", "30"}},
+		{"IPT_RATE_LIMIT_PER_HOUR", "0", []string{"IPT_RATE_LIMIT_PER_HOUR=0", "1 to 60", "placement tests", "use 3"}},
+		{"IPT_RATE_LIMIT_PER_HOUR", "61", []string{"IPT_RATE_LIMIT_PER_HOUR=61", "1 to 60"}},
+		{"IPT_RATE_LIMIT_PER_HOUR", "3.5", []string{"IPT_RATE_LIMIT_PER_HOUR", `"3.5"`, "whole number"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.key+"="+tc.value, func(t *testing.T) {
+			t.Setenv(tc.key, tc.value)
+			_, err := Load()
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			for _, part := range tc.parts {
+				if !strings.Contains(err.Error(), part) {
+					t.Errorf("error message %q should mention %q", err.Error(), part)
+				}
+			}
+		})
+	}
+}
+
+func TestLoadNamesTheSettingOutsideItsBounds(t *testing.T) {
+	cases := []struct {
+		key, value, want string
+	}{
+		{"WEB_BURST_PER_10_SEC", "0", "WEB_BURST_PER_10_SEC=0 is below 1"},
+		{"MAX_ACTIVE_MAILBOXES_GLOBAL", "-5", "MAX_ACTIVE_MAILBOXES_GLOBAL=-5 is below 1"},
+		{"SMTP_BURST_PER_MIN", "0", "SMTP_BURST_PER_MIN=0 is below 1"},
+		{"MAILBOX_TTL", "-1h", "MAILBOX_TTL=-1h0m0s is not a positive duration"},
+		{"CLEANUP_INTERVAL", "0s", "CLEANUP_INTERVAL=0s is not a positive duration"},
+		{"MAX_MESSAGE_BYTES", "1024", "MAX_MESSAGE_BYTES=1024 is below 524288"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.key, func(t *testing.T) {
+			t.Setenv(tc.key, tc.value)
+			_, err := Load()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestSplitCSV(t *testing.T) {
 	got := splitCSV(" a, ,b ,, c ")
 	if len(got) != 3 || got[0] != "a" || got[1] != "b" || got[2] != "c" {

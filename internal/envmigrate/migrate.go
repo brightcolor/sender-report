@@ -16,9 +16,11 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/brightcolor/sender-report/internal/config"
 	"github.com/brightcolor/sender-report/internal/version"
 )
 
@@ -77,6 +79,8 @@ var All = []VarDef{
 	{Key: "WEB_BURST_PER_10_SEC", Default: "20", Comment: "Web request burst per 10 s per IP"},
 	{Key: "SMTP_RATE_LIMIT_PER_HOUR", Default: "200", Comment: "SMTP connections allowed per hour per IP"},
 	{Key: "SMTP_BURST_PER_MIN", Default: "40", Comment: "SMTP burst per minute per IP"},
+	{Key: "PAYLOAD_RATE_LIMIT_PER_MIN", Default: strconv.Itoa(config.DefaultPayloadRateLimitPerMin),
+		Comment: fmt.Sprintf("Encrypted reports one IP may fetch per minute; rechecks and simulator runs count separately against the same number (1 to %d)", config.MaxPayloadRateLimitPerMin)},
 	{Key: "TRUSTED_PROXY_CIDRS", Default: "", Comment: "Comma-separated CIDRs whose X-Forwarded-For header is trusted"},
 
 	// ── Optional checks ───────────────────────────────────────────────────────
@@ -111,6 +115,10 @@ var All = []VarDef{
 
 	// ── Env migration ─────────────────────────────────────────────────────────
 	{Group: "Env migration", Key: "ENV_FILE", Default: "/config/.env", Comment: "Path inside the container to the mounted .env file; enables automatic migration on startup"},
+
+	// ── Inbox placement testing ───────────────────────────────────────────────
+	{Group: "Inbox placement testing", Key: "IPT_RATE_LIMIT_PER_HOUR", Default: strconv.Itoa(config.DefaultIPTRateLimitPerHour),
+		Comment: fmt.Sprintf("Placement tests one IP may start per hour (1 to %d)", config.MaxIPTRateLimitPerHour)},
 }
 
 // MigrateFile reads the .env file at path, appends every variable from [All]

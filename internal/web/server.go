@@ -51,12 +51,12 @@ type Server struct {
 	tmpl           *template.Template
 	limiter        *ratelimit.Limiter
 	burstLimiter   *ratelimit.Limiter
-	payloadLimiter *ratelimit.Limiter // tighter per-IP limit for /api/payload/
+	payloadLimiter *ratelimit.Limiter // PAYLOAD_RATE_LIMIT_PER_MIN per IP for /api/payload/, rechecks and the simulator
 	metrics        *telemetry.Counters
 	staticFS       http.Handler
 	trustedProxy   []*net.IPNet
 	engine         *analyzer.Engine   // for live single-check rechecks
-	iptLimiter     *ratelimit.Limiter // max 3 placement tests per IP per hour
+	iptLimiter     *ratelimit.Limiter // IPT_RATE_LIMIT_PER_HOUR placement tests per IP
 	seeds          *ipt.SeedConfig    // nil when feature disabled
 	iptMailer      *ipt.Mailer        // nil when email alerting not configured
 	// iptHealth caches the latest AccountStatus per account (key=provider+":"+user).
@@ -544,8 +544,8 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		tmpl:           t,
 		limiter:        ratelimit.New(time.Minute, cfg.WebRateLimitPerMin),
 		burstLimiter:   ratelimit.New(10*time.Second, cfg.WebBurstPer10Sec),
-		payloadLimiter: ratelimit.New(time.Minute, 30), // max 30 payload fetches/min per IP
-		iptLimiter:     ratelimit.New(time.Hour, 3),    // max 3 placement tests per IP per hour
+		payloadLimiter: ratelimit.New(time.Minute, cfg.PayloadRateLimitPerMin),
+		iptLimiter:     ratelimit.New(time.Hour, cfg.IPTRateLimitPerHour),
 		metrics:        metrics,
 		staticFS:       http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join("internal", "web", "static")))),
 		trustedProxy:   trustedProxy,
@@ -2141,6 +2141,48 @@ func jsonResp(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
+// apiError answers an API request with status, the technical reason as
+// "error" and an explanation with the next step in the visitor's language as
+// "message".
+func (s *Server) apiError(w http.ResponseWriter, r *http.Request, status int, reason, de, en string) {
+	jsonResp(w, status, map[string]string{"error": reason, "message": pickLang(string(s.lang(r)), de, en)})
+}
+
+// countNoun writes n followed by the singular or the plural noun.
+func countNoun(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return strconv.Itoa(n) + " " + many
+}
+
+// waitSeconds is d in whole seconds, rounded up, at least 1. It serves as the
+// value of a Retry-After header.
+func waitSeconds(d time.Duration) int {
+	secs := int((d + time.Second - 1) / time.Second)
+	if secs < 1 {
+		return 1
+	}
+	return secs
+}
+
+// waitText writes the wait d for a message in lang: in seconds below a
+// minute, in minutes from there on, rounded up.
+func waitText(lang i18n.Lang, d time.Duration) string {
+	secs := waitSeconds(d)
+	if secs < 60 {
+		if lang == i18n.EN {
+			return countNoun(secs, "second", "seconds")
+		}
+		return countNoun(secs, "Sekunde", "Sekunden")
+	}
+	mins := (secs + 59) / 60
+	if lang == i18n.EN {
+		return countNoun(mins, "minute", "minutes")
+	}
+	return countNoun(mins, "Minute", "Minuten")
+}
+
 // setMailboxCookie stores the mailbox created by the form fallback (without
 // JavaScript) in the mailbox cookie (MAILBOX_COOKIE_NAME); it expires with the
 // mailbox.
@@ -2753,20 +2795,27 @@ func (r *statusRecorder) Flush() {
 
 // iptStartAPI starts a new inbox placement test.
 // Route: POST /api/mailboxes/{token}/ipt/start
+//
+// Every error answer carries the technical reason as "error" and an
+// explanation with the next step in the visitor's language as "message".
 func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToken string) {
 	if s.seeds == nil {
-		jsonResp(w, http.StatusServiceUnavailable, map[string]string{"error": "inbox placement testing not configured"})
+		s.apiError(w, r, http.StatusServiceUnavailable, "inbox placement testing not configured",
+			"Platzierungstests stehen auf diesem Server gerade nicht zur Verfügung. Laden Sie die Seite neu, um den aktuellen Stand zu sehen.",
+			"Placement tests are unavailable on this server right now. Reload the page to see the current state.")
 		return
 	}
 	ip := s.clientIP(r)
-	if !s.iptLimiter.Allow("ipt:" + ip) {
-		jsonResp(w, http.StatusTooManyRequests, map[string]string{"error": "rate limit: max 3 placement tests per hour"})
+	if key := "ipt:" + ip; !s.iptLimiter.Allow(key) {
+		s.placementRateLimited(w, r, s.iptLimiter.RetryAfter(key))
 		return
 	}
 	ctx := r.Context()
 	mb, err := s.store.GetMailboxByToken(ctx, mailboxToken)
 	if err != nil {
-		jsonResp(w, http.StatusNotFound, map[string]string{"error": "mailbox not found"})
+		s.apiError(w, r, http.StatusNotFound, "mailbox not found",
+			"Dieses Test-Postfach gibt es nicht mehr, wahrscheinlich ist es abgelaufen. Legen Sie auf der Startseite ein neues an und starten Sie den Test dort.",
+			"This test mailbox no longer exists; it has probably expired. Create a new one on the home page and start the test there.")
 		return
 	}
 
@@ -2774,13 +2823,17 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 		SelectedProviders []string `json:"selected_providers"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err != nil {
-		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		s.apiError(w, r, http.StatusBadRequest, "invalid body",
+			"Die Anfrage zum Start des Tests ließ sich nicht lesen. Laden Sie die Seite neu und starten Sie den Test erneut.",
+			"The request to start the test could not be read. Reload the page and start the test again.")
 		return
 	}
 
 	allProviders := s.seeds.Filter(body.SelectedProviders)
 	if len(allProviders) == 0 {
-		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "no valid providers selected"})
+		s.apiError(w, r, http.StatusBadRequest, "no valid providers selected",
+			"Keiner der gewählten Anbieter ist auf diesem Server eingerichtet. Wählen Sie mindestens einen der angezeigten Anbieter aus.",
+			"None of the selected providers is set up on this server. Select at least one of the providers shown.")
 		return
 	}
 
@@ -2809,8 +2862,12 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 		}
 	}
 	if len(providers) == 0 {
+		names := strings.Join(unavailable, ", ")
 		jsonResp(w, http.StatusServiceUnavailable, map[string]any{
-			"error":       "all selected providers are currently unavailable",
+			"error": "all selected providers are currently unavailable",
+			"message": pickLang(string(s.lang(r)),
+				"Die gewählten Anbieter sind gerade nicht erreichbar: "+names+". Wählen Sie andere Anbieter oder starten Sie den Test später erneut.",
+				"The selected providers cannot be reached right now: "+names+". Select other providers or start the test again later."),
 			"unavailable": unavailable,
 		})
 		return
@@ -2818,7 +2875,10 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 
 	pt, err := randomToken(3) // 6 hex chars
 	if err != nil {
-		jsonResp(w, http.StatusInternalServerError, map[string]string{"error": "token error"})
+		s.logger.Printf("ipt: placement token error: %v", err)
+		s.apiError(w, r, http.StatusInternalServerError, "token error",
+			"Der Server konnte kein Token für den Test erzeugen. Starten Sie den Test erneut; tritt der Fehler wieder auf, informieren Sie den Betreiber.",
+			"The server could not create a token for the test. Start the test again; if the error persists, tell the operator.")
 		return
 	}
 	subjectTag := "[SR-" + pt + "]"
@@ -2826,7 +2886,10 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 	expiresAt := time.Now().UTC().Add(10 * time.Minute)
 
 	if err := s.store.CreatePlacementTest(ctx, mb.ID, pt, infos, expiresAt); err != nil {
-		jsonResp(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		s.logger.Printf("ipt: store placement test: %v", err)
+		s.apiError(w, r, http.StatusInternalServerError, "db error",
+			"Der Server konnte den Test nicht speichern. Starten Sie den Test erneut; tritt der Fehler wieder auf, informieren Sie den Betreiber.",
+			"The server could not save the test. Start the test again; if the error persists, tell the operator.")
 		return
 	}
 
@@ -2871,6 +2934,22 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 		resp["unavailable_providers"] = unavailable
 	}
 	jsonResp(w, http.StatusOK, resp)
+}
+
+// placementRateLimited answers a placement test start beyond
+// IPT_RATE_LIMIT_PER_HOUR with 429, a Retry-After header and a message in the
+// visitor's language that names the limit and when the next test can start.
+func (s *Server) placementRateLimited(w http.ResponseWriter, r *http.Request, wait time.Duration) {
+	n := s.cfg.IPTRateLimitPerHour
+	w.Header().Set("Retry-After", strconv.Itoa(waitSeconds(wait)))
+	jsonResp(w, http.StatusTooManyRequests, map[string]string{
+		"error": "rate limit: max " + countNoun(n, "placement test", "placement tests") + " per hour",
+		"message": pickLang(string(s.lang(r)),
+			fmt.Sprintf("Von Ihrer IP-Adresse wurden in der letzten Stunde schon %s gestartet, das ist die Obergrenze dieses Servers. Den nächsten Test können Sie in %s starten.",
+				countNoun(n, "Platzierungstest", "Platzierungstests"), waitText(i18n.DE, wait)),
+			fmt.Sprintf("Your IP address has already started %s in the last hour, which is the limit on this server. You can start the next test in %s.",
+				countNoun(n, "placement test", "placement tests"), waitText(i18n.EN, wait))),
+	})
 }
 
 // iptEventsAPI streams placement test progress via SSE.

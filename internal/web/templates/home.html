@@ -685,6 +685,21 @@
       if (el) el.innerHTML = html;
     }
 
+    // iptStartFailure is the message for a start the server turned down: the
+    // explanation it sent along, otherwise one that names the HTTP status.
+    function iptStartFailure(status, data) {
+      if (data && data.message) return data.message;
+      return LANG==='en'
+        ? 'The test could not be started (HTTP ' + status + '). Start it again in a moment.'
+        : 'Der Test ließ sich nicht starten (HTTP ' + status + '). Starten Sie ihn gleich noch einmal.';
+    }
+
+    function iptFailStart(message) {
+      startBtn.disabled = false;
+      startBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>' + (LANG==='en'?'Start test':'Test starten');
+      alert(message);
+    }
+
     var startBtn = document.getElementById('ipt-start-btn');
     if (startBtn) {
       startBtn.addEventListener('click', async function() {
@@ -694,25 +709,30 @@
         if (!selected.length) return;
         startBtn.disabled = true;
         startBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + (LANG==='en'?'Starting…':'Startet…');
+        var res, data = null;
         try {
-          var res = await fetch('/api/mailboxes/' + mailboxToken + '/ipt/start', {
+          res = await fetch('/api/mailboxes/' + mailboxToken + '/ipt/start', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({selected_providers: selected})
           });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          var data = await res.json();
-          iptPtToken = data.placement_token;
-          iptMailboxToken = mailboxToken;
-          document.getElementById('ipt-subject-tag').textContent = data.subject_tag || '';
-          renderSeedList(data.seeds || []);
-          showStep('send');
-          startSSE(mailboxToken, iptPtToken);
         } catch(e) {
-          startBtn.disabled = false;
-          startBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>' + (LANG==='en'?'Start test':'Test starten');
-          alert(LANG==='en'?'Error starting test. Please try again.':'Fehler beim Starten des Tests. Bitte erneut versuchen.');
+          iptFailStart(LANG==='en'
+            ? 'The server cannot be reached. Check your internet connection and start the test again.'
+            : 'Der Server ist nicht erreichbar. Prüfen Sie Ihre Internetverbindung und starten Sie den Test erneut.');
+          return;
         }
+        try { data = await res.json(); } catch(e) {}
+        if (!res.ok || !data || !data.placement_token) {
+          iptFailStart(iptStartFailure(res.status, data));
+          return;
+        }
+        iptPtToken = data.placement_token;
+        iptMailboxToken = mailboxToken;
+        document.getElementById('ipt-subject-tag').textContent = data.subject_tag || '';
+        renderSeedList(data.seeds || []);
+        showStep('send');
+        startSSE(mailboxToken, iptPtToken);
       });
     }
 
