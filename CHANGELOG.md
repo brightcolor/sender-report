@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.40.2] - 2026-10-05
+
 ### Security
 - **Der Container läuft als Benutzer `app`** — das Image legt `USER app` fest; uid 100
   und gid 101 stehen jetzt fest im Dockerfile. Vor dem Öffnen der Datenbank prüft der
