@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.40.1] - 2026-10-05
+
+### Security
+- **Abhängigkeiten mit bekannten Schwachstellen aktualisiert** — `golang.org/x/net`
+  0.50.0 → 0.58.0, `golang.org/x/text` 0.34.0 → 0.41.0, `golang.org/x/crypto` 0.48.0 →
+  0.55.0 und `golang.org/x/mod` 0.33.0 → 0.40.0. Die Updates betreffen die Analyse
+  eingehender Mails (HTML-Parser aus `x/net/html`, Umwandlung internationaler Domainnamen
+  in `x/net/idna` und `x/text`). Die Lücken in `x/crypto` (SSH,
+  SSH-Agent, known_hosts) und `x/mod` (sumdb) liegen in Paketen, die sender.report nicht
+  verwendet; mit dem Update verschwinden sie aus den Scans. Die Go-Version bleibt 1.25.
+- **Release-Workflow: Die Versionseingabe bleibt reiner Text** — Die eingegebene Version
+  erreicht die Skripte von `release.yml` als Umgebungsvariable, die Prüfung greift vor jeder
+  Verwendung, und die Meldungen bei ungültiger oder schon
+  vergebener Version nennen den nächsten Schritt.
+- **Container: Entrypoint und Binary gehören root** — `/app` mit Binary, Vorlagen,
+  statischen Dateien und `entrypoint.sh` gehört root und ist für den Dienst nur lesbar. Nur
+  `/data` gehört dem Benutzer `app`; der Dienst läuft wie bisher als `app`.
+
+### Fixed
+- **THIRD_PARTY_NOTICES.md nennt alle gelinkten Module** — die Lizenzen von `go-imap/v2`,
+  `go-message`, `go-sasl` und `google/uuid` fehlten, obwohl diese Module im Binary stecken.
+  Der Generator erstellt die Liste jetzt für das Linux-Image (`NOTICES_GOOS` und
+  `NOTICES_GOARCH` wählen ein anderes Ziel) und schreibt auch die Werkbank-Schriften, die
+  bisher nur von Hand eingetragen waren.
+
 ## [1.40.0] - 2026-09-28
 
 ### Fixed
