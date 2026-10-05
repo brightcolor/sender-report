@@ -93,10 +93,24 @@ The installer asks about optional services (`rspamd`, `redis`) and writes a matc
 ```bash
 cp .env.example .env          # adjust image, ports, optional TLS/proxy
 docker compose pull
+mkdir -p data && sudo chown -R 100:101 data   # the container user, see below
 docker compose up -d
 ```
 
 UI: `http://<host>:9090` (or your reverse-proxy URL).
+
+### Container user and data directory
+
+The container runs as the unprivileged user `app` (uid 100, gid 101) and keeps its
+data in `DATA_DIR` (`./data` on the host). A `./data` that Docker creates itself
+belongs to root, so a new installation hands it over once:
+`sudo chown -R 100:101 ./data`. The quickstart script does this for you.
+Installations that ran an earlier image already have `./data` owned by `app`.
+
+At startup the server checks that it can write `DATA_DIR` and the database files.
+If it cannot, it stops with a log line (`docker compose logs sender-report`) that
+names the path and the `chown` command. Containers started as root
+(`user: root`) hand `DATA_DIR` to `app` themselves and then run the server as `app`.
 
 ## Requirements
 
@@ -185,6 +199,8 @@ Mount the cert directory as a volume (`./certs:/certs:ro`). Behind a proxy use
 - Rate limits (web & SMTP), maximum message size, per-IP mailbox limits.
 - TTL-based data lifecycle (automatic deletion).
 - No external CDNs/trackers — all assets are served locally.
+- The container runs as the unprivileged user `app`; binary, templates and static
+  files belong to root.
 
 ## API
 

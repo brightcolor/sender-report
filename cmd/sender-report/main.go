@@ -54,8 +54,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
-		slogLogger.Error("data dir error", "error", err)
+	if err := checkStorage(cfg.DataDir, cfg.DBPath); err != nil {
+		slogLogger.Error("storage is not writable", "error", err)
 		os.Exit(1)
 	}
 
