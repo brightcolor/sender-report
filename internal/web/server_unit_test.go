@@ -423,19 +423,17 @@ func TestTechLabelsFollowTheLanguage(t *testing.T) {
 	})
 
 	t.Run("the client-side table carries the same language", func(t *testing.T) {
-		en, err := techLabelsJSON("en")
-		if err != nil {
-			t.Fatalf("techLabelsJSON: %v", err)
+		en := techLabelTable("en")
+		if en["remote_ip"] != "Sending IP" {
+			t.Errorf("English table has %q for remote_ip, want its English caption", en["remote_ip"])
 		}
-		if !strings.Contains(string(en), "Sending IP") {
-			t.Error("English table is missing its English captions")
+		for key, caption := range en {
+			if caption == "Sendende IP" {
+				t.Errorf("English table still carries the German caption under %q", key)
+			}
 		}
-		if strings.Contains(string(en), "Sendende IP") {
-			t.Error("English table still carries the German caption")
-		}
-		de, _ := techLabelsJSON("de")
-		if !strings.Contains(string(de), "Sendende IP") {
-			t.Error("German table lost its captions")
+		if de := techLabelTable("de"); de["remote_ip"] != "Sendende IP" {
+			t.Errorf("German table has %q for remote_ip", de["remote_ip"])
 		}
 	})
 }

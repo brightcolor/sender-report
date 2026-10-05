@@ -9,7 +9,7 @@ explainable checks: SPF, DKIM, DMARC, spam score, blacklists, DNS and more.
 
 [![CI](https://github.com/brightcolor/sender-report/actions/workflows/ci.yml/badge.svg)](https://github.com/brightcolor/sender-report/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Made with Go](https://img.shields.io/badge/Go-1.25-00ADD8.svg?logo=go&logoColor=white)](https://go.dev)
+[![Made with Go](https://img.shields.io/badge/Go-1.26-00ADD8.svg?logo=go&logoColor=white)](https://go.dev)
 [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 ```bash
@@ -93,10 +93,24 @@ The installer asks about optional services (`rspamd`, `redis`) and writes a matc
 ```bash
 cp .env.example .env          # adjust image, ports, optional TLS/proxy
 docker compose pull
+mkdir -p data && sudo chown -R 100:101 data   # the container user, see below
 docker compose up -d
 ```
 
 UI: `http://<host>:9090` (or your reverse-proxy URL).
+
+### Container user and data directory
+
+The container runs as the unprivileged user `app` (uid 100, gid 101) and keeps its
+data in `DATA_DIR` (`./data` on the host). A `./data` that Docker creates itself
+belongs to root, so a new installation hands it over once:
+`sudo chown -R 100:101 ./data`. The quickstart script does this for you.
+Installations that ran an earlier image already have `./data` owned by `app`.
+
+At startup the server checks that it can write `DATA_DIR` and the database files.
+If it cannot, it stops with a log line (`docker compose logs sender-report`) that
+names the path and the `chown` command. Containers started as root
+(`user: root`) hand `DATA_DIR` to `app` themselves and then run the server as `app`.
 
 ## Requirements
 
@@ -146,7 +160,7 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | Variable | Purpose |
 |---|---|
 | `SENDER_REPORT_IMAGE` | container image (pin a version for production) |
-| `PUBLIC_BASE_URL` | public URL; empty = derive from the request |
+| `PUBLIC_BASE_URL` | public URL; empty = derive from the request. With `FORCE_HTTPS` its host is the redirect target |
 | `SMTP_DOMAIN` | domain of generated addresses; empty = request host |
 | `HTTP_PORT` / `SMTP_PORT` | host ports (container: `:8080` / `:2525`) |
 | `ENABLE_TLS`, `TLS_CERT_FILE`, `TLS_KEY_FILE`, `FORCE_HTTPS` | built-in TLS / redirect |
@@ -160,6 +174,8 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | `ENABLE_INBOX_PLACEMENT`, `SEED_ACCOUNTS_FILE` | inbox placement testing via operator-configured seed accounts (default off) |
 | `ALERT_WEBHOOK_URL` | webhook on processing failures |
 | `UI_DEFAULT_THEME` | display option for new visitors: `auto` (follows the system, default), `light`, `dark` or `werkbank` |
+| `COOKIE_SECURE` | Secure attribute of cookies: `auto` (default; HTTPS requests and an `https://` `PUBLIC_BASE_URL`), `always` or `never` (plain-HTTP test setups) |
+| `LANG_COOKIE_NAME`, `LANG_COOKIE_DAYS`, `MAILBOX_COOKIE_NAME` | cookie names (`sr_lang`, `sr_mailbox`) and the days the language choice is kept (365, at most 400) |
 
 > The third-party checks (domain age, blocklists) contact external providers with
 > **domain names** (never mail content) and are off by default. Each user can enable them per
@@ -185,6 +201,9 @@ Mount the cert directory as a volume (`./certs:/certs:ro`). Behind a proxy use
 - Rate limits (web & SMTP), maximum message size, per-IP mailbox limits.
 - TTL-based data lifecycle (automatic deletion).
 - No external CDNs/trackers — all assets are served locally.
+- Cookies carry `HttpOnly`, `SameSite=Lax` and, over HTTPS, `Secure`.
+- The container runs as the unprivileged user `app`; binary, templates and static
+  files belong to root.
 
 ## API
 

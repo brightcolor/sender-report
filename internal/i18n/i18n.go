@@ -1,6 +1,7 @@
 // Package i18n provides simple two-language (DE/EN) support for the web UI.
 // Language is determined by:
-//  1. The "sr_lang" cookie (manual user override, set via the switcher).
+//  1. The language cookie (manual user override, set via the switcher; its
+//     name comes from LANG_COOKIE_NAME).
 //  2. The Accept-Language request header (browser preference).
 //  3. Default: English.
 //
@@ -21,13 +22,11 @@ const (
 	EN Lang = "en"
 )
 
-// CookieName is the cookie used for the manual language override.
-const CookieName = "sr_lang"
-
-// Detect returns the preferred language for the given request.
-func Detect(r *http.Request) Lang {
+// Detect returns the preferred language for the given request. cookieName is
+// the cookie the language switcher sets (LANG_COOKIE_NAME).
+func Detect(r *http.Request, cookieName string) Lang {
 	// 1. Manual override cookie.
-	if c, err := r.Cookie(CookieName); err == nil {
+	if c, err := r.Cookie(cookieName); err == nil {
 		if l := Lang(c.Value); l == DE || l == EN {
 			return l
 		}

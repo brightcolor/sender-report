@@ -18,17 +18,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    # Workflow inputs reach the scripts below only as environment variables.
-    # A ${{ }} expression inside run: is pasted into the script text before
-    # bash parses it, so a crafted version string could run commands before
-    # the format check in "Validate version" ever sees it.
+    # Workflow inputs reach the scripts below as environment variables, and
+    # "Validate version" checks the format before any other step uses it.
     env:
       VERSION: ${{ inputs.version }}
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.target }}
           fetch-depth: 0

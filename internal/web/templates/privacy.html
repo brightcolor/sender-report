@@ -246,11 +246,18 @@
                 </thead>
                 <tbody>
                   <tr>
-                    <td><code>sr_mailbox</code></td>
-                    <td>HTTP-Cookie<br><small class="text-secondary">HttpOnly, SameSite=Lax</small></td>
+                    <td><code>{{.MailboxCookieName}}</code></td>
+                    <td>HTTP-Cookie<br><small class="text-secondary">HttpOnly, SameSite=Lax{{template "cookie-secure-note" .}}</small></td>
                     <td>Speichert den Token der aktuell aktiven Mailbox, damit sie beim Seitenaufruf wiedererkannt wird. Nicht durch JavaScript auslesbar. Wird nur im JavaScript-losen Fallback-Modus gesetzt – im normalen (verschlüsselten) Betrieb erfolgt die Wiedererkennung allein über den Browser-Speicher.</td>
                     <td>Läuft mit der Mailbox ab (Standard: 24 Stunden)</td>
                     <td><span class="badge text-bg-secondary">Nicht erforderlich</span><br><small class="text-secondary">technisch notwendig</small></td>
+                  </tr>
+                  <tr>
+                    <td><code>{{.LangCookieName}}</code></td>
+                    <td>HTTP-Cookie<br><small class="text-secondary">HttpOnly, SameSite=Lax{{template "cookie-secure-note" .}}</small></td>
+                    <td>Speichert die Sprache (<code>de</code> oder <code>en</code>), die du über den Umschalter in der Kopfleiste gewählt hast. Wird erst beim Umschalten gesetzt; nur der Server liest ihn.</td>
+                    <td>{{.LangCookieDays}} Tage</td>
+                    <td><span class="badge text-bg-secondary">Nicht erforderlich</span><br><small class="text-secondary">funktional/Komfort</small></td>
                   </tr>
                   <tr>
                     <td><code>sr:theme</code></td>
@@ -374,7 +381,7 @@
                   <td>Art. 6 Abs. 1 lit. a – Einwilligung (nur nach Zustimmung)</td>
                 </tr>
                 <tr>
-                  <td>Gewählte Darstellung (localStorage)</td>
+                  <td>Gewählte Darstellung (localStorage) und Sprache (Cookie)</td>
                   <td>Art. 6 Abs. 1 lit. f – berechtigtes Interesse an Benutzerkomfort</td>
                 </tr>
               </tbody>
@@ -512,3 +519,6 @@
 </body>
 </html>
 {{end}}
+
+{{/* Secure attribute of the cookies in the storage table, as COOKIE_SECURE sets it. */}}
+{{define "cookie-secure-note"}}{{if eq .CookieSecure "always"}}, Secure{{else if eq .CookieSecure "auto"}}, Secure bei HTTPS{{end}}{{end}}

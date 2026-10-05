@@ -173,9 +173,19 @@ setup_env_file() {
   set_env_key "ENABLE_RSPAMD"   "$ENABLE_RSPAMD"
   set_env_key "ENABLE_REDIS"    "$ENABLE_REDIS"
   set_env_key "REDIS_ADDR"      "redis:6379"
+}
 
-  # Ensure data directory exists for the bind mount
-  mkdir -p "$INSTALL_DIR/data"
+# The server in the image runs as the unprivileged user "app" and writes to
+# ./data. The directory gets the uid and gid of that user, read from the
+# pulled image itself.
+prepare_data_dir() {
+  cd "$INSTALL_DIR"
+  local uid gid
+  uid="$(docker_cmd run --rm --entrypoint id "$SENDER_REPORT_IMAGE" -u)"
+  gid="$(docker_cmd run --rm --entrypoint id "$SENDER_REPORT_IMAGE" -g)"
+  log "Handing $INSTALL_DIR/data to the container user ($uid:$gid)"
+  $SUDO mkdir -p "$INSTALL_DIR/data"
+  $SUDO chown -R "$uid:$gid" "$INSTALL_DIR/data"
 }
 
 setup_optional_services_override() {
@@ -233,6 +243,8 @@ start_stack() {
   cd "$INSTALL_DIR"
   log "Pulling container image"
   docker_cmd compose pull
+
+  prepare_data_dir
 
   log "Starting Sender-Report stack"
   docker_cmd compose up -d

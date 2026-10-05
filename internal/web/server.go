@@ -91,6 +91,11 @@ type PrivacyData struct {
 	OperatorEmail    string
 	HideTemplateNote bool
 	Lang             string
+	// Cookie settings, listed in the table of browser storage.
+	CookieSecure      string
+	LangCookieName    string
+	LangCookieDays    int
+	MailboxCookieName string
 }
 
 type MailboxData struct {
@@ -317,12 +322,11 @@ func techLabel(lang, key string) string {
 	return humanizeKey(key)
 }
 
-// techLabelsJSON exposes the label map to the client so the E2E renderer uses the
-// same labels.
-// techLabelsJSON hands the caption table to the client-side renderer, which
+// techLabelTable hands the caption table to the client-side renderer, which
 // builds the raw-data table for decrypted reports. It has to carry the same
-// language as the server-rendered half, or one report shows both.
-func techLabelsJSON(lang string) (template.JS, error) {
+// language as the server-rendered half, or one report shows both. The
+// template writes it into a script, where html/template encodes it as JSON.
+func techLabelTable(lang string) map[string]string {
 	table := techLabels
 	if i18n.Lang(lang) == i18n.EN {
 		table = make(map[string]string, len(techLabels))
@@ -333,11 +337,7 @@ func techLabelsJSON(lang string) (template.JS, error) {
 			table[k] = v
 		}
 	}
-	b, err := json.Marshal(table)
-	if err != nil {
-		return "", err
-	}
-	return template.JS(b), nil
+	return table
 }
 
 // splitLinesFn splits a newline-separated string into a slice, skipping blank
@@ -468,7 +468,7 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"rblProviders":       rblProvidersFn,
 		"splitLines":         splitLinesFn,
 		"techLabel":          techLabel,
-		"techLabelsJSON":     techLabelsJSON,
+		"techLabelTable":     techLabelTable,
 		"mailTypeLabel":      analyzer.MailTypeLabel,
 		"mailTypeIcon":       analyzer.MailTypeIcon,
 		"fmtDelta":           fmtDelta,
@@ -486,13 +486,6 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"cExplanation": func(lang string, c model.CheckResult) string { return pickLang(lang, c.Explanation, c.ExplanationEN) },
 		"cRecommendation": func(lang string, c model.CheckResult) string {
 			return pickLang(lang, c.Recommendation, c.RecommendationEN)
-		},
-		"jsonEncode": func(v any) (template.JS, error) {
-			b, err := json.Marshal(v)
-			if err != nil {
-				return "", err
-			}
-			return template.JS(b), nil
 		},
 	}).ParseGlob(filepath.Join("internal", "web", "templates", "*.html"))
 	if err != nil {
@@ -700,6 +693,9 @@ func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// withHTTPSRedirect sends plain-HTTP requests to the same path over HTTPS
+// (FORCE_HTTPS). The target host is the host of PUBLIC_BASE_URL when that is
+// set, the request host otherwise.
 func (s *Server) withHTTPSRedirect(next http.Handler) http.Handler {
 	if !s.cfg.ForceHTTPS {
 		return next
@@ -709,9 +705,43 @@ func (s *Server) withHTTPSRedirect(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		target := "https://" + s.requestHost(r) + r.URL.RequestURI()
-		http.Redirect(w, r, target, http.StatusPermanentRedirect)
+		host := s.httpsRedirectHost(r)
+		if host == "" {
+			http.Error(w, pickLang(string(s.lang(r)),
+				"Die Anfrage nennt keinen gültigen Hostnamen und lässt sich deshalb nicht auf HTTPS umleiten. Rufen Sie die Seite über ihre öffentliche Adresse auf.",
+				"The request names no valid host name, so it cannot be redirected to HTTPS. Open the page through its public address."),
+				http.StatusBadRequest)
+			return
+		}
+		target := url.URL{Scheme: "https", Host: host, Path: r.URL.Path, RawPath: r.URL.RawPath, RawQuery: r.URL.RawQuery}
+		http.Redirect(w, r, target.String(), http.StatusPermanentRedirect)
 	})
+}
+
+// hostPortPattern matches a host name, an IPv4 address or a bracketed IPv6
+// address, each with an optional port.
+var hostPortPattern = regexp.MustCompile(`^(?:[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.?|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?$`)
+
+// httpsRedirectHost is the host withHTTPSRedirect sends a request to: the host
+// of PUBLIC_BASE_URL when it is set, otherwise the request host, provided it
+// has the form host[:port]. An empty result means there is no usable host.
+func (s *Server) httpsRedirectHost(r *http.Request) string {
+	if host := s.publicHost(); host != "" {
+		return host
+	}
+	if host := s.requestHost(r); hostPortPattern.MatchString(host) {
+		return host
+	}
+	return ""
+}
+
+// publicHost is the host[:port] of PUBLIC_BASE_URL, or "" when it is unset.
+func (s *Server) publicHost() string {
+	u, err := url.Parse(s.cfg.PublicBaseURL)
+	if err != nil || !hostPortPattern.MatchString(u.Host) {
+		return ""
+	}
+	return u.Host
 }
 
 func (s *Server) withRateLimit(next http.Handler) http.Handler {
@@ -745,11 +775,16 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte("ok"))
 }
 
-// setLang handles POST /lang?l=de|en to set the language preference cookie
-// and redirect back to the referring page.
+// setLang handles POST /lang?l=de|en: it stores the choice in the language
+// cookie (LANG_COOKIE_NAME, kept for LANG_COOKIE_DAYS) and returns the visitor
+// to the page the switcher sat on.
 func (s *Server) setLang(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, pickLang(string(s.lang(r)),
+			"Die Sprache wechseln Sie über den Umschalter oben auf der Seite.",
+			"Change the language with the switcher at the top of the page."),
+			http.StatusMethodNotAllowed)
 		return
 	}
 	lang := i18n.Lang(r.FormValue("l"))
@@ -757,17 +792,51 @@ func (s *Server) setLang(w http.ResponseWriter, r *http.Request) {
 		lang = i18n.EN
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:     i18n.CookieName,
+		Name:     s.cfg.LangCookieName,
 		Value:    string(lang),
 		Path:     "/",
-		MaxAge:   365 * 24 * 3600,
+		MaxAge:   s.cfg.LangCookieDays * secondsPerDay,
+		HttpOnly: true,
+		Secure:   s.secureCookies(r),
 		SameSite: http.SameSiteLaxMode,
 	})
-	ref := r.Header.Get("Referer")
-	if ref == "" {
-		ref = "/"
+	http.Redirect(w, r, localReturnPath(r.Header.Get("Referer")), http.StatusSeeOther)
+}
+
+const secondsPerDay = 24 * 60 * 60
+
+// localReturnPath is the page the language switch returns to: path and query
+// of the referring page, applied to this instance, or "/" when the request
+// carries no usable referrer.
+func localReturnPath(referer string) string {
+	ref, err := url.Parse(referer)
+	if err != nil {
+		return "/"
 	}
-	http.Redirect(w, r, ref, http.StatusSeeOther)
+	path := ref.EscapedPath()
+	// Browsers read //name and /\name as a host reference, so the result
+	// keeps to paths with a single leading slash.
+	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.HasPrefix(path, `/\`) {
+		return "/"
+	}
+	if ref.RawQuery != "" {
+		path += "?" + ref.RawQuery
+	}
+	return path
+}
+
+// lang is the language of the response to r: the choice stored in the
+// language cookie, otherwise the browser preference.
+func (s *Server) lang(r *http.Request) i18n.Lang {
+	return i18n.Detect(r, s.cfg.LangCookieName)
+}
+
+// secureCookies reports whether cookies in the response to r carry the Secure
+// attribute (COOKIE_SECURE, see config.CookieSecureModes).
+func (s *Server) secureCookies(r *http.Request) bool {
+	mode := s.cfg.CookieSecure
+	return mode == "always" || (mode == "auto" &&
+		(s.requestScheme(r) == "https" || strings.HasPrefix(strings.ToLower(s.cfg.PublicBaseURL), "https://")))
 }
 
 // pickLang returns the English text when the report is being rendered in
@@ -791,7 +860,7 @@ func pickLang(lang, de, en string) string {
 // with no explanation of why and no way onward — for a reader who had done
 // nothing wrong and, in the German UI, may not read English at all.
 func (s *Server) gonePage(w http.ResponseWriter, r *http.Request, status int) {
-	lang := i18n.Detect(r)
+	lang := s.lang(r)
 	title, body, back := "Dieser Link ist abgelaufen", "Testpostfächer und ihre Berichte werden nach kurzer Zeit automatisch gelöscht — das gehört zum Datenschutzversprechen dieses Dienstes. Der Bericht dahinter existiert nicht mehr und lässt sich auch nicht wiederherstellen. Schicken Sie einfach eine neue Testmail, um einen frischen Bericht zu bekommen.", "Neuen Test starten"
 	if lang == i18n.EN {
 		title, body, back = "This link has expired", "Test mailboxes and their reports are deleted automatically after a short time — that is part of this service's privacy promise. The report behind this link no longer exists and cannot be restored. Send a new test message to get a fresh report.", "Start a new test"
@@ -894,7 +963,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		Domain:               domain,
 		PublicURL:            s.publicBaseURL(r),
 		Stats:                stats,
-		Lang:                 string(i18n.Detect(r)),
+		Lang:                 string(s.lang(r)),
 		EnableInboxPlacement: s.seeds != nil,
 		IPTProviderNames:     s.iptProviderNames(),
 		IPTProviders:         s.iptProviders(),
@@ -1011,7 +1080,7 @@ func (s *Server) createMailbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.metrics.IncMailboxesCreated()
-	setMailboxCookie(w, mb)
+	s.setMailboxCookie(w, r, mb)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -1049,7 +1118,7 @@ func (s *Server) mailboxPage(w http.ResponseWriter, r *http.Request) {
 		Now:           time.Now().UTC(),
 		PublicURL:     s.publicBaseURL(r),
 		MaxExtendDays: s.cfg.MailboxMaxExtendDays,
-		Lang:          string(i18n.Detect(r)),
+		Lang:          string(s.lang(r)),
 	})
 }
 
@@ -1102,7 +1171,7 @@ func (s *Server) reportPage(w http.ResponseWriter, r *http.Request) {
 	for _, c := range selected.Report.Checks {
 		statuses[c.Status]++
 	}
-	checkGroups := groupReportChecks(selected.Report.Checks, string(i18n.Detect(r)))
+	checkGroups := groupReportChecks(selected.Report.Checks, string(s.lang(r)))
 	linkGroups := groupLinksByDomain(selected.Report.Links)
 	msgRef := messageReference(mb.Token, selected.Message.ID)
 	s.render(w, "report", ReportData{
@@ -1114,14 +1183,14 @@ func (s *Server) reportPage(w http.ResponseWriter, r *http.Request) {
 		CheckGroups:          checkGroups,
 		LinkGroups:           linkGroups,
 		LinkTotal:            len(selected.Report.Links),
-		HeroTitle:            reportHeroTitle(selected.Report.Score, string(i18n.Detect(r))),
-		HeroSubtitle:         reportHeroSubtitle(selected.Report.Score, string(i18n.Detect(r))),
+		HeroTitle:            reportHeroTitle(selected.Report.Score, string(s.lang(r))),
+		HeroSubtitle:         reportHeroSubtitle(selected.Report.Score, string(s.lang(r))),
 		PlainTextBody:        plainText,
 		HTMLSourceBody:       htmlSource,
 		HTMLPreviewBody:      htmlSource,
 		Encrypted:            encrypted,
 		MsgRef:               msgRef,
-		Lang:                 string(i18n.Detect(r)),
+		Lang:                 string(s.lang(r)),
 		EnableInboxPlacement: s.seeds != nil,
 		IPTProviderNames:     s.iptProviderNames(),
 		IPTProviders:         s.iptProviders(),
@@ -1201,7 +1270,7 @@ func (s *Server) aboutPage(w http.ResponseWriter, r *http.Request) {
 		AppName:              s.cfg.AppName,
 		Domain:               host,
 		PublicURL:            s.publicBaseURL(r),
-		Lang:                 string(i18n.Detect(r)),
+		Lang:                 string(s.lang(r)),
 		EnableInboxPlacement: s.seeds != nil,
 	})
 }
@@ -1212,12 +1281,16 @@ func (s *Server) privacyPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, "privacy", PrivacyData{
-		AppName:          s.cfg.AppName,
-		OperatorName:     s.cfg.PrivacyOperatorName,
-		OperatorAddress:  s.cfg.PrivacyOperatorAddress,
-		OperatorEmail:    s.cfg.PrivacyOperatorEmail,
-		HideTemplateNote: s.cfg.PrivacyHideTemplateNote,
-		Lang:             string(i18n.Detect(r)),
+		AppName:           s.cfg.AppName,
+		OperatorName:      s.cfg.PrivacyOperatorName,
+		OperatorAddress:   s.cfg.PrivacyOperatorAddress,
+		OperatorEmail:     s.cfg.PrivacyOperatorEmail,
+		HideTemplateNote:  s.cfg.PrivacyHideTemplateNote,
+		Lang:              string(s.lang(r)),
+		CookieSecure:      s.cfg.CookieSecure,
+		LangCookieName:    s.cfg.LangCookieName,
+		LangCookieDays:    s.cfg.LangCookieDays,
+		MailboxCookieName: s.cfg.MailboxCookieName,
 	})
 }
 
@@ -1532,7 +1605,7 @@ func (s *Server) simulatePage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	lang := string(i18n.Detect(r))
+	lang := string(s.lang(r))
 	s.render(w, "simulate", map[string]any{
 		"Lang": lang,
 	})
@@ -2068,17 +2141,21 @@ func jsonResp(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func setMailboxCookie(w http.ResponseWriter, mb model.Mailbox) {
+// setMailboxCookie stores the mailbox created by the form fallback (without
+// JavaScript) in the mailbox cookie (MAILBOX_COOKIE_NAME); it expires with the
+// mailbox.
+func (s *Server) setMailboxCookie(w http.ResponseWriter, r *http.Request, mb model.Mailbox) {
 	maxAge := int(time.Until(mb.ExpiresAt).Seconds())
 	if maxAge < 0 {
 		maxAge = 0
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:     "sr_mailbox",
+		Name:     s.cfg.MailboxCookieName,
 		Value:    mb.Token,
 		Path:     "/",
 		MaxAge:   maxAge,
 		HttpOnly: true,
+		Secure:   s.secureCookies(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -2631,7 +2708,7 @@ func (s *Server) reportPDFHandler(w http.ResponseWriter, r *http.Request) {
 		IncludeDetails: boolParam("details", true),
 	}
 
-	groups := groupReportChecks(rep.Checks, string(i18n.Detect(r)))
+	groups := groupReportChecks(rep.Checks, string(s.lang(r)))
 	pdfGroups := make([]reportpdf.CheckGroup, len(groups))
 	for i, g := range groups {
 		pdfGroups[i] = reportpdf.CheckGroup{Name: g.Name, Hint: g.Hint, Checks: g.Checks}
@@ -2799,7 +2876,13 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 // iptEventsAPI streams placement test progress via SSE.
 // Route: GET /api/mailboxes/{token}/ipt/{pt}/events
 func (s *Server) iptEventsAPI(w http.ResponseWriter, r *http.Request, mailboxToken, ptToken string) {
-	if _, err := s.store.GetMailboxByToken(r.Context(), mailboxToken); err != nil {
+	mb, err := s.store.GetMailboxByToken(r.Context(), mailboxToken)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	// A placement test is only visible through the mailbox that started it.
+	if pt, err := s.store.GetPlacementTest(r.Context(), ptToken); err != nil || pt.MailboxID != mb.ID {
 		http.NotFound(w, r)
 		return
 	}
@@ -2820,6 +2903,9 @@ func (s *Server) iptEventsAPI(w http.ResponseWriter, r *http.Request, mailboxTok
 		pt, err := s.store.GetPlacementTest(r.Context(), ptToken)
 		if err != nil {
 			return false, err
+		}
+		if pt.MailboxID != mb.ID {
+			return false, errors.New("placement test belongs to another mailbox")
 		}
 		raw, _ := json.Marshal(pt)
 		if string(raw) != lastPayload {
@@ -2861,12 +2947,14 @@ func (s *Server) iptEventsAPI(w http.ResponseWriter, r *http.Request, mailboxTok
 // iptResultAPI returns the current state of a placement test as JSON.
 // Route: GET /api/mailboxes/{token}/ipt/{pt}
 func (s *Server) iptResultAPI(w http.ResponseWriter, r *http.Request, mailboxToken, ptToken string) {
-	if _, err := s.store.GetMailboxByToken(r.Context(), mailboxToken); err != nil {
+	mb, err := s.store.GetMailboxByToken(r.Context(), mailboxToken)
+	if err != nil {
 		jsonResp(w, http.StatusNotFound, map[string]string{"error": "mailbox not found"})
 		return
 	}
+	// A placement test is only visible through the mailbox that started it.
 	pt, err := s.store.GetPlacementTest(r.Context(), ptToken)
-	if err != nil {
+	if err != nil || pt.MailboxID != mb.ID {
 		jsonResp(w, http.StatusNotFound, map[string]string{"error": "test not found"})
 		return
 	}

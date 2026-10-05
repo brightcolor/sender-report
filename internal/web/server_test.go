@@ -295,6 +295,170 @@ func TestReportScoreHeroClassThreshold(t *testing.T) {
 	}
 }
 
+// TestPlacementTestAnswersOnlyForItsMailbox starts a placement test for one
+// mailbox and asks for it through that mailbox and through another one. Both
+// routes answer only for the mailbox that started the test.
+func TestPlacementTestAnswersOnlyForItsMailbox(t *testing.T) {
+	restoreWD := chdirToRepoRoot(t)
+	defer restoreWD()
+
+	srv, st, mb, _, _ := prepareWebTestFixture(t)
+	ctx := context.Background()
+	other, err := st.CreateMailbox(ctx, "q7wd2m4xp", "q7wd2m4xp@example.test", "", "127.0.0.1", time.Hour)
+	if err != nil {
+		t.Fatalf("create second mailbox: %v", err)
+	}
+	const ptToken = "a1b2c3"
+	if err := st.CreatePlacementTest(ctx, mb.ID, ptToken, nil, time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("create placement test: %v", err)
+	}
+
+	// The events route streams until the test ends; the deadline closes the
+	// stream, so a route that answers with it still returns its status here.
+	status := func(path string) int {
+		reqCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		req := httptest.NewRequest(http.MethodGet, path, nil).WithContext(reqCtx)
+		rr := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rr, req)
+		return rr.Code
+	}
+	if got := status("/api/mailboxes/" + mb.Token + "/ipt/" + ptToken); got != http.StatusOK {
+		t.Errorf("result through its own mailbox: status %d, want 200", got)
+	}
+	if got := status("/api/mailboxes/" + other.Token + "/ipt/" + ptToken); got != http.StatusNotFound {
+		t.Errorf("result through another mailbox: status %d, want 404", got)
+	}
+	if got := status("/api/mailboxes/" + other.Token + "/ipt/" + ptToken + "/events"); got != http.StatusNotFound {
+		t.Errorf("events through another mailbox: status %d, want 404", got)
+	}
+}
+
+// TestReportScriptDataIsJSONEncoded renders a report whose message carries
+// markup characters. html/template writes the values into the page script as
+// JSON, with <, > and & as unicode escapes.
+func TestReportScriptDataIsJSONEncoded(t *testing.T) {
+	restoreWD := chdirToRepoRoot(t)
+	defer restoreWD()
+
+	srv, st, mb, _, _ := prepareWebTestFixture(t)
+	ctx := context.Background()
+	msg, err := st.SaveMessage(ctx, model.Message{
+		MailboxID:   mb.ID,
+		SMTPFrom:    "news@example.org",
+		RCPTTo:      mb.Address,
+		RemoteIP:    "203.0.113.20",
+		HELO:        "mx.example.org",
+		ReceivedAt:  time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC),
+		RawSource:   "Subject: Angebot <b>Herbst</b> & mehr\r\n\r\n<p>Hallo</p>",
+		HeaderBlock: "Subject: Angebot <b>Herbst</b> & mehr",
+		Subject:     "Angebot <b>Herbst</b> & mehr",
+		SizeBytes:   64,
+	})
+	if err != nil {
+		t.Fatalf("save message: %v", err)
+	}
+	if _, err := st.SaveReport(ctx, model.AnalysisReport{
+		MessageID: msg.ID,
+		CreatedAt: time.Now().UTC(),
+		Score:     8.1,
+		Checks:    []model.CheckResult{{ID: "spf", Name: "SPF", Status: "pass", Summary: "ok"}},
+	}); err != nil {
+		t.Fatalf("save report: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/report/"+mb.Token+"?msg="+messageReference(mb.Token, msg.ID), nil)
+	req.Header.Set("Accept-Language", "en")
+	rr := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	scriptLine := func(prefix string) string {
+		for _, line := range strings.Split(body, "\n") {
+			if line = strings.TrimSpace(line); strings.HasPrefix(line, prefix) {
+				return line
+			}
+		}
+		return ""
+	}
+	// encoding/json writes <, > and & as unicode escapes, like html/template
+	// in a script.
+	subject, _ := json.Marshal(msg.Subject)
+	rawSource, _ := json.Marshal(msg.RawSource)
+	for prefix, want := range map[string]string{
+		"var LANG =":      `var LANG = "en";`,
+		"subject:":        `subject:    ` + string(subject) + `,`,
+		"receivedAt:":     `receivedAt: "2026-10-01T12:00:00Z"`,
+		"var rawSource =": `var rawSource = ` + string(rawSource) + `;`,
+	} {
+		got := scriptLine(prefix)
+		if got != want {
+			t.Errorf("script line %q, want %q", got, want)
+		}
+		if strings.ContainsAny(got, "<>&") {
+			t.Errorf("script line %q carries markup characters as they are", got)
+		}
+	}
+	if labels := scriptLine("window.__mpTechLabels ="); !strings.Contains(labels, `"remote_ip":"Sending IP"`) {
+		t.Errorf("caption table %q lacks the English caption", labels)
+	}
+}
+
+// TestFormFallbackSetsTheConfiguredMailboxCookie creates a mailbox through
+// the form fallback with cookie settings other than the defaults.
+func TestFormFallbackSetsTheConfiguredMailboxCookie(t *testing.T) {
+	restoreWD := chdirToRepoRoot(t)
+	defer restoreWD()
+
+	sqlDB, err := db.Open(filepath.Join(t.TempDir(), "form.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	cfg := config.Config{
+		AppName:            "Sender-Report",
+		PublicBaseURL:      "https://sender.example",
+		SMTPDomain:         "example.test",
+		MailboxTTL:         time.Hour,
+		MaxActivePerIP:     100,
+		MaxActiveGlobal:    1000,
+		WebRateLimitPerMin: 1000,
+		WebBurstPer10Sec:   1000,
+		CookieSecure:       "auto",
+		LangCookieName:     "ui_language",
+		LangCookieDays:     30,
+		MailboxCookieName:  "box_token",
+	}
+	srv, err := New(cfg, store.New(sqlDB), nil, nil)
+	if err != nil {
+		t.Fatalf("new web server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/mailboxes", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = "203.0.113.10:12345"
+	rr := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d body=%q", rr.Code, rr.Body.String())
+	}
+	var got *http.Cookie
+	for _, c := range rr.Result().Cookies() {
+		if c.Name == "box_token" {
+			got = c
+		}
+	}
+	if got == nil {
+		t.Fatalf("no box_token cookie among %v", rr.Result().Cookies())
+	}
+	if got.Value == "" || got.MaxAge <= 0 || !got.HttpOnly || !got.Secure || got.SameSite != http.SameSiteLaxMode {
+		t.Errorf("cookie %+v, want a token with lifetime, HttpOnly, Secure (https public URL) and SameSite=Lax", got)
+	}
+}
+
 func prepareWebTestFixture(t *testing.T) (*Server, *store.Store, model.Mailbox, model.Message, model.AnalysisReport) {
 	t.Helper()
 

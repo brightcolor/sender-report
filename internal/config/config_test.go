@@ -151,6 +151,71 @@ func TestLoadRejectsUnknownUITheme(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultsCookieSettings(t *testing.T) {
+	for _, key := range []string{"COOKIE_SECURE", "LANG_COOKIE_NAME", "LANG_COOKIE_DAYS", "MAILBOX_COOKIE_NAME"} {
+		t.Setenv(key, "")
+	}
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.CookieSecure != "auto" || cfg.LangCookieName != "sr_lang" || cfg.LangCookieDays != 365 || cfg.MailboxCookieName != "sr_mailbox" {
+		t.Fatalf("unexpected cookie defaults: secure=%q lang=%q days=%d mailbox=%q", cfg.CookieSecure, cfg.LangCookieName, cfg.LangCookieDays, cfg.MailboxCookieName)
+	}
+}
+
+func TestLoadParsesCookieSettings(t *testing.T) {
+	t.Setenv("COOKIE_SECURE", " Always ")
+	t.Setenv("LANG_COOKIE_NAME", "ui_language")
+	t.Setenv("LANG_COOKIE_DAYS", "30")
+	t.Setenv("MAILBOX_COOKIE_NAME", "box.token")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.CookieSecure != "always" || cfg.LangCookieName != "ui_language" || cfg.LangCookieDays != 30 || cfg.MailboxCookieName != "box.token" {
+		t.Fatalf("unexpected cookie settings: secure=%q lang=%q days=%d mailbox=%q", cfg.CookieSecure, cfg.LangCookieName, cfg.LangCookieDays, cfg.MailboxCookieName)
+	}
+	for _, days := range []string{"1", "400"} {
+		t.Setenv("LANG_COOKIE_DAYS", days)
+		if _, err := Load(); err != nil {
+			t.Errorf("LANG_COOKIE_DAYS=%s rejected: %v", days, err)
+		}
+	}
+}
+
+func TestLoadRejectsInvalidCookieSettings(t *testing.T) {
+	cases := []struct {
+		name  string
+		env   map[string]string
+		parts []string
+	}{
+		{"unknown mode", map[string]string{"COOKIE_SECURE": "sometimes"}, []string{"COOKIE_SECURE", `"sometimes"`, "auto, always, never"}},
+		{"space in the name", map[string]string{"LANG_COOKIE_NAME": "ui language"}, []string{"LANG_COOKIE_NAME", `"ui language"`, "letters, digits"}},
+		{"semicolon in the name", map[string]string{"MAILBOX_COOKIE_NAME": "box;token"}, []string{"MAILBOX_COOKIE_NAME", `"box;token"`}},
+		{"same name twice", map[string]string{"LANG_COOKIE_NAME": "sr_state", "MAILBOX_COOKIE_NAME": "sr_state"}, []string{"LANG_COOKIE_NAME and MAILBOX_COOKIE_NAME", `"sr_state"`, "different names"}},
+		{"zero days", map[string]string{"LANG_COOKIE_DAYS": "0"}, []string{"LANG_COOKIE_DAYS=0", "1 to 400"}},
+		{"more than browsers keep", map[string]string{"LANG_COOKIE_DAYS": "401"}, []string{"LANG_COOKIE_DAYS=401", "400 days"}},
+		{"days as a word", map[string]string{"LANG_COOKIE_DAYS": "one year"}, []string{"LANG_COOKIE_DAYS", `"one year"`, "whole number", "365"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for key, value := range tc.env {
+				t.Setenv(key, value)
+			}
+			_, err := Load()
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			for _, part := range tc.parts {
+				if !strings.Contains(err.Error(), part) {
+					t.Errorf("error message %q should mention %q", err.Error(), part)
+				}
+			}
+		})
+	}
+}
+
 func TestSplitCSV(t *testing.T) {
 	got := splitCSV(" a, ,b ,, c ")
 	if len(got) != 3 || got[0] != "a" || got[1] != "b" || got[2] != "c" {

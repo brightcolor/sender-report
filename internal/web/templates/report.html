@@ -1108,25 +1108,25 @@ Kind regards,
 // ── Report data for client-side PDF generation ─────────────────────────────
 // Non-encrypted: full data embedded here.
 // E2E encrypted: showDecrypted() below overwrites groups + message fields.
-var LANG = {{jsonEncode .Lang}};
+var LANG = {{.Lang}};
 window.__mpReport = {
-  appName:      {{jsonEncode .AppName}},
+  appName:      {{.AppName}},
   score:        {{printf "%f" .Report.Score}},
-  scoreLabel:   {{jsonEncode .HeroTitle}},
-  heroSubtitle: {{jsonEncode .HeroSubtitle}},
+  scoreLabel:   {{.HeroTitle}},
+  heroSubtitle: {{.HeroSubtitle}},
   encrypted:    {{if .Encrypted}}true{{else}}false{{end}},
-  mailbox:    {address: {{jsonEncode .Mailbox.Address}}, token: {{jsonEncode .Mailbox.Token}}},
+  mailbox:    {address: {{.Mailbox.Address}}, token: {{.Mailbox.Token}}},
   message: {
-    subject:    {{jsonEncode .Message.Subject}},
-    smtpFrom:   {{jsonEncode .Message.SMTPFrom}},
-    remoteIP:   {{jsonEncode .Message.RemoteIP}},
-    helo:       {{jsonEncode .Message.HELO}},
-    receivedAt: {{if not .Message.ReceivedAt.IsZero}}{{jsonEncode (.Message.ReceivedAt.Format "2006-01-02T15:04:05Z07:00")}}{{else}}""{{end}}
+    subject:    {{.Message.Subject}},
+    smtpFrom:   {{.Message.SMTPFrom}},
+    remoteIP:   {{.Message.RemoteIP}},
+    helo:       {{.Message.HELO}},
+    receivedAt: {{if not .Message.ReceivedAt.IsZero}}{{.Message.ReceivedAt.Format "2006-01-02T15:04:05Z07:00"}}{{else}}""{{end}}
   },
-  groups: {{jsonEncode .CheckGroups}}
+  groups: {{.CheckGroups}}
 };
 // Friendly German labels for raw-data keys, shared from the server (one source).
-window.__mpTechLabels = {{techLabelsJSON .Lang}};
+window.__mpTechLabels = {{techLabelTable .Lang}};
 </script>
 <script src="/static/vendor/jspdf.umd.min.js"></script>
 <script src="/static/pdf-report.js?v={{appVersion}}"></script>
@@ -2185,8 +2185,8 @@ function renderDecryptedReport(p) {
   // For non-encrypted reports the raw source is embedded in the page.
   {{if not .Encrypted}}
   (function() {
-    var rawSource = {{jsonEncode .Message.RawSource}};
-    var mbToken = {{jsonEncode .Mailbox.Token}};
+    var rawSource = {{.Message.RawSource}};
+    var mbToken = {{.Mailbox.Token}};
     var score = {{printf "%f" .Report.Score}};
     if (rawSource && rawSource !== '') {
       document.querySelectorAll('[data-simulate]').forEach(function(simBtn) {
@@ -2298,7 +2298,7 @@ function renderDecryptedReport(p) {
 
 <script>
 (function(){
-  var LANG = {{.Lang | jsonEncode}};
+  var LANG = {{.Lang}};
   var IPT_MB_TOKEN = TOKEN || '';
   var iptRPtToken = '';
   var iptRSSE = null;
