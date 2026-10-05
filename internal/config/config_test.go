@@ -304,6 +304,58 @@ func TestLoadNamesTheSettingOutsideItsBounds(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultsIPTTokenLengthTo128Bits(t *testing.T) {
+	t.Setenv("IPT_TOKEN_LENGTH", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.IPTTokenLength != 32 {
+		t.Fatalf("IPT_TOKEN_LENGTH default = %d, want 32", cfg.IPTTokenLength)
+	}
+}
+
+func TestLoadParsesIPTTokenLength(t *testing.T) {
+	for _, n := range []int{16, 41, 64} {
+		t.Run(strconv.Itoa(n), func(t *testing.T) {
+			t.Setenv("IPT_TOKEN_LENGTH", strconv.Itoa(n))
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("IPT_TOKEN_LENGTH=%d rejected: %v", n, err)
+			}
+			if cfg.IPTTokenLength != n {
+				t.Fatalf("IPT_TOKEN_LENGTH = %d, want %d", cfg.IPTTokenLength, n)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsIPTTokenLengthOutsideItsBounds(t *testing.T) {
+	cases := []struct {
+		value string
+		parts []string
+	}{
+		{"6", []string{"IPT_TOKEN_LENGTH=6", "16 to 64", "at least 16 hexadecimal characters (64 random bits)", "use 32"}},
+		{"15", []string{"IPT_TOKEN_LENGTH=15", "16 to 64"}},
+		{"65", []string{"IPT_TOKEN_LENGTH=65", "16 to 64"}},
+		{"long", []string{"IPT_TOKEN_LENGTH", `"long"`, "whole number", "32"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.value, func(t *testing.T) {
+			t.Setenv("IPT_TOKEN_LENGTH", tc.value)
+			_, err := Load()
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			for _, part := range tc.parts {
+				if !strings.Contains(err.Error(), part) {
+					t.Errorf("error message %q should mention %q", err.Error(), part)
+				}
+			}
+		})
+	}
+}
+
 func TestLoadDefaultsHTTPSExemptPathsToTheHealthChecks(t *testing.T) {
 	t.Setenv("FORCE_HTTPS_EXEMPT_PATHS", "")
 	cfg, err := Load()

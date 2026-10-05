@@ -2906,7 +2906,7 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 		return
 	}
 
-	pt, err := randomToken(3) // 6 hex chars
+	pt, err := s.newPlacementToken()
 	if err != nil {
 		s.logger.Printf("ipt: placement token error: %v", err)
 		s.apiError(w, r, http.StatusInternalServerError, "token error",
@@ -2969,6 +2969,42 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 	jsonResp(w, http.StatusOK, resp)
 }
 
+// newPlacementToken returns a random token of IPT_TOKEN_LENGTH hexadecimal
+// characters for a new placement test. A length outside the bounds of the
+// setting yields an error.
+func (s *Server) newPlacementToken() (string, error) {
+	n := s.cfg.IPTTokenLength
+	if n < config.MinIPTTokenLength || n > config.MaxIPTTokenLength {
+		return "", fmt.Errorf("IPT_TOKEN_LENGTH=%d is outside %d to %d", n, config.MinIPTTokenLength, config.MaxIPTTokenLength)
+	}
+	tok, err := randomToken((n + 1) / 2)
+	if err != nil {
+		return "", err
+	}
+	return tok[:n], nil
+}
+
+// placementTokenAccepted reports whether token opens the placement test pt
+// at the time now: a token with at least IPT_TOKEN_LENGTH characters for as
+// long as the test is stored, a shorter one until the test expires.
+func (s *Server) placementTokenAccepted(token string, pt ipt.PlacementTest, now time.Time) bool {
+	return len(token) >= s.cfg.IPTTokenLength || now.Before(pt.ExpiresAt)
+}
+
+// placementTestFor returns the placement test behind ptToken when the mailbox
+// mb started it and the token opens it (placementTokenAccepted). Otherwise it
+// returns store.ErrNotFound, or the error of the store.
+func (s *Server) placementTestFor(ctx context.Context, mb model.Mailbox, ptToken string) (ipt.PlacementTest, error) {
+	pt, err := s.store.GetPlacementTest(ctx, ptToken)
+	if err != nil {
+		return ipt.PlacementTest{}, err
+	}
+	if pt.MailboxID != mb.ID || !s.placementTokenAccepted(ptToken, pt, time.Now()) {
+		return ipt.PlacementTest{}, store.ErrNotFound
+	}
+	return pt, nil
+}
+
 // placementRateLimited answers a placement test start beyond
 // IPT_RATE_LIMIT_PER_HOUR with 429, a Retry-After header and a message in the
 // visitor's language that names the limit and when the next test can start.
@@ -2994,7 +3030,7 @@ func (s *Server) iptEventsAPI(w http.ResponseWriter, r *http.Request, mailboxTok
 		return
 	}
 	// A placement test is only visible through the mailbox that started it.
-	if pt, err := s.store.GetPlacementTest(r.Context(), ptToken); err != nil || pt.MailboxID != mb.ID {
+	if _, err := s.placementTestFor(r.Context(), mb, ptToken); err != nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -3012,12 +3048,9 @@ func (s *Server) iptEventsAPI(w http.ResponseWriter, r *http.Request, mailboxTok
 	lastPayload := ""
 
 	send := func() (done bool, err error) {
-		pt, err := s.store.GetPlacementTest(r.Context(), ptToken)
+		pt, err := s.placementTestFor(r.Context(), mb, ptToken)
 		if err != nil {
 			return false, err
-		}
-		if pt.MailboxID != mb.ID {
-			return false, errors.New("placement test belongs to another mailbox")
 		}
 		raw, _ := json.Marshal(pt)
 		if string(raw) != lastPayload {
@@ -3043,7 +3076,11 @@ func (s *Server) iptEventsAPI(w http.ResponseWriter, r *http.Request, mailboxTok
 		case <-ticker.C:
 			done, err := send()
 			if err != nil {
-				_, _ = fmt.Fprintf(w, "event: error\ndata: {\"error\":\"db error\"}\n\n")
+				reason := `{"error":"db error"}`
+				if errors.Is(err, store.ErrNotFound) {
+					reason = `{"error":"test not found"}`
+				}
+				_, _ = fmt.Fprintf(w, "event: error\ndata: %s\n\n", reason)
 				flusher.Flush()
 				return
 			}
@@ -3065,8 +3102,8 @@ func (s *Server) iptResultAPI(w http.ResponseWriter, r *http.Request, mailboxTok
 		return
 	}
 	// A placement test is only visible through the mailbox that started it.
-	pt, err := s.store.GetPlacementTest(r.Context(), ptToken)
-	if err != nil || pt.MailboxID != mb.ID {
+	pt, err := s.placementTestFor(r.Context(), mb, ptToken)
+	if err != nil {
 		jsonResp(w, http.StatusNotFound, map[string]string{"error": "test not found"})
 		return
 	}

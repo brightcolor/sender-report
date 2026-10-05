@@ -69,6 +69,7 @@ type Config struct {
 	IPTAlertSMTPPass     string        // IPT_ALERT_SMTP_PASS (optional)
 	IPTAlertIncludeRaw   bool          // IPT_ALERT_INCLUDE_RAW_ERRORS (default true)
 	IPTRateLimitPerHour  int           // IPT_RATE_LIMIT_PER_HOUR — placement tests one IP address may start per hour
+	IPTTokenLength       int           // IPT_TOKEN_LENGTH — hexadecimal characters in the subject token of a new placement test
 	// Web interface
 	UIDefaultTheme string // UI_DEFAULT_THEME — display option for visitors who have not picked one (see UIThemes)
 	// Cookies
@@ -109,6 +110,16 @@ const (
 	MaxIPTRateLimitPerHour        = 60
 )
 
+// Default and bounds of IPT_TOKEN_LENGTH, in hexadecimal characters of 4
+// random bits each: 32 characters carry 128 bits, 16 characters (64 bits) are
+// the least that keeps a token unguessable, and 64 characters keep the tag
+// short enough to add to a subject line.
+const (
+	DefaultIPTTokenLength = 32
+	MinIPTTokenLength     = 16
+	MaxIPTTokenLength     = 64
+)
+
 // DefaultForceHTTPSExemptPaths lists the paths that answer over plain HTTP
 // although FORCE_HTTPS is set: the health and readiness checks, so a
 // healthcheck inside the container reaches them on http://127.0.0.1
@@ -137,6 +148,10 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	iptRateLimit, err := getEnvIntChecked("IPT_RATE_LIMIT_PER_HOUR", DefaultIPTRateLimitPerHour)
+	if err != nil {
+		return Config{}, err
+	}
+	iptTokenLength, err := getEnvIntChecked("IPT_TOKEN_LENGTH", DefaultIPTTokenLength)
 	if err != nil {
 		return Config{}, err
 	}
@@ -191,6 +206,7 @@ func Load() (Config, error) {
 		IPTAlertSMTPPass:         getEnv("IPT_ALERT_SMTP_PASS", ""),
 		IPTAlertIncludeRaw:       getEnvBool("IPT_ALERT_INCLUDE_RAW_ERRORS", true),
 		IPTRateLimitPerHour:      iptRateLimit,
+		IPTTokenLength:           iptTokenLength,
 		UIDefaultTheme:           strings.ToLower(getEnv("UI_DEFAULT_THEME", "auto")),
 		CookieSecure:             strings.ToLower(getEnv("COOKIE_SECURE", "auto")),
 		LangCookieName:           getEnv("LANG_COOKIE_NAME", "sr_lang"),
@@ -225,6 +241,9 @@ func Load() (Config, error) {
 	}
 	if err := checkRequestLimits(cfg); err != nil {
 		return cfg, err
+	}
+	if cfg.IPTTokenLength < MinIPTTokenLength || cfg.IPTTokenLength > MaxIPTTokenLength {
+		return cfg, fmt.Errorf("IPT_TOKEN_LENGTH=%d is outside %d to %d; the subject token of a placement test needs at least %d hexadecimal characters (%d random bits) to stay unguessable; remove it to use %d", cfg.IPTTokenLength, MinIPTTokenLength, MaxIPTTokenLength, MinIPTTokenLength, MinIPTTokenLength*4, DefaultIPTTokenLength)
 	}
 	for _, d := range []struct {
 		key   string

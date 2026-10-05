@@ -121,6 +121,8 @@ var All = []VarDef{
 	// ── Inbox placement testing ───────────────────────────────────────────────
 	{Group: "Inbox placement testing", Key: "IPT_RATE_LIMIT_PER_HOUR", Default: strconv.Itoa(config.DefaultIPTRateLimitPerHour),
 		Comment: fmt.Sprintf("Placement tests one IP may start per hour (1 to %d)", config.MaxIPTRateLimitPerHour)},
+	{Key: "IPT_TOKEN_LENGTH", Default: strconv.Itoa(config.DefaultIPTTokenLength),
+		Comment: fmt.Sprintf("Hexadecimal characters in the subject token of a new placement test (%d to %d); a test with a shorter token answers to it until it expires", config.MinIPTTokenLength, config.MaxIPTTokenLength)},
 }
 
 // MigrateFile reads the .env file at path, appends every variable from [All]

@@ -171,6 +171,7 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | `WEB_RATE_LIMIT_PER_MIN`, `SMTP_RATE_LIMIT_PER_HOUR`, … | rate limits |
 | `PAYLOAD_RATE_LIMIT_PER_MIN` | encrypted reports one IP address may fetch per minute; rechecks and simulator runs count separately against the same number (default 30, 1 to 600) |
 | `IPT_RATE_LIMIT_PER_HOUR` | placement tests one IP address may start per hour (default 3, 1 to 60) |
+| `IPT_TOKEN_LENGTH` | hexadecimal characters in the subject token of a new placement test (default 32 = 128 bits, 16 to 64); a test with a shorter token answers to it until the test expires |
 | `ENABLE_RBL_CHECKS`, `RBL_PROVIDERS` | DNSBL/RBL (IP reputation), optional |
 | `ENABLE_SPAMASSASSIN`, `ENABLE_RSPAMD`, … | external spam filters, optional |
 | `ENABLE_DOMAIN_AGE`, `ENABLE_DOMAIN_BLOCKLIST`, `DOMAIN_BLOCKLIST_PROVIDERS` | force third-party checks on globally (default off) |

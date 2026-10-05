@@ -15,6 +15,7 @@ var configDefaults = map[string]string{
 	"PAYLOAD_RATE_LIMIT_PER_MIN": strconv.Itoa(config.DefaultPayloadRateLimitPerMin),
 	"IPT_RATE_LIMIT_PER_HOUR":    strconv.Itoa(config.DefaultIPTRateLimitPerHour),
 	"FORCE_HTTPS_EXEMPT_PATHS":   config.DefaultForceHTTPSExemptPaths,
+	"IPT_TOKEN_LENGTH":           strconv.Itoa(config.DefaultIPTTokenLength),
 }
 
 func TestAllCarriesTheDefaultsFromConfig(t *testing.T) {
