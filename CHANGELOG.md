@@ -4,6 +4,51 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+- **Platzierungstests tragen ein Token mit 128 Bit** — neue Platzierungstests bekommen im
+  Betreff-Tag `[SR-…]` ein zufälliges Token aus 32 Hex-Zeichen. `IPT_TOKEN_LENGTH` legt
+  die Länge fest (Vorgabe 32, erlaubt 16 bis 64 Zeichen zu je 4 Bit). Ergebnis und
+  Fortschritt eines Tests (`/api/mailboxes/{token}/ipt/{pt}` und `…/events`) öffnet ein
+  Token mit mindestens dieser Länge, solange der Test gespeichert ist; ein kürzeres Token
+  öffnet seinen Test bis zu dessen Ablauf.
+
+### Added
+- **`PAYLOAD_RATE_LIMIT_PER_MIN` und `IPT_RATE_LIMIT_PER_HOUR`** — `PAYLOAD_RATE_LIMIT_PER_MIN`
+  (Vorgabe 30, erlaubt 1 bis 600) begrenzt je IP-Adresse und Minute die Abrufe
+  verschlüsselter Berichte; erneute Prüfungen und Simulator-Analysen zählen getrennt gegen
+  dieselbe Zahl. `IPT_RATE_LIMIT_PER_HOUR` (Vorgabe 3, erlaubt 1 bis 60) begrenzt die
+  Platzierungstests je IP-Adresse und Stunde. Ein Wert außerhalb der Grenzen oder ohne
+  ganze Zahl hält den Start mit einer Meldung an, die Grenzen und Vorgabe nennt; dasselbe
+  gilt für `IPT_TOKEN_LENGTH`.
+- **`FORCE_HTTPS_EXEMPT_PATHS`** — die Pfade, die mit `FORCE_HTTPS` auch über einfaches
+  HTTP direkt antworten (Vorgabe `/healthz,/readyz`). Ein Eintrag gilt für genau diesen
+  Pfad, ein Eintrag mit `/` am Ende für alle Pfade darunter; `none` leitet alle Pfade um.
+  Ein Eintrag, der kein Pfad ist, und `/` allein halten den Start mit einer Meldung an,
+  die das erwartete Format nennt.
+
+### Changed
+- **Health-Pfade antworten mit `FORCE_HTTPS` direkt** — `/healthz` und `/readyz`
+  antworten auch über einfaches HTTP. Der Healthcheck im Container
+  (`wget http://127.0.0.1:8080/healthz`) erreicht den Server damit unabhängig von
+  `PUBLIC_BASE_URL`.
+- **Meldungen beim Start eines Platzierungstests** — Fehlerantworten von
+  `POST /api/mailboxes/{token}/ipt/start` tragen neben `error` das Feld `message` mit
+  Ursache und nächstem Schritt in der Sprache des Besuchers. Über der Grenze antwortet der
+  Server mit 429 und `Retry-After`; die Meldung nennt die eingestellte Zahl und die Zeit
+  bis zum nächsten möglichen Test. Startseite und Report zeigen diese Meldungen an; bei
+  einem Verbindungsfehler weisen sie auf die Internetverbindung hin, bei einer Antwort
+  ohne eigene Meldung nennen sie den HTTP-Status.
+- **Startmeldungen nennen Variable und Wert** — liegt eine Grenze oder ein Zeitraum unter
+  dem erlaubten Wert (`MAX_ACTIVE_MAILBOXES_*`, `WEB_*`, `SMTP_*`, `MAX_MESSAGE_BYTES`,
+  `MAILBOX_TTL`, `DATA_RETENTION_TTL`, `CLEANUP_INTERVAL`), nennt die Meldung beim Start
+  die Variable mit ihrem Wert.
+
+### Fixed
+- **Platzierungstests starten auch aus dem Report** — das Skript des Dialogs
+  „Inbox Placement Test“ im Report bekommt das Postfach-Token aus den Seitendaten und
+  läuft bei verschlüsselten wie unverschlüsselten Berichten; „Test starten“ schickt die
+  Anfrage ab.
+
 ## [1.40.2] - 2026-10-05
 
 ### Security
