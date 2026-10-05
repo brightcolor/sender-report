@@ -1,6 +1,6 @@
 module github.com/brightcolor/sender-report
 
-go 1.25.0
+go 1.26.0
 
 require (
 	golang.org/x/net v0.58.0
@@ -30,5 +30,5 @@ require (
 	github.com/emersion/go-msgauth v0.7.0
 	github.com/go-pdf/fpdf v0.9.0
 	github.com/miekg/dns v1.1.72
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 )

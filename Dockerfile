@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ── Build stage ───────────────────────────────────────────────────────────────
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 WORKDIR /src
 
 # No build-base/GCC needed: modernc.org/sqlite is pure Go (CGO_ENABLED=0).

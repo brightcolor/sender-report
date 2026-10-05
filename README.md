@@ -9,7 +9,7 @@ explainable checks: SPF, DKIM, DMARC, spam score, blacklists, DNS and more.
 
 [![CI](https://github.com/brightcolor/sender-report/actions/workflows/ci.yml/badge.svg)](https://github.com/brightcolor/sender-report/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Made with Go](https://img.shields.io/badge/Go-1.25-00ADD8.svg?logo=go&logoColor=white)](https://go.dev)
+[![Made with Go](https://img.shields.io/badge/Go-1.26-00ADD8.svg?logo=go&logoColor=white)](https://go.dev)
 [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 ```bash
