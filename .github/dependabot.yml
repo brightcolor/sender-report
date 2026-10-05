@@ -1,0 +1,13 @@
+# Keeps the GitHub Actions pinned to commits current. Dependabot proposes a
+# new release only after seven days, collected in one PR per week.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
