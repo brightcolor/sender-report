@@ -3014,7 +3014,7 @@ func (s *Server) placementRateLimited(w http.ResponseWriter, r *http.Request, wa
 	jsonResp(w, http.StatusTooManyRequests, map[string]string{
 		"error": "rate limit: max " + countNoun(n, "placement test", "placement tests") + " per hour",
 		"message": pickLang(string(s.lang(r)),
-			fmt.Sprintf("Von Ihrer IP-Adresse wurden in der letzten Stunde schon %s gestartet, das ist die Obergrenze dieses Servers. Den nächsten Test können Sie in %s starten.",
+			fmt.Sprintf("Ihre IP-Adresse hat in der letzten Stunde schon %s gestartet, das ist die Obergrenze dieses Servers. Den nächsten Test können Sie in %s starten.",
 				countNoun(n, "Platzierungstest", "Platzierungstests"), waitText(i18n.DE, wait)),
 			fmt.Sprintf("Your IP address has already started %s in the last hour, which is the limit on this server. You can start the next test in %s.",
 				countNoun(n, "placement test", "placement tests"), waitText(i18n.EN, wait))),

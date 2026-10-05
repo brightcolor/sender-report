@@ -72,7 +72,7 @@ func TestPlacementRateLimitNamesTheConfiguredLimit(t *testing.T) {
 		{2, "rate limit: max 2 placement tests per hour", "en",
 			[]string{"already started 2 placement tests in the last hour", "limit on this server", "in 24 minutes"}, []string{"3"}},
 		{1, "rate limit: max 1 placement test per hour", "de",
-			[]string{"schon 1 Platzierungstest gestartet"}, nil},
+			[]string{"Ihre IP-Adresse hat in der letzten Stunde schon 1 Platzierungstest gestartet"}, nil},
 		{12, "rate limit: max 12 placement tests per hour", "en",
 			[]string{"already started 12 placement tests"}, nil},
 	}
