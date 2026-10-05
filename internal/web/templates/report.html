@@ -2278,7 +2278,7 @@ function renderDecryptedReport(p) {
           <p class="small text-secondary mb-2">{{if eq .Lang "de"}}Sende deine Testmail an diese Adressen:{{else}}Send your test mail to these addresses:{{end}}</p>
           <div id="mp-ipt-r-seed-list"></div>
           <div class="text-secondary small mt-3">
-            <i class="bi bi-clock me-1"></i>{{if eq .Lang "de"}}Warte auf Zustellung (bis zu 10 Minuten)…{{else}}Waiting for delivery (up to 10 minutes)…{{end}}
+            <i class="bi bi-clock me-1"></i>{{if eq .Lang "de"}}Warte auf Zustellung (bis zu {{.IPTTestMinutes}} {{if eq .IPTTestMinutes 1}}Minute{{else}}Minuten{{end}})…{{else}}Waiting for delivery (up to {{.IPTTestMinutes}} {{if eq .IPTTestMinutes 1}}minute{{else}}minutes{{end}})…{{end}}
           </div>
         </div>
 

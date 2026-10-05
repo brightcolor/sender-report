@@ -87,6 +87,9 @@ func TestReportPlacementDialogCarriesItsMailbox(t *testing.T) {
 		if !strings.Contains(body, "mp-ipt-r-start-btn") {
 			t.Errorf("report %q: the placement dialog is missing", token)
 		}
+		if !strings.Contains(body, "Warte auf Zustellung (bis zu 10 Minuten)") {
+			t.Errorf("report %q: the placement dialog lacks the test duration", token)
+		}
 	}
 }
 
@@ -148,6 +151,78 @@ func TestPlacementTokenRoutesFollowTheTokenLength(t *testing.T) {
 				if want && !strings.Contains(events.Body.String(), "event: done") {
 					t.Errorf("%s: events stream %q lacks the done event", name, events.Body.String())
 				}
+			}
+		})
+	}
+}
+
+// TestPlacementTestsRunForTheConfiguredDuration starts a test with two
+// settings of IPT_TEST_DURATION and reads its end from the answer and from the
+// store.
+func TestPlacementTestsRunForTheConfiguredDuration(t *testing.T) {
+	for _, d := range []time.Duration{config.DefaultIPTTestDuration, 3 * time.Minute} {
+		t.Run(d.String(), func(t *testing.T) {
+			srv, st := newStoreTestServer(t, func(c *config.Config) {
+				c.IPTTokenLength = config.DefaultIPTTokenLength
+				c.IPTTestDuration = d
+			})
+			ctx := context.Background()
+			name := "dauerb0x" + strconv.Itoa(int(d/time.Minute))
+			mb, err := st.CreateMailbox(ctx, name, name+"@example.test", "", "127.0.0.1", time.Hour)
+			if err != nil {
+				t.Fatalf("create mailbox: %v", err)
+			}
+
+			before := time.Now().UTC()
+			rr := serve(srv, http.MethodPost, "/api/mailboxes/"+mb.Token+"/ipt/start", `{"selected_providers":["Testmail"]}`, "203.0.113.12", "en")
+			after := time.Now().UTC()
+			if rr.Code != http.StatusOK {
+				t.Fatalf("start: status %d body %s", rr.Code, rr.Body.String())
+			}
+			body := decodeJSON(t, rr)
+			raw, _ := body["expires_at"].(string)
+			expires, err := time.Parse(time.RFC3339Nano, raw)
+			if err != nil {
+				t.Fatalf("expires_at %q: %v", raw, err)
+			}
+			if expires.Before(before.Add(d)) || expires.After(after.Add(d)) {
+				t.Fatalf("expires_at = %s, want %s after the start", expires, d)
+			}
+			token, _ := body["placement_token"].(string)
+			pt, err := st.GetPlacementTest(ctx, token)
+			if err != nil {
+				t.Fatalf("stored test: %v", err)
+			}
+			if diff := pt.ExpiresAt.Sub(expires); diff < -time.Second || diff > time.Second {
+				t.Fatalf("stored expires_at = %s, answer says %s", pt.ExpiresAt, expires)
+			}
+		})
+	}
+}
+
+// TestPlacementDialogNamesTheConfiguredDuration renders the start page with
+// placement tests switched on and looks for the duration in the waiting line
+// of the dialog, in both languages and for one and several minutes.
+func TestPlacementDialogNamesTheConfiguredDuration(t *testing.T) {
+	cases := []struct {
+		d          time.Duration
+		lang, want string
+	}{
+		{config.DefaultIPTTestDuration, "de", "Warte auf Zustellung (bis zu 10 Minuten)"},
+		{3 * time.Minute, "de", "Warte auf Zustellung (bis zu 3 Minuten)"},
+		{time.Minute, "de", "Warte auf Zustellung (bis zu 1 Minute)"},
+		{3 * time.Minute, "en", "Waiting for delivery (up to 3 minutes)"},
+		{time.Minute, "en", "Waiting for delivery (up to 1 minute)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.lang+"/"+tc.d.String(), func(t *testing.T) {
+			srv, _ := newStoreTestServer(t, func(c *config.Config) { c.IPTTestDuration = tc.d })
+			rr := serve(srv, http.MethodGet, "/", "", "203.0.113.13", tc.lang)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("start page: status %d", rr.Code)
+			}
+			if !strings.Contains(rr.Body.String(), tc.want) {
+				t.Fatalf("start page lacks %q", tc.want)
 			}
 		})
 	}

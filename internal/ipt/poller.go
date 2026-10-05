@@ -11,20 +11,20 @@ import (
 	"github.com/emersion/go-imap/v2/imapclient"
 )
 
-const (
-	pollInterval = 30 * time.Second
-	// Spam folder names to probe in order after INBOX.
-	// The first one that can be SELECT-ed successfully will be used.
-)
+// PollSettings carries the settings of the IMAP lookups of a placement test.
+type PollSettings struct {
+	Interval    time.Duration // IPT_POLL_INTERVAL: pause between two lookups in one seed account
+	SpamFolders []string      // IPT_SPAM_FOLDERS: folders searched after INBOX, in this order
+}
 
-var spamFolders = []string{"Spam", "Junk", "[Gmail]/Spam", "Bulk Mail", "Bulk", "Junk E-Mail"}
-
-// PollWithHosts starts one goroutine per seed account. Each goroutine polls
-// IMAP every 30 seconds until it finds the message or ctx expires. Results are
-// sent to the results channel as each provider resolves; the channel is closed
-// when all goroutines have finished. imapHosts[i] is the host:port for infos[i].
+// PollWithHosts starts one goroutine per seed account. Each goroutine looks
+// for the message over IMAP, then again after every settings.Interval, until
+// it finds the message or ctx expires. Results are sent to the results channel
+// as each provider resolves; the channel is closed when all goroutines have
+// finished. imapHosts[i] is the host:port for infos[i].
 func PollWithHosts(
 	ctx context.Context,
+	settings PollSettings,
 	infos []SeedInfo,
 	accounts []Account,
 	imapHosts []string,
@@ -37,7 +37,7 @@ func PollWithHosts(
 		wg.Add(1)
 		go func(info SeedInfo, acc Account, host string) {
 			defer wg.Done()
-			res := pollOne(ctx, info, acc, host, subjectToken, since)
+			res := pollOne(ctx, settings, info, acc, host, subjectToken, since)
 			results <- res
 		}(infos[i], accounts[i], imapHosts[i])
 	}
@@ -49,17 +49,18 @@ func PollWithHosts(
 // for a single account, until found or ctx expires.
 func pollOne(
 	ctx context.Context,
+	settings PollSettings,
 	info SeedInfo,
 	acc Account,
 	imapHost string,
 	subjectToken string,
 	since time.Time,
 ) ProviderResult {
-	ticker := time.NewTicker(pollInterval)
+	ticker := time.NewTicker(settings.Interval)
 	defer ticker.Stop()
 
 	// Try immediately on first call, then on each tick.
-	if folder := tryFind(ctx, acc, imapHost, subjectToken, since); folder != "" {
+	if folder := tryFind(ctx, settings.SpamFolders, acc, imapHost, subjectToken, since); folder != "" {
 		return ProviderResult{
 			Provider:  info.Provider,
 			Address:   info.Address,
@@ -79,7 +80,7 @@ func pollOne(
 				CheckedAt: time.Now().UTC(),
 			}
 		case <-ticker.C:
-			if folder := tryFind(ctx, acc, imapHost, subjectToken, since); folder != "" {
+			if folder := tryFind(ctx, settings.SpamFolders, acc, imapHost, subjectToken, since); folder != "" {
 				return ProviderResult{
 					Provider:  info.Provider,
 					Address:   info.Address,
@@ -92,10 +93,11 @@ func pollOne(
 	}
 }
 
-// tryFind opens an IMAP connection, checks INBOX and spam folders for a message
-// whose Subject header contains subjectToken and was received SINCE since.
+// tryFind opens an IMAP connection, checks INBOX and then spamFolders in their
+// order for a message whose Subject header contains subjectToken and was
+// received SINCE since. A spam folder the account does not have is skipped.
 // Returns the folder name where the message was found, or "" if not found.
-func tryFind(ctx context.Context, acc Account, imapHost, subjectToken string, since time.Time) string {
+func tryFind(ctx context.Context, spamFolders []string, acc Account, imapHost, subjectToken string, since time.Time) string {
 	host, _, err := net.SplitHostPort(imapHost)
 	if err != nil {
 		host = imapHost
@@ -123,7 +125,7 @@ func tryFind(ctx context.Context, acc Account, imapHost, subjectToken string, si
 		return "INBOX"
 	}
 
-	// Try each known spam folder name.
+	// Try each configured spam folder name.
 	for _, folder := range spamFolders {
 		if found := searchFolder(ctx, c, folder, criteria); found {
 			return folder

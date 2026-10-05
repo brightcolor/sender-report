@@ -172,6 +172,11 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | `PAYLOAD_RATE_LIMIT_PER_MIN` | encrypted reports one IP address may fetch per minute; rechecks and simulator runs count separately against the same number (default 30, 1 to 600) |
 | `IPT_RATE_LIMIT_PER_HOUR` | placement tests one IP address may start per hour (default 3, 1 to 60) |
 | `IPT_TOKEN_LENGTH` | hexadecimal characters in the subject token of a new placement test (default 32 = 128 bits, 16 to 64); a test with a shorter token answers to it until the test expires |
+| `IPT_TEST_DURATION` | how long a placement test waits for its message, in whole minutes; the placement dialog names it (default `10m`, `1m` to `1h`) |
+| `IPT_POLL_INTERVAL` | pause between two IMAP lookups in one seed account, shorter than `IPT_TEST_DURATION` (default `30s`, `5s` to `5m`) |
+| `IPT_EVENTS_INTERVAL` | how often the open placement dialog receives the state of its test (default `5s`, `1s` to `1m`) |
+| `IPT_SEARCH_MARGIN` | how far before the start of a test the IMAP search reaches back, so a provider whose clock runs behind still finds the message (default `2m`, `0s` to `1h`) |
+| `IPT_SPAM_FOLDERS` | folders a placement test searches after INBOX, in this order (default `Spam,Junk,[Gmail]/Spam,Bulk Mail,Bulk,Junk E-Mail`, at most 20; `none` searches INBOX alone) |
 | `ENABLE_RBL_CHECKS`, `RBL_PROVIDERS` | DNSBL/RBL (IP reputation), optional |
 | `ENABLE_SPAMASSASSIN`, `ENABLE_RSPAMD`, … | external spam filters, optional |
 | `ENABLE_DOMAIN_AGE`, `ENABLE_DOMAIN_BLOCKLIST`, `DOMAIN_BLOCKLIST_PROVIDERS` | force third-party checks on globally (default off) |

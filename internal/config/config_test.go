@@ -424,3 +424,139 @@ func TestSplitCSV(t *testing.T) {
 		t.Fatalf("unexpected splitCSV output: %#v", got)
 	}
 }
+
+func TestLoadDefaultsPlacementTiming(t *testing.T) {
+	for _, key := range []string{"IPT_TEST_DURATION", "IPT_POLL_INTERVAL", "IPT_EVENTS_INTERVAL", "IPT_SEARCH_MARGIN", "IPT_SPAM_FOLDERS"} {
+		t.Setenv(key, "")
+	}
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.IPTTestDuration != 10*time.Minute || cfg.IPTPollInterval != 30*time.Second || cfg.IPTEventsInterval != 5*time.Second || cfg.IPTSearchMargin != 2*time.Minute {
+		t.Fatalf("timing = %s, %s, %s, %s; want 10m, 30s, 5s, 2m", cfg.IPTTestDuration, cfg.IPTPollInterval, cfg.IPTEventsInterval, cfg.IPTSearchMargin)
+	}
+	if got := strings.Join(cfg.IPTSpamFolders, ","); got != "Spam,Junk,[Gmail]/Spam,Bulk Mail,Bulk,Junk E-Mail" {
+		t.Fatalf("IPT_SPAM_FOLDERS default = %q", got)
+	}
+}
+
+func TestLoadParsesPlacementTiming(t *testing.T) {
+	t.Setenv("IPT_TEST_DURATION", "3m")
+	t.Setenv("IPT_POLL_INTERVAL", "10s")
+	t.Setenv("IPT_EVENTS_INTERVAL", "2s")
+	t.Setenv("IPT_SEARCH_MARGIN", "0s")
+	t.Setenv("IPT_SPAM_FOLDERS", " Junk , Werbung ")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.IPTTestDuration != 3*time.Minute || cfg.IPTPollInterval != 10*time.Second || cfg.IPTEventsInterval != 2*time.Second || cfg.IPTSearchMargin != 0 {
+		t.Fatalf("timing = %s, %s, %s, %s; want 3m, 10s, 2s, 0s", cfg.IPTTestDuration, cfg.IPTPollInterval, cfg.IPTEventsInterval, cfg.IPTSearchMargin)
+	}
+	if got := strings.Join(cfg.IPTSpamFolders, "|"); got != "Junk|Werbung" {
+		t.Fatalf("IPT_SPAM_FOLDERS = %q, want Junk and Werbung", got)
+	}
+}
+
+func TestLoadSearchesInboxAloneWithoutSpamFolders(t *testing.T) {
+	t.Setenv("IPT_SPAM_FOLDERS", "none")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.IPTSpamFolders == nil || len(cfg.IPTSpamFolders) != 0 {
+		t.Fatalf("IPT_SPAM_FOLDERS=none gives %q, want an empty list", cfg.IPTSpamFolders)
+	}
+}
+
+func TestLoadRejectsPlacementTimingOutsideItsBounds(t *testing.T) {
+	cases := []struct {
+		key, value string
+		parts      []string
+	}{
+		{"IPT_TEST_DURATION", "30s", []string{"IPT_TEST_DURATION=30s", "1m to 1h", "use 10m"}},
+		{"IPT_TEST_DURATION", "2h", []string{"IPT_TEST_DURATION=2h", "1m to 1h"}},
+		{"IPT_TEST_DURATION", "90s", []string{"IPT_TEST_DURATION=1m30s", "whole number of minutes", "10m"}},
+		{"IPT_TEST_DURATION", "zehn", []string{"IPT_TEST_DURATION", `"zehn"`, "not a duration", "10m"}},
+		{"IPT_POLL_INTERVAL", "1s", []string{"IPT_POLL_INTERVAL=1s", "5s to 5m", "use 30s"}},
+		{"IPT_EVENTS_INTERVAL", "2m", []string{"IPT_EVENTS_INTERVAL=2m", "1s to 1m", "use 5s"}},
+		{"IPT_SEARCH_MARGIN", "-1m", []string{"IPT_SEARCH_MARGIN=-1m", "0s to 1h", "use 2m"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.key+"="+tc.value, func(t *testing.T) {
+			t.Setenv(tc.key, tc.value)
+			_, err := Load()
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			for _, part := range tc.parts {
+				if !strings.Contains(err.Error(), part) {
+					t.Errorf("error message %q should mention %q", err.Error(), part)
+				}
+			}
+		})
+	}
+}
+
+func TestLoadKeepsThePollIntervalBelowTheTestDuration(t *testing.T) {
+	t.Setenv("IPT_TEST_DURATION", "1m")
+	t.Setenv("IPT_POLL_INTERVAL", "1m")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	for _, part := range []string{"IPT_POLL_INTERVAL=1m", "IPT_TEST_DURATION=1m", "not shorter"} {
+		if !strings.Contains(err.Error(), part) {
+			t.Errorf("error message %q should mention %q", err.Error(), part)
+		}
+	}
+	t.Setenv("IPT_POLL_INTERVAL", "59s")
+	if _, err := Load(); err != nil {
+		t.Fatalf("IPT_POLL_INTERVAL=59s below IPT_TEST_DURATION=1m rejected: %v", err)
+	}
+}
+
+func TestLoadRejectsUnusableSpamFolders(t *testing.T) {
+	many := make([]string, MaxIPTSpamFolders+1)
+	for i := range many {
+		many[i] = "Ordner" + strconv.Itoa(i)
+	}
+	cases := []struct {
+		value string
+		parts []string
+	}{
+		{strings.Join(many, ","), []string{"IPT_SPAM_FOLDERS", "21 folders", "at most 20"}},
+		{"Spam,Sp\x07am", []string{"IPT_SPAM_FOLDERS", `"Sp\aam"`, "control characters", "none"}},
+		{strings.Repeat("x", MaxIPTSpamFolderChars+1), []string{"IPT_SPAM_FOLDERS", "up to 100 characters"}},
+	}
+	for i, tc := range cases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			t.Setenv("IPT_SPAM_FOLDERS", tc.value)
+			_, err := Load()
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			for _, part := range tc.parts {
+				if !strings.Contains(err.Error(), part) {
+					t.Errorf("error message %q should mention %q", err.Error(), part)
+				}
+			}
+		})
+	}
+}
+
+func TestFormatDurationWritesTheSettingsForm(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		10 * time.Minute: "10m",
+		time.Hour:        "1h",
+		90 * time.Minute: "1h30m",
+		30 * time.Second: "30s",
+		90 * time.Second: "1m30s",
+		0:                "0s",
+	} {
+		if got := FormatDuration(d); got != want {
+			t.Errorf("FormatDuration(%v) = %q, want %q", d, got, want)
+		}
+	}
+}

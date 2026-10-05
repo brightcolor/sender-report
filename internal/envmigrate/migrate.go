@@ -123,6 +123,16 @@ var All = []VarDef{
 		Comment: fmt.Sprintf("Placement tests one IP may start per hour (1 to %d)", config.MaxIPTRateLimitPerHour)},
 	{Key: "IPT_TOKEN_LENGTH", Default: strconv.Itoa(config.DefaultIPTTokenLength),
 		Comment: fmt.Sprintf("Hexadecimal characters in the subject token of a new placement test (%d to %d); a test with a shorter token answers to it until it expires", config.MinIPTTokenLength, config.MaxIPTTokenLength)},
+	{Key: "IPT_TEST_DURATION", Default: config.FormatDuration(config.DefaultIPTTestDuration),
+		Comment: fmt.Sprintf("How long a placement test waits for its message, in whole minutes (%s to %s)", config.FormatDuration(config.MinIPTTestDuration), config.FormatDuration(config.MaxIPTTestDuration))},
+	{Key: "IPT_POLL_INTERVAL", Default: config.FormatDuration(config.DefaultIPTPollInterval),
+		Comment: fmt.Sprintf("Pause between two IMAP lookups in one seed account (%s to %s), shorter than IPT_TEST_DURATION", config.FormatDuration(config.MinIPTPollInterval), config.FormatDuration(config.MaxIPTPollInterval))},
+	{Key: "IPT_EVENTS_INTERVAL", Default: config.FormatDuration(config.DefaultIPTEventsInterval),
+		Comment: fmt.Sprintf("How often the open placement dialog receives the state of its test (%s to %s)", config.FormatDuration(config.MinIPTEventsInterval), config.FormatDuration(config.MaxIPTEventsInterval))},
+	{Key: "IPT_SEARCH_MARGIN", Default: config.FormatDuration(config.DefaultIPTSearchMargin),
+		Comment: fmt.Sprintf("How far before the start of a test the IMAP search reaches back (0s to %s)", config.FormatDuration(config.MaxIPTSearchMargin))},
+	{Key: "IPT_SPAM_FOLDERS", Default: config.DefaultIPTSpamFolders,
+		Comment: fmt.Sprintf("Folders a placement test searches after INBOX, in this order (at most %d); %s searches INBOX alone", config.MaxIPTSpamFolders, config.NoSpamFolders)},
 }
 
 // MigrateFile reads the .env file at path, appends every variable from [All]

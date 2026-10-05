@@ -25,6 +25,17 @@ All notable changes to this project will be documented in this file.
   Pfad, ein Eintrag mit `/` am Ende für alle Pfade darunter; `none` leitet alle Pfade um.
   Ein Eintrag, der kein Pfad ist, und `/` allein halten den Start mit einer Meldung an,
   die das erwartete Format nennt.
+- **Zeitplan und Ordner der Platzierungstests** — `IPT_TEST_DURATION` (Vorgabe `10m`,
+  erlaubt `1m` bis `1h` in ganzen Minuten) legt fest, wie lange ein Test auf seine
+  Nachricht wartet; der Dialog nennt diese Dauer. `IPT_POLL_INTERVAL` (Vorgabe `30s`, `5s`
+  bis `5m`, kürzer als die Testdauer) ist die Pause zwischen zwei IMAP-Abfragen je
+  Seed-Konto, `IPT_EVENTS_INTERVAL` (Vorgabe `5s`, `1s` bis `1m`) der Takt, in dem der
+  offene Dialog den Stand seines Tests bekommt, und `IPT_SEARCH_MARGIN` (Vorgabe `2m`, `0s`
+  bis `1h`) der Vorlauf der IMAP-Suche vor dem Teststart. `IPT_SPAM_FOLDERS` nennt die
+  Ordner, die ein Test nach INBOX durchsucht, in dieser Reihenfolge (Vorgabe
+  `Spam,Junk,[Gmail]/Spam,Bulk Mail,Bulk,Junk E-Mail`, höchstens 20; `none` sucht nur in
+  INBOX). Ein Wert außerhalb der Grenzen hält den Start mit einer Meldung an, die Grenzen
+  und Vorgabe nennt.
 
 ### Changed
 - **Health-Pfade antworten mit `FORCE_HTTPS` direkt** — `/healthz` und `/readyz`

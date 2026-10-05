@@ -82,6 +82,7 @@ type HomeData struct {
 	EnableInboxPlacement bool
 	IPTProviderNames     []string // kept for legacy; prefer IPTProviders
 	IPTProviders         []IPTProviderInfo
+	IPTTestMinutes       int // IPT_TEST_DURATION in minutes, named in the placement dialog
 }
 
 type PrivacyData struct {
@@ -128,6 +129,7 @@ type ReportData struct {
 	EnableInboxPlacement bool
 	IPTProviderNames     []string
 	IPTProviders         []IPTProviderInfo
+	IPTTestMinutes       int // IPT_TEST_DURATION in minutes, named in the placement dialog
 }
 
 type ReportCheckGroup struct {
@@ -446,6 +448,20 @@ type ReportLinkGroup struct {
 }
 
 func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *telemetry.Counters) (*Server, error) {
+	// A configuration built without config.Load, as in tests, leaves the
+	// timing of placement tests at zero; such a server takes the defaults.
+	if cfg.IPTTestDuration <= 0 {
+		cfg.IPTTestDuration = config.DefaultIPTTestDuration
+	}
+	if cfg.IPTPollInterval <= 0 {
+		cfg.IPTPollInterval = config.DefaultIPTPollInterval
+	}
+	if cfg.IPTEventsInterval <= 0 {
+		cfg.IPTEventsInterval = config.DefaultIPTEventsInterval
+	}
+	if cfg.IPTSpamFolders == nil {
+		cfg.IPTSpamFolders = strings.Split(config.DefaultIPTSpamFolders, ",")
+	}
 	if logger == nil {
 		logger = log.Default()
 	}
@@ -1000,6 +1016,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		EnableInboxPlacement: s.seeds != nil,
 		IPTProviderNames:     s.iptProviderNames(),
 		IPTProviders:         s.iptProviders(),
+		IPTTestMinutes:       int(s.cfg.IPTTestDuration / time.Minute),
 	}
 	s.render(w, "home", data)
 }
@@ -1227,6 +1244,7 @@ func (s *Server) reportPage(w http.ResponseWriter, r *http.Request) {
 		EnableInboxPlacement: s.seeds != nil,
 		IPTProviderNames:     s.iptProviderNames(),
 		IPTProviders:         s.iptProviders(),
+		IPTTestMinutes:       int(s.cfg.IPTTestDuration / time.Minute),
 	})
 }
 
@@ -2916,7 +2934,7 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 	}
 	subjectTag := "[SR-" + pt + "]"
 	infos, accounts := ipt.Pick(providers)
-	expiresAt := time.Now().UTC().Add(10 * time.Minute)
+	expiresAt := time.Now().UTC().Add(s.cfg.IPTTestDuration)
 
 	if err := s.store.CreatePlacementTest(ctx, mb.ID, pt, infos, expiresAt); err != nil {
 		s.logger.Printf("ipt: store placement test: %v", err)
@@ -2936,9 +2954,10 @@ func (s *Server) iptStartAPI(w http.ResponseWriter, r *http.Request, mailboxToke
 	go func() {
 		pollCtx, cancel := context.WithDeadline(context.Background(), expiresAt)
 		defer cancel()
-		since := time.Now().UTC().Add(-2 * time.Minute)
+		since := time.Now().UTC().Add(-s.cfg.IPTSearchMargin)
 		results := make(chan ipt.ProviderResult, len(infos))
-		go ipt.PollWithHosts(pollCtx, infos, accounts, imapHosts, pt, since, results)
+		settings := ipt.PollSettings{Interval: s.cfg.IPTPollInterval, SpamFolders: s.cfg.IPTSpamFolders}
+		go ipt.PollWithHosts(pollCtx, settings, infos, accounts, imapHosts, pt, since, results)
 
 		var collected []ipt.ProviderResult
 		for res := range results {
@@ -3043,7 +3062,7 @@ func (s *Server) iptEventsAPI(w http.ResponseWriter, r *http.Request, mailboxTok
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(s.cfg.IPTEventsInterval)
 	defer ticker.Stop()
 	lastPayload := ""
 

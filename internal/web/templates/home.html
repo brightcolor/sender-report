@@ -544,7 +544,7 @@
             <div id="ipt-seed-list"></div>
             <div class="text-secondary small mt-3">
               <i class="bi bi-clock me-1"></i>
-              {{if eq .Lang "en"}}Waiting for delivery (up to 10 minutes)…{{else}}Warte auf Zustellung (bis zu 10 Minuten)…{{end}}
+              {{if eq .Lang "en"}}Waiting for delivery (up to {{.IPTTestMinutes}} {{if eq .IPTTestMinutes 1}}minute{{else}}minutes{{end}})…{{else}}Warte auf Zustellung (bis zu {{.IPTTestMinutes}} {{if eq .IPTTestMinutes 1}}Minute{{else}}Minuten{{end}})…{{end}}
             </div>
           </div>
 
