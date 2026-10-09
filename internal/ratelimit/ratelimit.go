@@ -41,3 +41,29 @@ func (l *Limiter) Allow(key string) bool {
 	l.hits[key] = kept
 	return true
 }
+
+// RetryAfter is the time until Allow lets key through again: zero while key
+// is below the limit, otherwise the time until enough of its hits have left
+// the window.
+func (l *Limiter) RetryAfter(key string) time.Duration {
+	now := time.Now()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.maxHits <= 0 {
+		return l.window
+	}
+	cutoff := now.Add(-l.window)
+	var kept []time.Time
+	for _, t := range l.hits[key] {
+		if t.After(cutoff) {
+			kept = append(kept, t)
+		}
+	}
+	if len(kept) < l.maxHits {
+		return 0
+	}
+	// Hits are stored in the order they happened; the next one fits once
+	// this hit has left the window.
+	return kept[len(kept)-l.maxHits].Add(l.window).Sub(now)
+}

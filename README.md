@@ -164,10 +164,19 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | `SMTP_DOMAIN` | domain of generated addresses; empty = request host |
 | `HTTP_PORT` / `SMTP_PORT` | host ports (container: `:8080` / `:2525`) |
 | `ENABLE_TLS`, `TLS_CERT_FILE`, `TLS_KEY_FILE`, `FORCE_HTTPS` | built-in TLS / redirect |
+| `FORCE_HTTPS_EXEMPT_PATHS` | paths that answer over plain HTTP although `FORCE_HTTPS` is set, so the container healthcheck reaches them regardless of `PUBLIC_BASE_URL` (default `/healthz,/readyz`; an entry ending in `/` covers the paths below it, `none` redirects every path) |
 | `TRUSTED_PROXY_CIDRS` | only these proxy CIDRs may set `X-Forwarded-*` |
 | `MAILBOX_TTL`, `DATA_RETENTION_TTL`, `CLEANUP_INTERVAL` | lifetime & cleanup |
 | `MAX_MESSAGE_BYTES`, `MAX_ACTIVE_MAILBOXES_PER_IP/_GLOBAL` | limits |
 | `WEB_RATE_LIMIT_PER_MIN`, `SMTP_RATE_LIMIT_PER_HOUR`, … | rate limits |
+| `PAYLOAD_RATE_LIMIT_PER_MIN` | encrypted reports one IP address may fetch per minute; rechecks and simulator runs count separately against the same number (default 30, 1 to 600) |
+| `IPT_RATE_LIMIT_PER_HOUR` | placement tests one IP address may start per hour (default 3, 1 to 60) |
+| `IPT_TOKEN_LENGTH` | hexadecimal characters in the subject token of a new placement test (default 32 = 128 bits, 16 to 64); a test with a shorter token answers to it until the test expires |
+| `IPT_TEST_DURATION` | how long a placement test waits for its message, in whole minutes; the placement dialog names it (default `10m`, `1m` to `1h`) |
+| `IPT_POLL_INTERVAL` | pause between two IMAP lookups in one seed account, shorter than `IPT_TEST_DURATION` (default `30s`, `5s` to `5m`) |
+| `IPT_EVENTS_INTERVAL` | how often the open placement dialog receives the state of its test (default `5s`, `1s` to `1m`) |
+| `IPT_SEARCH_MARGIN` | how far before the start of a test the IMAP search reaches back, so a provider whose clock runs behind still finds the message (default `2m`, `0s` to `1h`) |
+| `IPT_SPAM_FOLDERS` | folders a placement test searches after INBOX, in this order (default `Spam,Junk,[Gmail]/Spam,Bulk Mail,Bulk,Junk E-Mail`, at most 20; `none` searches INBOX alone) |
 | `ENABLE_RBL_CHECKS`, `RBL_PROVIDERS` | DNSBL/RBL (IP reputation), optional |
 | `ENABLE_SPAMASSASSIN`, `ENABLE_RSPAMD`, … | external spam filters, optional |
 | `ENABLE_DOMAIN_AGE`, `ENABLE_DOMAIN_BLOCKLIST`, `DOMAIN_BLOCKLIST_PROVIDERS` | force third-party checks on globally (default off) |
@@ -198,7 +207,8 @@ Mount the cert directory as a volume (`./certs:/certs:ro`). Behind a proxy use
 
 - **End-to-end encryption** of mail content (key only in the link/browser).
 - No open relay; SMTP recipients are validated against active mailboxes.
-- Rate limits (web & SMTP), maximum message size, per-IP mailbox limits.
+- Rate limits (web, SMTP, report payloads, placement tests), maximum message size, per-IP
+  mailbox limits.
 - TTL-based data lifecycle (automatic deletion).
 - No external CDNs/trackers — all assets are served locally.
 - Cookies carry `HttpOnly`, `SameSite=Lax` and, over HTTPS, `Secure`.

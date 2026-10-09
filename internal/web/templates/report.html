@@ -2278,7 +2278,7 @@ function renderDecryptedReport(p) {
           <p class="small text-secondary mb-2">{{if eq .Lang "de"}}Sende deine Testmail an diese Adressen:{{else}}Send your test mail to these addresses:{{end}}</p>
           <div id="mp-ipt-r-seed-list"></div>
           <div class="text-secondary small mt-3">
-            <i class="bi bi-clock me-1"></i>{{if eq .Lang "de"}}Warte auf Zustellung (bis zu 10 Minuten)…{{else}}Waiting for delivery (up to 10 minutes)…{{end}}
+            <i class="bi bi-clock me-1"></i>{{if eq .Lang "de"}}Warte auf Zustellung (bis zu {{.IPTTestMinutes}} {{if eq .IPTTestMinutes 1}}Minute{{else}}Minuten{{end}})…{{else}}Waiting for delivery (up to {{.IPTTestMinutes}} {{if eq .IPTTestMinutes 1}}minute{{else}}minutes{{end}})…{{end}}
           </div>
         </div>
 
@@ -2299,7 +2299,7 @@ function renderDecryptedReport(p) {
 <script>
 (function(){
   var LANG = {{.Lang}};
-  var IPT_MB_TOKEN = TOKEN || '';
+  var IPT_MB_TOKEN = {{.Mailbox.Token}};
   var iptRPtToken = '';
   var iptRSSE = null;
 
@@ -2362,6 +2362,21 @@ function renderDecryptedReport(p) {
     });
   }
 
+  // iptRStartFailure is the message for a start the server turned down: the
+  // explanation it sent along, otherwise one that names the HTTP status.
+  function iptRStartFailure(status, data){
+    if(data&&data.message) return data.message;
+    return LANG==='en'
+      ?'The test could not be started (HTTP '+status+'). Start it again in a moment.'
+      :'Der Test ließ sich nicht starten (HTTP '+status+'). Starten Sie ihn gleich noch einmal.';
+  }
+
+  function iptRFailStart(message){
+    startBtn.disabled=false;
+    startBtn.innerHTML='<i class="bi bi-play-fill me-1"></i>'+(LANG==='en'?'Start test':'Test starten');
+    alert(message);
+  }
+
   var startBtn=document.getElementById('mp-ipt-r-start-btn');
   if(startBtn){
     startBtn.addEventListener('click',async function(){
@@ -2370,20 +2385,25 @@ function renderDecryptedReport(p) {
       if(!selected.length) return;
       startBtn.disabled=true;
       startBtn.innerHTML='<span class="spinner-border spinner-border-sm me-2"></span>'+(LANG==='en'?'Starting…':'Startet…');
+      var res, data=null;
       try{
-        var res=await fetch('/api/mailboxes/'+IPT_MB_TOKEN+'/ipt/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({selected_providers:selected})});
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        var data=await res.json();
-        iptRPtToken=data.placement_token;
-        document.getElementById('mp-ipt-r-subject-tag').textContent=data.subject_tag||'';
-        iptRRenderSeeds(data.seeds||[]);
-        iptRShowStep('send');
-        iptRStartSSE(iptRPtToken);
+        res=await fetch('/api/mailboxes/'+IPT_MB_TOKEN+'/ipt/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({selected_providers:selected})});
       }catch(e){
-        startBtn.disabled=false;
-        startBtn.innerHTML='<i class="bi bi-play-fill me-1"></i>'+(LANG==='en'?'Start test':'Test starten');
-        alert(LANG==='en'?'Error starting test.':'Fehler beim Starten des Tests.');
+        iptRFailStart(LANG==='en'
+          ?'The server cannot be reached. Check your internet connection and start the test again.'
+          :'Der Server ist nicht erreichbar. Prüfen Sie Ihre Internetverbindung und starten Sie den Test erneut.');
+        return;
       }
+      try{ data=await res.json(); }catch(e){}
+      if(!res.ok||!data||!data.placement_token){
+        iptRFailStart(iptRStartFailure(res.status, data));
+        return;
+      }
+      iptRPtToken=data.placement_token;
+      document.getElementById('mp-ipt-r-subject-tag').textContent=data.subject_tag||'';
+      iptRRenderSeeds(data.seeds||[]);
+      iptRShowStep('send');
+      iptRStartSSE(iptRPtToken);
     });
   }
 

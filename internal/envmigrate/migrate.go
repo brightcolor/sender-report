@@ -16,9 +16,11 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/brightcolor/sender-report/internal/config"
 	"github.com/brightcolor/sender-report/internal/version"
 )
 
@@ -52,6 +54,8 @@ var All = []VarDef{
 	{Key: "TLS_CERT_FILE", Default: "", Comment: "Path to TLS certificate (required when ENABLE_TLS=true)"},
 	{Key: "TLS_KEY_FILE", Default: "", Comment: "Path to TLS private key (required when ENABLE_TLS=true)"},
 	{Key: "FORCE_HTTPS", Default: "false", Comment: "Redirect plain HTTP to HTTPS"},
+	{Key: "FORCE_HTTPS_EXEMPT_PATHS", Default: config.DefaultForceHTTPSExemptPaths,
+		Comment: "Paths that answer over plain HTTP although FORCE_HTTPS is set; an entry ending in / covers the paths below it, " + config.NoExemptPaths + " redirects every path"},
 
 	// ── Docker / Compose ─────────────────────────────────────────────────────
 	{Group: "Docker / Compose", Key: "SENDER_REPORT_IMAGE", Default: "ghcr.io/brightcolor/sender-report:latest", Comment: "Container image used by docker-compose"},
@@ -77,6 +81,8 @@ var All = []VarDef{
 	{Key: "WEB_BURST_PER_10_SEC", Default: "20", Comment: "Web request burst per 10 s per IP"},
 	{Key: "SMTP_RATE_LIMIT_PER_HOUR", Default: "200", Comment: "SMTP connections allowed per hour per IP"},
 	{Key: "SMTP_BURST_PER_MIN", Default: "40", Comment: "SMTP burst per minute per IP"},
+	{Key: "PAYLOAD_RATE_LIMIT_PER_MIN", Default: strconv.Itoa(config.DefaultPayloadRateLimitPerMin),
+		Comment: fmt.Sprintf("Encrypted reports one IP may fetch per minute; rechecks and simulator runs count separately against the same number (1 to %d)", config.MaxPayloadRateLimitPerMin)},
 	{Key: "TRUSTED_PROXY_CIDRS", Default: "", Comment: "Comma-separated CIDRs whose X-Forwarded-For header is trusted"},
 
 	// ── Optional checks ───────────────────────────────────────────────────────
@@ -111,6 +117,22 @@ var All = []VarDef{
 
 	// ── Env migration ─────────────────────────────────────────────────────────
 	{Group: "Env migration", Key: "ENV_FILE", Default: "/config/.env", Comment: "Path inside the container to the mounted .env file; enables automatic migration on startup"},
+
+	// ── Inbox placement testing ───────────────────────────────────────────────
+	{Group: "Inbox placement testing", Key: "IPT_RATE_LIMIT_PER_HOUR", Default: strconv.Itoa(config.DefaultIPTRateLimitPerHour),
+		Comment: fmt.Sprintf("Placement tests one IP may start per hour (1 to %d)", config.MaxIPTRateLimitPerHour)},
+	{Key: "IPT_TOKEN_LENGTH", Default: strconv.Itoa(config.DefaultIPTTokenLength),
+		Comment: fmt.Sprintf("Hexadecimal characters in the subject token of a new placement test (%d to %d); a test with a shorter token answers to it until it expires", config.MinIPTTokenLength, config.MaxIPTTokenLength)},
+	{Key: "IPT_TEST_DURATION", Default: config.FormatDuration(config.DefaultIPTTestDuration),
+		Comment: fmt.Sprintf("How long a placement test waits for its message, in whole minutes (%s to %s)", config.FormatDuration(config.MinIPTTestDuration), config.FormatDuration(config.MaxIPTTestDuration))},
+	{Key: "IPT_POLL_INTERVAL", Default: config.FormatDuration(config.DefaultIPTPollInterval),
+		Comment: fmt.Sprintf("Pause between two IMAP lookups in one seed account (%s to %s), shorter than IPT_TEST_DURATION", config.FormatDuration(config.MinIPTPollInterval), config.FormatDuration(config.MaxIPTPollInterval))},
+	{Key: "IPT_EVENTS_INTERVAL", Default: config.FormatDuration(config.DefaultIPTEventsInterval),
+		Comment: fmt.Sprintf("How often the open placement dialog receives the state of its test (%s to %s)", config.FormatDuration(config.MinIPTEventsInterval), config.FormatDuration(config.MaxIPTEventsInterval))},
+	{Key: "IPT_SEARCH_MARGIN", Default: config.FormatDuration(config.DefaultIPTSearchMargin),
+		Comment: fmt.Sprintf("How far before the start of a test the IMAP search reaches back (0s to %s)", config.FormatDuration(config.MaxIPTSearchMargin))},
+	{Key: "IPT_SPAM_FOLDERS", Default: config.DefaultIPTSpamFolders,
+		Comment: fmt.Sprintf("Folders a placement test searches after INBOX, in this order (at most %d); %s searches INBOX alone", config.MaxIPTSpamFolders, config.NoSpamFolders)},
 }
 
 // MigrateFile reads the .env file at path, appends every variable from [All]
