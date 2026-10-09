@@ -132,17 +132,6 @@ func (s *Store) TouchMailbox(ctx context.Context, id int64) error {
 	return err
 }
 
-func (s *Store) ExtendMailbox(ctx context.Context, token string, newExpiresAt time.Time) (model.Mailbox, error) {
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE mailboxes SET expires_at = ? WHERE token = ?`,
-		newExpiresAt.UTC(), token,
-	)
-	if err != nil {
-		return model.Mailbox{}, err
-	}
-	return s.GetMailboxByToken(ctx, token)
-}
-
 func (s *Store) SaveMessage(ctx context.Context, m model.Message) (model.Message, error) {
 	if m.ReceivedAt.IsZero() {
 		m.ReceivedAt = time.Now().UTC()
@@ -444,6 +433,14 @@ func (s *Store) counterValue(ctx context.Context, key string) float64 {
 	return v
 }
 
+// Cleanup enforces the retention window. A mailbox's expires_at only ends its
+// receiving window — mail is refused from then on — while the reports already
+// generated for it stay reachable under /report/<token>. Both messages and the
+// mailbox row are therefore removed by retention, not by expiry: a message goes
+// `retention` after it arrived, and the mailbox goes `retention` after it
+// stopped receiving, which is the earliest point at which none of its messages
+// can still be inside the window. Deleting the mailbox cascades to its messages
+// and reports.
 func (s *Store) Cleanup(ctx context.Context, now time.Time, retention time.Duration) (deletedMailboxes, deletedMessages int64, err error) {
 	cutoff := now.UTC().Add(-retention)
 
@@ -453,7 +450,7 @@ func (s *Store) Cleanup(ctx context.Context, now time.Time, retention time.Durat
 	}
 	deletedMessages, _ = resMsg.RowsAffected()
 
-	resBox, err := s.db.ExecContext(ctx, `DELETE FROM mailboxes WHERE expires_at < ?`, now.UTC())
+	resBox, err := s.db.ExecContext(ctx, `DELETE FROM mailboxes WHERE expires_at < ?`, cutoff)
 	if err != nil {
 		return deletedMailboxes, deletedMessages, err
 	}

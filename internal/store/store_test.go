@@ -159,7 +159,7 @@ func TestStoreMailboxMessageReportLifecycle(t *testing.T) {
 	}
 }
 
-func TestStoreCleanupDeletesExpiredMailboxAndOldMessages(t *testing.T) {
+func TestStoreCleanupKeepsExpiredMailboxUntilRetentionElapsed(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
 
@@ -184,7 +184,7 @@ func TestStoreCleanupDeletesExpiredMailboxAndOldMessages(t *testing.T) {
 		t.Fatalf("SaveMessage old: %v", err)
 	}
 
-	_, err = st.SaveMessage(ctx, model.Message{
+	newMsg, err := st.SaveMessage(ctx, model.Message{
 		MailboxID:   mb.ID,
 		SMTPFrom:    "b@example.org",
 		RCPTTo:      mb.Address,
@@ -200,28 +200,81 @@ func TestStoreCleanupDeletesExpiredMailboxAndOldMessages(t *testing.T) {
 		t.Fatalf("SaveMessage new: %v", err)
 	}
 
-	// Force mailbox expiry.
-	_, err = st.db.ExecContext(ctx, `UPDATE mailboxes SET expires_at = ? WHERE id = ?`, time.Now().UTC().Add(-time.Minute), mb.ID)
-	if err != nil {
-		t.Fatalf("force expire mailbox: %v", err)
-	}
+	// The mailbox stopped accepting mail a minute ago, but the retention window
+	// has not elapsed — its reports must stay reachable.
+	forceMailboxExpiry(t, st, mb.ID, time.Now().UTC().Add(-time.Minute))
 
 	deletedMailboxes, deletedMessages, err := st.Cleanup(ctx, time.Now().UTC(), 24*time.Hour)
+	if err != nil {
+		t.Fatalf("Cleanup: %v", err)
+	}
+	if deletedMailboxes != 0 {
+		t.Fatalf("expected the mailbox to survive its expiry, got %d deleted", deletedMailboxes)
+	}
+	if deletedMessages != 1 {
+		t.Fatalf("expected exactly the out-of-retention message to be deleted, got %d", deletedMessages)
+	}
+
+	if _, err := st.GetMailboxByID(ctx, mb.ID); err != nil {
+		t.Fatalf("expected expired mailbox to be kept within retention, got %v", err)
+	}
+	if _, err := st.GetMessage(ctx, oldMsg.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected old message to be removed, got %v", err)
+	}
+	if _, err := st.GetMessage(ctx, newMsg.ID); err != nil {
+		t.Fatalf("expected recent message to be kept, got %v", err)
+	}
+}
+
+func TestStoreCleanupDeletesMailboxOnceRetentionElapsed(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	mb, err := st.CreateMailbox(ctx, "tok-gone", "tok-gone@example.test", "", "127.0.0.1", time.Hour)
+	if err != nil {
+		t.Fatalf("CreateMailbox: %v", err)
+	}
+
+	msg, err := st.SaveMessage(ctx, model.Message{
+		MailboxID:   mb.ID,
+		SMTPFrom:    "c@example.org",
+		RCPTTo:      mb.Address,
+		RemoteIP:    "203.0.113.3",
+		HELO:        "mx3.example.org",
+		ReceivedAt:  time.Now().UTC(),
+		RawSource:   "recent",
+		HeaderBlock: "recent",
+		Subject:     "recent",
+		SizeBytes:   1,
+	})
+	if err != nil {
+		t.Fatalf("SaveMessage: %v", err)
+	}
+
+	// Expired longer ago than the retention window — mailbox and everything
+	// hanging off it (messages, reports) go.
+	forceMailboxExpiry(t, st, mb.ID, time.Now().UTC().Add(-25*time.Hour))
+
+	deletedMailboxes, _, err := st.Cleanup(ctx, time.Now().UTC(), 24*time.Hour)
 	if err != nil {
 		t.Fatalf("Cleanup: %v", err)
 	}
 	if deletedMailboxes != 1 {
 		t.Fatalf("expected 1 deleted mailbox, got %d", deletedMailboxes)
 	}
-	if deletedMessages < 1 {
-		t.Fatalf("expected at least 1 deleted message, got %d", deletedMessages)
-	}
-
 	if _, err := st.GetMailboxByID(ctx, mb.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("expected expired mailbox to be removed, got %v", err)
+		t.Fatalf("expected mailbox to be removed, got %v", err)
 	}
-	if _, err := st.GetMessage(ctx, oldMsg.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("expected old message to be removed, got %v", err)
+	if _, err := st.GetMessage(ctx, msg.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected message to be removed by cascade, got %v", err)
+	}
+}
+
+func forceMailboxExpiry(t *testing.T, st *Store, id int64, expiresAt time.Time) {
+	t.Helper()
+	if _, err := st.db.ExecContext(context.Background(),
+		`UPDATE mailboxes SET expires_at = ? WHERE id = ?`, expiresAt, id); err != nil {
+		t.Fatalf("force expire mailbox: %v", err)
 	}
 }
 

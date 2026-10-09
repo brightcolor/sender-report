@@ -249,7 +249,7 @@
                     <td><code>{{.MailboxCookieName}}</code></td>
                     <td>HTTP-Cookie<br><small class="text-secondary">HttpOnly, SameSite=Lax{{template "cookie-secure-note" .}}</small></td>
                     <td>Speichert den Token der aktuell aktiven Mailbox, damit sie beim Seitenaufruf wiedererkannt wird. Nicht durch JavaScript auslesbar. Wird nur im JavaScript-losen Fallback-Modus gesetzt – im normalen (verschlüsselten) Betrieb erfolgt die Wiedererkennung allein über den Browser-Speicher.</td>
-                    <td>Läuft mit der Mailbox ab (Standard: 24 Stunden)</td>
+                    <td>Läuft mit dem Empfangsfenster der Mailbox ab ({{.MailboxHours}} Stunden)</td>
                     <td><span class="badge text-bg-secondary">Nicht erforderlich</span><br><small class="text-secondary">technisch notwendig</small></td>
                   </tr>
                   <tr>
@@ -393,11 +393,13 @@
               E-Mail-Daten werden temporär gespeichert und automatisch gelöscht:
             </p>
             <ul>
-              <li><strong>Mailbox-TTL</strong> (Standard: 24 Stunden): Nach Ablauf dieser Zeit
-                wird die Mailbox als abgelaufen markiert.</li>
-              <li><strong>Datenaufbewahrung</strong> (Standard: 7 Tage): E-Mails, Analyseberichte
-                und Mailbox-Daten werden spätestens nach dieser Frist automatisch aus der
-                Datenbank gelöscht. Der Betreiber kann diese Werte konfigurieren.</li>
+              <li><strong>Mailbox-TTL</strong> ({{.MailboxHours}} Stunden): Das Empfangsfenster.
+                Nach Ablauf dieser Zeit nimmt die Adresse keine E-Mails mehr an. Bereits
+                empfangene Mails und ihre Berichte werden dadurch noch nicht gelöscht.</li>
+              <li><strong>Datenaufbewahrung</strong> ({{.RetentionDays}} Tage): E-Mails, Analyseberichte
+                und Mailbox-Daten werden spätestens nach dieser Frist – gerechnet ab Eingang der
+                jeweiligen E-Mail – automatisch aus der Datenbank gelöscht. Der Betreiber kann
+                diese Werte konfigurieren.</li>
               <li><strong>HTTP-Logs</strong>: Werden nur im Arbeitsspeicher gehalten und
                 gehen beim Neustart des Prozesses verloren (Standardkonfiguration).</li>
             </ul>

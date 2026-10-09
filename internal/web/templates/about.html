@@ -43,9 +43,9 @@
       { "@type": "Question", "name": "Brauche ich einen Account?",
         "acceptedAnswer": { "@type": "Answer", "text": "Nein. Es wird automatisch eine temporäre Mailbox erzeugt – ohne Registrierung, ohne E-Mail-Adresse, ohne Passwort." } },
       { "@type": "Question", "name": "Was passiert mit meinen Testmails?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Sie werden ausschließlich für die Analyse verarbeitet und nach Ablauf der Mailbox automatisch und vollständig gelöscht. Es findet keine Weitergabe an Dritte statt." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "Sie werden ausschließlich für die Analyse verarbeitet und nach Ablauf der Aufbewahrungsfrist von {{.RetentionDays}} Tagen automatisch und vollständig gelöscht. Es findet keine Weitergabe an Dritte statt." } },
       { "@type": "Question", "name": "Wie lange ist eine Mailbox gültig?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Standardmäßig 24 Stunden. In der Mailbox-Ansicht lässt sich die Gültigkeit bei Bedarf verlängern." } },
+        "acceptedAnswer": { "@type": "Answer", "text": "Die Adresse nimmt {{.MailboxHours}} Stunden lang Mails an. Der erzeugte Analysebericht bleibt danach noch {{.RetentionDays}} Tage lang über seinen Link abrufbar und wird dann automatisch gelöscht." } },
       { "@type": "Question", "name": "Welche Prüfungen werden durchgeführt?",
         "acceptedAnswer": { "@type": "Answer", "text": "68 Checks aus fünf Bereichen: Authentifizierung (SPF, DKIM, DMARC inkl. Policy, Schlüssellänge, Alignment, ARC), DNS & Infrastruktur (PTR, HELO, TLS, MX, MTA-STS, DNSSEC, BIMI, DANE), Spam-Signale (SpamAssassin, Rspamd, DNSBL), Format & Inhalt sowie Header & Rohdaten. Das Ergebnis fasst ein Score von 0–10 zusammen." } },
       { "@type": "Question", "name": "Kann ich sender.report selbst hosten?",
@@ -1177,11 +1177,15 @@
             <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
               <div class="accordion-body text-secondary">
                 {{if eq .Lang "de"}}
-                Standardmäßig 24 Stunden. In der Mailbox-Ansicht kannst du die Gültigkeit bei
-                Bedarf verlängern (bis zum vom Betreiber konfigurierten Maximum).
+                Die Adresse nimmt {{.MailboxHours}} Stunden lang Mails an. Das ist bewusst kurz —
+                für einen Test reicht es, und danach kann niemand mehr an die Adresse schreiben.
+                Der Analysebericht selbst bleibt davon unberührt: Er ist noch {{.RetentionDays}} Tage nach Eingang
+                der Mail über seinen Link abrufbar und wird dann automatisch gelöscht.
                 {{else}}
-                24 hours by default. In the mailbox view you can extend the validity period if needed
-                (up to the maximum configured by the operator).
+                The address accepts mail for {{.MailboxHours}} hours. That window is deliberately short —
+                long enough for a test, and afterwards nobody can write to the address any more.
+                The report itself is unaffected: it stays retrievable via its link for {{.RetentionDays}} days after
+                the message arrived, and is then deleted automatically.
                 {{end}}
               </div>
             </div>
