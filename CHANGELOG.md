@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.41.0] - 2026-10-09
+
 ### Security
 - **Platzierungstests tragen ein Token mit 128 Bit** — neue Platzierungstests bekommen im
   Betreff-Tag `[SR-…]` ein zufälliges Token aus 32 Hex-Zeichen. `IPT_TOKEN_LENGTH` legt
