@@ -47,8 +47,10 @@ func TestStartTriggersPeriodicCleanup(t *testing.T) {
 		t.Fatalf("SaveMessage: %v", err)
 	}
 
-	// Expire mailbox so cleanup has guaranteed work.
-	if _, err := sqlDB.Exec(`UPDATE mailboxes SET expires_at = ? WHERE id = ?`, time.Now().UTC().Add(-time.Minute), mb.ID); err != nil {
+	// Push the mailbox past the retention window (not merely past its receiving
+	// window, which on its own no longer deletes anything) so the ticker has
+	// guaranteed work.
+	if _, err := sqlDB.Exec(`UPDATE mailboxes SET expires_at = ? WHERE id = ?`, time.Now().UTC().Add(-48*time.Hour), mb.ID); err != nil {
 		t.Fatalf("expire mailbox: %v", err)
 	}
 

@@ -97,16 +97,21 @@ type PrivacyData struct {
 	LangCookieName    string
 	LangCookieDays    int
 	MailboxCookieName string
+	// Lifetimes from MAILBOX_TTL and DATA_RETENTION_TTL, named in the text.
+	MailboxHours  int
+	RetentionDays int
 }
 
 type MailboxData struct {
-	AppName       string
-	Mailbox       model.Mailbox
-	Messages      []model.MessageWithReport
-	Now           time.Time
-	PublicURL     string
-	MaxExtendDays int
-	Lang          string
+	AppName   string
+	Mailbox   model.Mailbox
+	Messages  []model.MessageWithReport
+	Now       time.Time
+	PublicURL string
+	Lang      string
+	// RetentionDays is how long a report stays retrievable after its message
+	// arrived — independent of the mailbox's own receiving window.
+	RetentionDays int
 }
 
 type ReportData struct {
@@ -492,6 +497,12 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"t":                  func(lang, key string) string { return i18n.T(i18n.Lang(lang), key) },
 		"appVersion":         func() string { return version.Version },
 		"defaultTheme":       func() string { return cfg.UIDefaultTheme },
+		// tf is t for translations that carry printf verbs, so a number a template
+		// knows (a retention window, a count) can be placed inside the sentence
+		// rather than glued on after it, where German and English put it differently.
+		"tf": func(lang, key string, args ...any) string {
+			return fmt.Sprintf(i18n.T(i18n.Lang(lang), key), args...)
+		},
 		// The analyzer stores an English variant of every check's name, summary,
 		// explanation and advice alongside the German one, precisely so a report
 		// can be rendered in either language without re-analysing it. Nothing
@@ -910,9 +921,9 @@ func pickLang(lang, de, en string) string {
 // nothing wrong and, in the German UI, may not read English at all.
 func (s *Server) gonePage(w http.ResponseWriter, r *http.Request, status int) {
 	lang := s.lang(r)
-	title, body, back := "Dieser Link ist abgelaufen", "Testpostfächer und ihre Berichte werden nach kurzer Zeit automatisch gelöscht — das gehört zum Datenschutzversprechen dieses Dienstes. Der Bericht dahinter existiert nicht mehr und lässt sich auch nicht wiederherstellen. Schicken Sie einfach eine neue Testmail, um einen frischen Bericht zu bekommen.", "Neuen Test starten"
+	title, body, back := "Dieser Link ist abgelaufen", "Testpostfächer und ihre Berichte werden nach Ablauf der Aufbewahrungsfrist automatisch gelöscht — das gehört zum Datenschutzversprechen dieses Dienstes. Der Bericht dahinter existiert nicht mehr und lässt sich auch nicht wiederherstellen. Schicken Sie einfach eine neue Testmail, um einen frischen Bericht zu bekommen.", "Neuen Test starten"
 	if lang == i18n.EN {
-		title, body, back = "This link has expired", "Test mailboxes and their reports are deleted automatically after a short time — that is part of this service's privacy promise. The report behind this link no longer exists and cannot be restored. Send a new test message to get a fresh report.", "Start a new test"
+		title, body, back = "This link has expired", "Test mailboxes and their reports are deleted automatically once the retention period is over — that is part of this service's privacy promise. The report behind this link no longer exists and cannot be restored. Send a new test message to get a fresh report.", "Start a new test"
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
@@ -1167,8 +1178,8 @@ func (s *Server) mailboxPage(w http.ResponseWriter, r *http.Request) {
 		Messages:      msgs,
 		Now:           time.Now().UTC(),
 		PublicURL:     s.publicBaseURL(r),
-		MaxExtendDays: s.cfg.MailboxMaxExtendDays,
 		Lang:          string(s.lang(r)),
+		RetentionDays: int(s.cfg.RetentionTTL.Hours() / 24),
 	})
 }
 
@@ -1317,12 +1328,16 @@ func (s *Server) aboutPage(w http.ResponseWriter, r *http.Request) {
 		PublicURL            string
 		Lang                 string
 		EnableInboxPlacement bool
+		RetentionDays        int
+		MailboxHours         int
 	}{
 		AppName:              s.cfg.AppName,
 		Domain:               host,
 		PublicURL:            s.publicBaseURL(r),
 		Lang:                 string(s.lang(r)),
 		EnableInboxPlacement: s.seeds != nil,
+		RetentionDays:        int(s.cfg.RetentionTTL.Hours() / 24),
+		MailboxHours:         int(s.cfg.MailboxTTL.Hours()),
 	})
 }
 
@@ -1342,6 +1357,8 @@ func (s *Server) privacyPage(w http.ResponseWriter, r *http.Request) {
 		LangCookieName:    s.cfg.LangCookieName,
 		LangCookieDays:    s.cfg.LangCookieDays,
 		MailboxCookieName: s.cfg.MailboxCookieName,
+		MailboxHours:      int(s.cfg.MailboxTTL.Hours()),
+		RetentionDays:     int(s.cfg.RetentionTTL.Hours() / 24),
 	})
 }
 
@@ -1852,51 +1869,6 @@ func (s *Server) mailboxAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		jsonResp(w, http.StatusOK, map[string]string{"status": "deleted"})
-
-	case action == "extend" && r.Method == http.MethodPost:
-		mb, err := s.store.GetMailboxByToken(ctx, token)
-		if err != nil {
-			jsonResp(w, http.StatusNotFound, map[string]string{"error": "mailbox not found"})
-			return
-		}
-		var body struct {
-			ExpiresAt time.Time `json:"expires_at"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ExpiresAt.IsZero() {
-			jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid expires_at"})
-			return
-		}
-		now := time.Now().UTC()
-		maxExtend := now.Add(time.Duration(s.cfg.MailboxMaxExtendDays) * 24 * time.Hour)
-		if body.ExpiresAt.Before(now) {
-			jsonResp(w, http.StatusBadRequest, map[string]string{"error": "expires_at must be in the future"})
-			return
-		}
-		if body.ExpiresAt.After(maxExtend) {
-			jsonResp(w, http.StatusBadRequest, map[string]string{
-				"error": fmt.Sprintf("maximum extension is %d days from now", s.cfg.MailboxMaxExtendDays),
-			})
-			return
-		}
-		// Only allow extension after half the original lifetime has elapsed
-		lifetime := mb.ExpiresAt.Sub(mb.CreatedAt)
-		halfPoint := mb.CreatedAt.Add(lifetime / 2)
-		if now.Before(halfPoint) {
-			jsonResp(w, http.StatusForbidden, map[string]string{
-				"error":    "too early to extend",
-				"earliest": halfPoint.UTC().Format(time.RFC3339),
-			})
-			return
-		}
-		updated, err := s.store.ExtendMailbox(ctx, token, body.ExpiresAt)
-		if err != nil {
-			jsonResp(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
-			return
-		}
-		jsonResp(w, http.StatusOK, map[string]any{
-			"status":     "extended",
-			"expires_at": updated.ExpiresAt,
-		})
 
 	default:
 		http.NotFound(w, r)

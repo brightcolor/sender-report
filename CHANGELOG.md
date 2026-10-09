@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.42.0] - 2026-10-09
+
+### Fixed
+- **Berichte bleiben so lange abrufbar, wie `DATA_RETENTION_TTL` es sagt.** Eingestellt
+  waren 7 Tage (`168h`), tatsächlich verschwand ein Bericht nach 24 Stunden: Berichte
+  hängen per `ON DELETE CASCADE` an ihrer Nachricht und die an ihrer Mailbox, und der
+  Aufräumjob löschte jede Mailbox, sobald ihr `MAILBOX_TTL` abgelaufen war. Wer einen
+  Report-Link weiterreichte oder am nächsten Tag noch einmal öffnete, landete auf
+  „Dieser Link ist abgelaufen“. Jetzt ist `MAILBOX_TTL` das **Empfangsfenster** (danach
+  nimmt die Adresse keine Mail mehr an), und `DATA_RETENTION_TTL` bestimmt allein, wie
+  lange Nachricht und Bericht **abrufbar** bleiben. Der Aufräumjob löscht eine Mailbox
+  erst, wenn auch ihre jüngstmögliche Nachricht aus der Aufbewahrung gefallen ist. Die
+  Vorgabe bleibt 7 Tage. Eine Mailbox zählt weiter nur während ihres Empfangsfensters
+  gegen `MAX_ACTIVE_MAILBOXES_PER_IP` und `MAX_ACTIVE_MAILBOXES_GLOBAL`.
+
+### Changed
+- Die Mailbox-Ansicht nennt „Empfängt bis“, nach Ablauf „Empfang beendet“, und darunter,
+  wie lange die Berichte noch abrufbar sind.
+- Die Seiten `/about` (mit FAQ) und `/privacy` nennen Empfangsfenster und Aufbewahrung aus
+  `MAILBOX_TTL` und `DATA_RETENTION_TTL`, so wie sie eingestellt sind.
+
+### Removed
+- **Das Verlängern der Mailbox** samt Knopf, Dialog, `POST /api/mailboxes/{token}/extend`
+  und `MAILBOX_MAX_EXTEND_DAYS`. Es diente dazu, den Bericht länger zu halten; das regelt
+  jetzt die Aufbewahrung.
+
 ## [1.41.0] - 2026-10-09
 
 ### Security

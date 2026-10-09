@@ -52,8 +52,6 @@ type Config struct {
 	RspamdPassword           string
 	AlertWebhookURL          string
 	TrustedProxyCIDRs        []string
-	// Mailbox extension
-	MailboxMaxExtendDays int
 	// Privacy page operator info
 	PrivacyOperatorName     string
 	PrivacyOperatorAddress  string
@@ -240,7 +238,6 @@ func Load() (Config, error) {
 		RspamdPassword:           getEnv("RSPAMD_PASSWORD", ""),
 		AlertWebhookURL:          getEnv("ALERT_WEBHOOK_URL", ""),
 		TrustedProxyCIDRs:        splitCSV(getEnv("TRUSTED_PROXY_CIDRS", "")),
-		MailboxMaxExtendDays:     getEnvInt("MAILBOX_MAX_EXTEND_DAYS", 7),
 		PrivacyOperatorName:      getEnv("PRIVACY_OPERATOR_NAME", ""),
 		PrivacyOperatorAddress:   getEnv("PRIVACY_OPERATOR_ADDRESS", ""),
 		PrivacyOperatorEmail:     getEnv("PRIVACY_OPERATOR_EMAIL", ""),

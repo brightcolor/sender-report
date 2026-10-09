@@ -252,6 +252,14 @@ func TestMailboxPageRendersMessageList(t *testing.T) {
 	if !strings.Contains(body, msgRef) {
 		t.Fatalf("expected message reference link in page")
 	}
+	// The page must state the retention window, because it is no longer the same
+	// as the mailbox's own expiry and the reader cannot infer it from the address.
+	if !strings.Contains(body, "Reports stay retrievable for 30 days after delivery") {
+		t.Fatalf("expected the retention notice in page")
+	}
+	if strings.Contains(body, "mp-extend") {
+		t.Fatalf("extend control should be gone from the mailbox page")
+	}
 	_ = rep
 }
 
@@ -514,6 +522,7 @@ func prepareWebTestFixture(t *testing.T) (*Server, *store.Store, model.Mailbox, 
 		PublicBaseURL:      "http://localhost:8080",
 		SMTPDomain:         "example.test",
 		MailboxTTL:         time.Hour,
+		RetentionTTL:       30 * 24 * time.Hour,
 		WebRateLimitPerMin: 1000,
 		WebBurstPer10Sec:   1000,
 	}

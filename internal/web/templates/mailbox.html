@@ -122,20 +122,18 @@
               <!-- Meta -->
               <dl class="mp-live-meta mb-0 flex-shrink-0">
                 <div>
-                  <dt>{{t .Lang "mailbox.valid_until"}}</dt>
+                  <dt>{{if .Mailbox.ExpiresAt.Before .Now}}{{t .Lang "mailbox.receiving"}}{{else}}{{t .Lang "mailbox.receives_until"}}{{end}}</dt>
                   <dd>
-                    <span data-time="{{.Mailbox.ExpiresAt.Format "2006-01-02T15:04:05Z07:00"}}">
-                      {{.Mailbox.ExpiresAt.Format "02.01.2006, 15:04 MST"}}
-                    </span>
-                    <button class="btn btn-link btn-sm p-0 ms-2 align-baseline mp-extend-btn"
-                            type="button"
-                            data-token="{{.Mailbox.Token}}"
-                            data-expires="{{.Mailbox.ExpiresAt.Format "2006-01-02T15:04:05Z07:00"}}"
-                            data-created="{{.Mailbox.CreatedAt.Format "2006-01-02T15:04:05Z07:00"}}"
-                            data-max-days="{{.MaxExtendDays}}"
-                            title="{{t .Lang "mailbox.extend_title"}}">
-                      <i class="bi bi-clock-history"></i> {{t .Lang "mailbox.extend"}}
-                    </button>
+                    {{if .Mailbox.ExpiresAt.Before .Now}}
+                      <span class="badge text-bg-secondary">{{t .Lang "mailbox.receiving_closed"}}</span>
+                    {{else}}
+                      <span data-time="{{.Mailbox.ExpiresAt.Format "2006-01-02T15:04:05Z07:00"}}">
+                        {{.Mailbox.ExpiresAt.Format "02.01.2006, 15:04 MST"}}
+                      </span>
+                    {{end}}
+                    <div class="text-secondary small mt-1">
+                      <i class="bi bi-archive me-1"></i>{{tf .Lang "mailbox.reports_kept" .RetentionDays}}
+                    </div>
                   </dd>
                 </div>
                 <div>
@@ -235,51 +233,6 @@
       </div>
     </div>
   </main>
-
-  <!-- ── Extend-Modal ──────────────────────────────────────────────────── -->
-  <div class="modal fade" id="mp-extend-modal" tabindex="-1"
-       aria-labelledby="mp-extend-modal-label" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header border-bottom-0 pb-1">
-          <h5 class="modal-title" id="mp-extend-modal-label">
-            <i class="bi bi-clock-history me-2 text-primary"></i>{{t .Lang "mailbox.extend_title"}}
-          </h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{t .Lang "mailbox.modal_close"}}"></button>
-        </div>
-        <div class="modal-body">
-
-          <!-- Zu-früh-Hinweis (wird per JS ein-/ausgeblendet) -->
-          <div id="mp-extend-too-early" class="alert alert-warning d-none py-2 mb-3" role="alert">
-            <i class="bi bi-hourglass-split me-1"></i>
-            <span id="mp-extend-earliest-msg"></span>
-          </div>
-
-          <!-- Slider -->
-          <label class="form-label fw-semibold mb-1">
-            {{t .Lang "mailbox.modal_new_duration"}}
-            <span id="mp-extend-days-label" class="text-primary ms-1"></span>
-          </label>
-          <input type="range" class="form-range mb-3" id="mp-extend-slider"
-                 min="1" max="7" step="1" value="3">
-
-          <!-- Date picker -->
-          <label class="form-label fw-semibold mb-1" for="mp-extend-date">
-            {{t .Lang "mailbox.modal_or_date"}}
-          </label>
-          <input type="datetime-local" class="form-control mb-3" id="mp-extend-date">
-
-          <p class="text-secondary small mb-0" id="mp-extend-info"></p>
-        </div>
-        <div class="modal-footer border-top-0 pt-0">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{t .Lang "mailbox.modal_cancel"}}</button>
-          <button type="button" class="btn btn-primary" id="mp-extend-confirm-btn">
-            <i class="bi bi-check2 me-1"></i>{{t .Lang "mailbox.extend"}}
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   {{template "consent-banner" .}}
   {{template "page-footer" .}}

@@ -68,9 +68,8 @@ var All = []VarDef{
 	{Key: "DB_PATH", Default: "/data/sender-report.db", Comment: "Path to the SQLite database file"},
 
 	// ── Lifetime & cleanup ────────────────────────────────────────────────────
-	{Group: "Lifetime & cleanup", Key: "MAILBOX_TTL", Default: "24h", Comment: "How long a mailbox is valid"},
-	{Key: "MAILBOX_MAX_EXTEND_DAYS", Default: "7", Comment: "Maximum days a mailbox lifetime can be extended from now"},
-	{Key: "DATA_RETENTION_TTL", Default: "168h", Comment: "How long emails and reports are kept (7 days)"},
+	{Group: "Lifetime & cleanup", Key: "MAILBOX_TTL", Default: "24h", Comment: "How long a mailbox accepts incoming mail"},
+	{Key: "DATA_RETENTION_TTL", Default: "168h", Comment: "How long emails and reports stay retrievable (7 days)"},
 	{Key: "CLEANUP_INTERVAL", Default: "30m", Comment: "How often the cleanup job runs"},
 
 	// ── Limits ────────────────────────────────────────────────────────────────

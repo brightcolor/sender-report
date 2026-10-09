@@ -166,7 +166,7 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | `ENABLE_TLS`, `TLS_CERT_FILE`, `TLS_KEY_FILE`, `FORCE_HTTPS` | built-in TLS / redirect |
 | `FORCE_HTTPS_EXEMPT_PATHS` | paths that answer over plain HTTP although `FORCE_HTTPS` is set, so the container healthcheck reaches them regardless of `PUBLIC_BASE_URL` (default `/healthz,/readyz`; an entry ending in `/` covers the paths below it, `none` redirects every path) |
 | `TRUSTED_PROXY_CIDRS` | only these proxy CIDRs may set `X-Forwarded-*` |
-| `MAILBOX_TTL`, `DATA_RETENTION_TTL`, `CLEANUP_INTERVAL` | lifetime & cleanup |
+| `MAILBOX_TTL`, `DATA_RETENTION_TTL`, `CLEANUP_INTERVAL` | receiving window, retention & cleanup |
 | `MAX_MESSAGE_BYTES`, `MAX_ACTIVE_MAILBOXES_PER_IP/_GLOBAL` | limits |
 | `WEB_RATE_LIMIT_PER_MIN`, `SMTP_RATE_LIMIT_PER_HOUR`, … | rate limits |
 | `PAYLOAD_RATE_LIMIT_PER_MIN` | encrypted reports one IP address may fetch per minute; rechecks and simulator runs count separately against the same number (default 30, 1 to 600) |
@@ -185,6 +185,12 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | `UI_DEFAULT_THEME` | display option for new visitors: `auto` (follows the system, default), `light`, `dark` or `werkbank` |
 | `COOKIE_SECURE` | Secure attribute of cookies: `auto` (default; HTTPS requests and an `https://` `PUBLIC_BASE_URL`), `always` or `never` (plain-HTTP test setups) |
 | `LANG_COOKIE_NAME`, `LANG_COOKIE_DAYS`, `MAILBOX_COOKIE_NAME` | cookie names (`sr_lang`, `sr_mailbox`) and the days the language choice is kept (365, at most 400) |
+
+> `MAILBOX_TTL` (default 24 h) is the **receiving window**: once it passes, the address
+> refuses mail. `DATA_RETENTION_TTL` (default 7 days) is how long messages and their
+> reports stay **retrievable** — a report link keeps working that long after the message
+> arrived, and only then is everything deleted. The two are independent, so a mailbox
+> counts against the active-mailbox limits for 24 h while its reports live on.
 
 > The third-party checks (domain age, blocklists) contact external providers with
 > **domain names** (never mail content) and are off by default. Each user can enable them per
