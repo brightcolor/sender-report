@@ -415,11 +415,15 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 	// "DKIM meldet permerror", which looks like broken DKIM even though the
 	// signature is cryptographically fine and only trips a policy rule.
 	dkimDetail := strings.TrimSpace(headers.Get("X-Sender-Report-DKIM-Detail"))
+	var keyDiag dkimKeyDiag
+	if hasDKIMSig && dkimDetailIsKeyProblem(strings.ToLower(dkimDetail)) {
+		keyDiag = diagnoseDKIMKey(ctx, headers.Get("DKIM-Signature"))
+	}
 	switch dkimResult {
 	case "pass":
 		report.Checks = append(report.Checks, pass("dkim", "DKIM", 0.4, "DKIM laut Authentication-Results bestanden.", ""))
 	case "fail", "temperror", "permerror":
-		f := classifyDKIMFailure(dkimResult, dkimDetail, report.CreatedAt)
+		f := classifyDKIMFailure(dkimResult, dkimDetail, report.CreatedAt, keyDiag)
 		var c model.CheckResult
 		if f.status == "warn" {
 			c = warn("dkim", "DKIM", f.delta, f.summaryDE, f.suggestDE)
@@ -664,6 +668,7 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 		DKIMResult:     dkimResult,
 		DKIMDomain:     dkimDomain,
 		DKIMDetail:     dkimDetail,
+		DKIMKey:        keyDiag,
 		DMARCResult:    dmarcResult,
 		DMARCRecords:   dmarcRecords,
 		DMARCPolicy:    dmarcPolicy,
@@ -1098,6 +1103,7 @@ type checkContext struct {
 	DKIMResult     string
 	DKIMDomain     string
 	DKIMDetail     string
+	DKIMKey        dkimKeyDiag
 	DMARCResult    string
 	DMARCRecords   []string
 	DMARCPolicy    string
@@ -2040,7 +2046,7 @@ var dkimSHA1HardFailFrom = time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 // Cases where the signature is cryptographically valid and only trips a policy
 // rule (rsa-sha1, insecure l= tag) are reported as a warning, not a hard fail —
 // they are a deliverability risk to flag, not broken DKIM.
-func classifyDKIMFailure(result, detail string, now time.Time) dkimFinding {
+func classifyDKIMFailure(result, detail string, now time.Time, diag dkimKeyDiag) dkimFinding {
 	d := strings.ToLower(detail)
 	switch {
 	case strings.Contains(d, "hash algorithm too weak") || strings.Contains(d, "sha1"):
@@ -2092,15 +2098,8 @@ func classifyDKIMFailure(result, detail string, now time.Time) dkimFinding {
 			suggestDE: "Signierung als letzten Schritt vor dem Versand ausführen; nachgelagerte Content-Änderungen vermeiden oder danach neu signieren.",
 			suggestEN: "Sign as the last step before sending; avoid post-signing content changes or re-sign afterwards.",
 		}
-	case strings.Contains(d, "no key for signature"), strings.Contains(d, "no valid key"),
-		strings.Contains(d, "key syntax"), strings.Contains(d, "key revoked"):
-		return dkimFinding{
-			status: "fail", delta: -1.2, specific: true,
-			summaryDE: "Der öffentliche DKIM-Schlüssel konnte nicht gefunden oder gelesen werden (Selector-DNS-Record fehlt, ist leer oder fehlerhaft).",
-			summaryEN: "The DKIM public key could not be found or read (selector DNS record missing, empty or malformed).",
-			suggestDE: "TXT-Record <selector>._domainkey.<domain> prüfen: v=DKIM1; k=rsa; p=<base64-Key>.",
-			suggestEN: "Check the TXT record <selector>._domainkey.<domain>: v=DKIM1; k=rsa; p=<base64-key>.",
-		}
+	case dkimDetailIsKeyProblem(d):
+		return dkimMissingKeyFinding(detail, diag)
 	case strings.Contains(d, "multiple txt"):
 		return dkimFinding{
 			status: "fail", delta: -1.2, specific: true,
@@ -2892,7 +2891,7 @@ func summaryEN(id, status, deSummary string, ctx checkContext) string {
 	case "dkim:pass":
 		return "DKIM passed according to Authentication-Results."
 	case "dkim:fail", "dkim:warn":
-		if f := classifyDKIMFailure(ctx.DKIMResult, ctx.DKIMDetail, ctx.Now); f.specific {
+		if f := classifyDKIMFailure(ctx.DKIMResult, ctx.DKIMDetail, ctx.Now, ctx.DKIMKey); f.specific {
 			return f.summaryEN
 		}
 		if status == "warn" {
@@ -3133,7 +3132,7 @@ func recommendationEN(id, status string, ctx checkContext) string {
 		}
 	case "dkim":
 		if status == "fail" || status == "warn" {
-			if f := classifyDKIMFailure(ctx.DKIMResult, ctx.DKIMDetail, ctx.Now); f.specific {
+			if f := classifyDKIMFailure(ctx.DKIMResult, ctx.DKIMDetail, ctx.Now, ctx.DKIMKey); f.specific {
 				return f.suggestEN
 			}
 			return fmt.Sprintf("Generate a 2048-bit RSA or Ed25519 DKIM key pair, publish the public key as a TXT record at <selector>._domainkey.%s, and configure your MTA to sign all outgoing mail.", emptyFallback(ctx.FromDomain, "example.org"))
@@ -3474,7 +3473,7 @@ func dkimRecommendation(ctx checkContext) string {
 	// A specific verifier reason (rsa-sha1, l= tag, expired, …) gets targeted
 	// advice — the sender already has DKIM, so the generic "generate a new key
 	// pair" text below would be wrong for them.
-	if f := classifyDKIMFailure(ctx.DKIMResult, ctx.DKIMDetail, ctx.Now); f.specific {
+	if f := classifyDKIMFailure(ctx.DKIMResult, ctx.DKIMDetail, ctx.Now, ctx.DKIMKey); f.specific {
 		return f.suggestDE
 	}
 	domain := emptyFallback(ctx.FromDomain, "example.org")

@@ -105,7 +105,7 @@ func TestClassifyDKIMFailure(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := classifyDKIMFailure(tc.result, tc.detail, tc.now)
+			f := classifyDKIMFailure(tc.result, tc.detail, tc.now, dkimKeyDiag{})
 			if f.status != tc.wantStatus {
 				t.Fatalf("status: got %q, want %q", f.status, tc.wantStatus)
 			}

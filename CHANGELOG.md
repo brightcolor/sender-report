@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.42.2] - 2026-10-16
+
+### Fixed
+- **Der DKIM-Befund „Schlüssel nicht gefunden“ sagt jetzt, was das Problem ist.** Bisher stand
+  nur „Selector-DNS-Record fehlt, ist leer oder fehlerhaft“ mit dem Platzhalter
+  `<selector>._domainkey.<domain>`. Der Befund nennt jetzt Selector und Domain aus der
+  Signatur, den abgefragten DNS-Namen und die Ursache aus einer Abfrage des Records:
+  kein Record vorhanden, DNS ohne Antwort, Record fehlerhaft (mehrere Records, `p=` fehlt
+  oder leer, kein gültiges Base64, kein lesbarer Schlüssel, `s=` ohne `email`, zu kurzer
+  RSA-Schlüssel) oder Record inzwischen vorhanden (Negativ-Antwort aus dem Zwischenspeicher).
+  Die Empfehlung enthält den konkreten Namen und den Befehl `dig +short TXT …`. Die Meldung
+  des Prüfers steht wörtlich dabei. Ist der Record inzwischen abrufbar oder das DNS stumm,
+  wird der Befund als Warnung gewertet, weil ein fehlender Record damit offen bleibt.
+- Die Rohdaten des DKIM-Befunds zeigen Selector, DNS-Name und Zustand des Records.
+
 ## [1.42.1] - 2026-10-16
 
 ### Fixed
