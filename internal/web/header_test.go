@@ -96,8 +96,8 @@ func TestHeaderActionsStayReachableOnPhones(t *testing.T) {
 			}
 		})
 	}
-	if checked != 6 {
-		t.Errorf("checked %d page headers, expected 6", checked)
+	if checked != 7 {
+		t.Errorf("checked %d page headers, expected 7", checked)
 	}
 }
 

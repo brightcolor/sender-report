@@ -1,0 +1,178 @@
+{{define "guides"}}
+<!doctype html>
+<html lang="{{.Lang}}" data-bs-theme="light" data-default-theme="{{defaultTheme}}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{{.PageTitle}}</title>
+  <meta name="description" content="{{.Description}}" />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <meta name="theme-color" content="#0d6efd" />
+  {{seoHead .Lang .PublicURL .SEOPath}}
+  <meta property="og:type" content="{{if .Slug}}article{{else}}website{{end}}" />
+  <meta property="og:site_name" content="{{.AppName}}" />
+  <meta property="og:title" content="{{.H1}}" />
+  <meta property="og:description" content="{{.Description}}" />
+  <meta property="og:locale" content="{{if eq .Lang "de"}}de_DE{{else}}en_US{{end}}" />
+  <meta property="og:image" content="{{.PublicURL}}/static/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{{.H1}}" />
+  <meta name="twitter:description" content="{{.Description}}" />
+  <meta name="twitter:image" content="{{.PublicURL}}/static/og-image.png" />
+  <script type="application/ld+json">{{.JSONLD}}</script>
+
+  {{template "theme-boot" .}}
+  <link rel="stylesheet" href="/static/vendor/bootstrap.min.css">
+  <link rel="stylesheet" href="/static/vendor/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/static/vendor/overlayscrollbars.min.css">
+  <link rel="stylesheet" href="/static/vendor/adminlte.min.css">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <link rel="stylesheet" href="/static/app.css?v={{appVersion}}" />
+  <link rel="stylesheet" href="/static/werkbank.css?v={{appVersion}}" />
+</head>
+<body class="layout-fixed">
+<div class="app-wrapper">
+
+  <nav class="app-header navbar navbar-expand bg-body">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{{langPath .Lang "/"}}">
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" style="flex-shrink:0">
+          <rect width="32" height="32" rx="7" fill="#0d6efd"/>
+          <rect x="4" y="8" width="18" height="13" rx="2" fill="white"/>
+          <path d="M4 10 L13 17 L22 10" stroke="#0d6efd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <circle cx="24" cy="24" r="7" fill="#198754"/>
+          <path d="M21 24 L23.2 26.2 L27.5 21.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>{{.AppName}}
+      </a>
+      <ul class="navbar-nav ms-auto align-items-center gap-2">
+        <li class="nav-item d-none d-md-block">
+          <span class="badge text-bg-primary">{{.Domain}}</span>
+        </li>
+        <li class="nav-item dropdown">
+          <button class="btn btn-outline-secondary btn-sm dropdown-toggle mp-more-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                  aria-label="{{t .Lang "nav.more"}}" title="{{t .Lang "nav.more"}}">
+            <i class="bi bi-list d-sm-none" aria-hidden="true"></i><span class="d-none d-sm-inline">{{t .Lang "nav.more"}}</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item small" href="{{langPath .Lang "/guides"}}"><i class="bi bi-book me-2"></i>{{if eq .Lang "de"}}Ratgeber{{else}}Guides{{end}}</a></li>
+            <li><a class="dropdown-item small" href="{{langPath .Lang "/about"}}"><i class="bi bi-info-circle me-2"></i>{{t .Lang "nav.about"}} sender.report</a></li>
+            <li><a class="dropdown-item small" href="{{langPath .Lang "/about"}}#faq"><i class="bi bi-question-circle me-2"></i>FAQ</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item small" href="{{langPath .Lang "/privacy"}}"><i class="bi bi-shield-lock me-2"></i>{{t .Lang "nav.privacy"}}</a></li>
+          </ul>
+        </li>
+        <li class="nav-item">
+          <form method="post" action="/lang" class="d-inline">
+            {{if eq .Lang "de"}}
+            <button class="btn btn-outline-secondary btn-sm" type="submit" name="l" value="en" title="Switch to English">EN</button>
+            {{else}}
+            <button class="btn btn-outline-secondary btn-sm" type="submit" name="l" value="de" title="Auf Deutsch wechseln">DE</button>
+            {{end}}
+          </form>
+        </li>
+        {{template "theme-menu" .}}
+      </ul>
+    </div>
+  </nav>
+
+  <main class="app-main">
+    <section class="py-5">
+      <div class="container-xl px-4" style="max-width:860px">
+
+        <nav aria-label="{{if eq .Lang "de"}}Brotkrumen{{else}}Breadcrumb{{end}}" class="d-flex align-items-center gap-2 mb-3 small">
+          <a href="{{langPath .Lang "/"}}" class="text-secondary text-decoration-none"><i class="bi bi-house me-1"></i>{{.AppName}}</a>
+          <span class="text-secondary opacity-50">/</span>
+          {{if .Slug}}
+          <a href="{{langPath .Lang "/guides"}}" class="text-secondary text-decoration-none">{{if eq .Lang "de"}}Ratgeber{{else}}Guides{{end}}</a>
+          <span class="text-secondary opacity-50">/</span>
+          <span class="text-secondary">{{.H1}}</span>
+          {{else}}
+          <span class="text-secondary">{{if eq .Lang "de"}}Ratgeber{{else}}Guides{{end}}</span>
+          {{end}}
+        </nav>
+
+        <h1 class="fw-bold mb-3" style="font-size:2rem">{{.H1}}</h1>
+        <p class="text-secondary mb-4" style="font-size:1.1rem; line-height:1.7">{{.Lead}}</p>
+
+        {{if .Slug}}
+        <article>
+          {{range .Guide.Sections}}
+          <h2 class="h4 fw-bold mt-4 mb-2">{{.Heading}}</h2>
+          {{range .Paragraphs}}<p style="line-height:1.7">{{.}}</p>{{end}}
+          {{if .Code}}<pre class="border rounded p-3 bg-body-tertiary small" style="overflow-x:auto"><code>{{.Code}}</code></pre>{{end}}
+          {{if .Items}}<ul style="line-height:1.7">{{range .Items}}<li class="mb-1">{{.}}</li>{{end}}</ul>{{end}}
+          {{end}}
+        </article>
+
+        <aside class="card border-primary my-5">
+          <div class="card-body d-flex flex-wrap align-items-center gap-3 justify-content-between">
+            <div>
+              <h2 class="h5 fw-bold mb-1">{{if eq .Lang "de"}}Teste deine E-Mail jetzt kostenlos{{else}}Test your email now for free{{end}}</h2>
+              <p class="mb-0 text-secondary small">{{if eq .Lang "de"}}Sende eine Testmail und erhalte einen verschlüsselten Bericht mit 68 Prüfungen.{{else}}Send a test mail and get an encrypted report with 68 checks.{{end}}</p>
+            </div>
+            <a href="{{langPath .Lang "/"}}" class="btn btn-primary px-4"><i class="bi bi-play-fill me-1"></i>{{if eq .Lang "de"}}Jetzt testen{{else}}Start testing{{end}}</a>
+          </div>
+        </aside>
+
+        {{if .Guide.FAQ}}
+        <section id="faq">
+          <h2 class="h4 fw-bold mb-3">{{if eq .Lang "de"}}Häufige Fragen{{else}}Frequently asked questions{{end}}</h2>
+          {{range .Guide.FAQ}}
+          <h3 class="h6 fw-bold mt-3 mb-1">{{.Q}}</h3>
+          <p class="text-secondary" style="line-height:1.7">{{.A}}</p>
+          {{end}}
+        </section>
+        {{end}}
+
+        {{if .Related}}
+        <section class="mt-5">
+          <h2 class="h5 fw-bold mb-3">{{if eq .Lang "de"}}Weiterlesen{{else}}Related guides{{end}}</h2>
+          <div class="row g-3">
+            {{range .Related}}
+            <div class="col-md-6">
+              <a class="card h-100 text-decoration-none" href="{{langPath $.Lang (printf "/guides/%s" .Slug)}}">
+                <div class="card-body"><strong><i class="bi {{.Icon}} me-2"></i>{{.Title}}</strong></div>
+              </a>
+            </div>
+            {{end}}
+          </div>
+        </section>
+        {{end}}
+
+        <p class="text-secondary small mt-5 mb-0">{{if eq .Lang "de"}}Zuletzt aktualisiert{{else}}Last updated{{end}}: <time datetime="{{.Updated}}">{{.Updated}}</time></p>
+
+        {{else}}
+        <div class="row g-3">
+          {{range .Guides}}
+          <div class="col-md-6">
+            <a class="card h-100 text-decoration-none" href="{{langPath $.Lang (printf "/guides/%s" .Slug)}}">
+              <div class="card-body">
+                <h2 class="h5 fw-bold"><i class="bi {{.Icon}} me-2"></i>{{.Title}}</h2>
+                <p class="mb-0 text-secondary small">{{.Description}}</p>
+              </div>
+            </a>
+          </div>
+          {{end}}
+        </div>
+        <div class="text-center mt-5">
+          <a href="{{langPath .Lang "/"}}" class="btn btn-primary px-4"><i class="bi bi-play-fill me-1"></i>{{if eq .Lang "de"}}Jetzt testen{{else}}Start testing{{end}}</a>
+        </div>
+        {{end}}
+
+      </div>
+    </section>
+  </main>
+
+  {{template "page-footer" .}}
+
+</div>
+<script src="/static/vendor/popper.min.js"></script>
+<script src="/static/vendor/bootstrap.min.js"></script>
+<script src="/static/vendor/overlayscrollbars.es5.min.js"></script>
+<script src="/static/vendor/adminlte.min.js"></script>
+<script src="/static/app.js?v={{appVersion}}"></script>
+</body>
+</html>
+{{end}}

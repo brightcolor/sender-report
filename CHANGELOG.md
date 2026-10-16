@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.45.0] - 2026-10-16
+
+### Added
+- **Suchmaschinenoptimierung.** Öffentliche Seiten haben eigene Adressen je Sprache
+  (`/de/…`, `/en/…`) mit `canonical`, `hreflang` (de, en, x-default) und `Vary:
+  Accept-Language` auf den Adressen ohne Präfix. Bisher lieferte eine Adresse je nach
+  Cookie oder `Accept-Language` Deutsch oder Englisch; Suchmaschinen ohne Sprachkopf
+  sahen nur Englisch. Der Sprachumschalter wechselt auf Präfixseiten zur anderen
+  Sprachadresse.
+- **Ratgeber unter `/de/guides` und `/en/guides`** mit acht Seiten: Zustellbarkeit
+  verbessern, SPF, DKIM, DMARC, Spam-Score, Blacklist-Check, Reverse-DNS und eine
+  Mail-Tester-Alternative. Jede Seite hat strukturierte Daten (Article, BreadcrumbList,
+  FAQPage), führt zum Test und verlinkt verwandte Ratgeber. Die Startseite verlinkt alle
+  Ratgeber, das Menü ebenfalls.
+- Die Sitemap nennt jede öffentliche Seite in beiden Sprachen mit `xhtml:link`-Alternativen
+  und `lastmod` bei Ratgebern. `robots.txt` erlaubt die neuen Pfade.
+- Vorschaubild `og-image.png` (1200 × 630). Soziale Netzwerke stellen das bisherige SVG nicht
+  dar; Open-Graph- und Twitter-Karten verweisen jetzt auf das PNG.
+
 ## [1.44.0] - 2026-10-16
 
 ### Added

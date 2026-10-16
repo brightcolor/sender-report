@@ -11,7 +11,7 @@
   {{end}}
   <meta name="robots" content="index,follow,max-image-preview:large" />
   <meta name="theme-color" content="#0d6efd" />
-  <link rel="canonical" href="{{.PublicURL}}/about" />
+  {{seoHead .Lang .PublicURL "/about"}}
   {{if eq .Lang "de"}}
   <title>Wie {{.AppName}} prüft: alle Checks &amp; FAQ – SPF, DKIM, DMARC</title>
   {{else}}
@@ -30,8 +30,7 @@
   <meta property="og:description" content="68 checks with severity ratings and explanations – plus FAQ covering SPF, DKIM, DMARC and spam score." />
   <meta property="og:locale" content="en_US" />
   {{end}}
-  <meta property="og:url" content="{{.PublicURL}}/about" />
-  <meta property="og:image" content="{{.PublicURL}}/static/og-image.svg" />
+  <meta property="og:image" content="{{.PublicURL}}/static/og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
 
   <!-- FAQ structured data (rich results) -->
@@ -71,7 +70,7 @@
   <!-- ── Navbar ─────────────────────────────────────────────────────────── -->
   <nav class="app-header navbar navbar-expand bg-body">
     <div class="container-fluid">
-      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{{langPath $.Lang "/"}}">
         <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" style="flex-shrink:0">
           <rect width="32" height="32" rx="7" fill="#0d6efd"/>
           <rect x="4" y="8" width="18" height="13" rx="2" fill="white"/>
@@ -90,11 +89,12 @@
             <i class="bi bi-list d-sm-none" aria-hidden="true"></i><span class="d-none d-sm-inline">{{t .Lang "nav.more"}}</span>
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>{{t .Lang "nav.about"}} sender.report</a></li>
-            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>{{t .Lang "nav.about_checks"}}</a></li>
-            <li><a class="dropdown-item small" href="/about#faq"><i class="bi bi-question-circle me-2"></i>FAQ</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/guides"}}"><i class="bi bi-book me-2"></i>{{if eq $.Lang "de"}}Ratgeber{{else}}Guides{{end}}</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/about"}}"><i class="bi bi-info-circle me-2"></i>{{t .Lang "nav.about"}} sender.report</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/about"}}#checks"><i class="bi bi-check2-circle me-2"></i>{{t .Lang "nav.about_checks"}}</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/about"}}#faq"><i class="bi bi-question-circle me-2"></i>FAQ</a></li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>{{t .Lang "nav.privacy"}}</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/privacy"}}"><i class="bi bi-shield-lock me-2"></i>{{t .Lang "nav.privacy"}}</a></li>
           </ul>
         </li>
         <!-- Language switcher -->
@@ -119,7 +119,7 @@
     <section class="mp-hero-section py-5">
       <div class="container-xl px-4 mp-home-container">
         <div class="d-flex align-items-center gap-2 mb-2">
-          <a href="/" class="text-secondary text-decoration-none small"><i class="bi bi-house me-1"></i>{{if eq .Lang "de"}}Start{{else}}Home{{end}}</a>
+          <a href="{{langPath $.Lang "/"}}" class="text-secondary text-decoration-none small"><i class="bi bi-house me-1"></i>{{if eq .Lang "de"}}Start{{else}}Home{{end}}</a>
           <span class="text-secondary small opacity-50">/</span>
           <span class="text-secondary small">{{t .Lang "nav.about"}} sender.report</span>
         </div>
@@ -202,7 +202,7 @@
                   HTML oder Subject den Score beeinflussen. Content-Checks laufen live (600&nbsp;ms Debounce),
                   DNS-Checks auf Anfrage per Klick.
                 </p>
-                <a href="/simulate" class="btn btn-outline-primary btn-sm">Simulator öffnen →</a>
+                <a href="{{langPath $.Lang "/simulate"}}" class="btn btn-outline-primary btn-sm">Simulator öffnen →</a>
                 {{else}}
                 <h2 class="h5 fw-bold mb-1">Mail Simulator – Test Changes Live</h2>
                 <p class="text-secondary mb-2">
@@ -210,7 +210,7 @@
                   HTML or subject affect the score. Content checks run live (600&nbsp;ms debounce),
                   DNS checks available on demand with one click.
                 </p>
-                <a href="/simulate" class="btn btn-outline-primary btn-sm">Open Simulator →</a>
+                <a href="{{langPath $.Lang "/simulate"}}" class="btn btn-outline-primary btn-sm">Open Simulator →</a>
                 {{end}}
               </div>
             </div>
@@ -1051,10 +1051,10 @@
           <i class="bi bi-sliders me-1"></i>
           {{if eq .Lang "de"}}
           Die mit <span class="badge text-bg-light text-secondary border">Opt-in</span>
-          markierten Checks aktivierst du selbst auf der <a href="/">Startseite</a> – informiert und jederzeit widerrufbar.
+          markierten Checks aktivierst du selbst auf der <a href="{{langPath $.Lang "/"}}">Startseite</a> – informiert und jederzeit widerrufbar.
           {{else}}
           Checks marked <span class="badge text-bg-light text-secondary border">Opt-in</span>
-          are enabled by you on the <a href="/">start page</a> — informed consent, revocable at any time.
+          are enabled by you on the <a href="{{langPath $.Lang "/"}}">start page</a> — informed consent, revocable at any time.
           {{end}}
         </p>
 
@@ -1079,7 +1079,7 @@
               <li><i class="bi bi-hdd-stack"></i><div><strong>Keine externen Dienste.</strong> Alle Skripte, Schriften und Styles kommen vom eigenen Server – keine CDNs, keine Tracker.</div></li>
               <li><i class="bi bi-people"></i><div><strong>Keine Weitergabe.</strong> Inhalte gehen an keine Werbe- oder Tracking-Dritten. Punkt.</div></li>
             </ul>
-            <a href="/privacy" class="btn btn-outline-secondary btn-sm mt-2">
+            <a href="{{langPath $.Lang "/privacy"}}" class="btn btn-outline-secondary btn-sm mt-2">
               <i class="bi bi-file-earmark-text me-1"></i>Zur Datenschutzerklärung
             </a>
             {{else}}
@@ -1094,7 +1094,7 @@
               <li><i class="bi bi-hdd-stack"></i><div><strong>No external services.</strong> All scripts, fonts and styles come from the local server — no CDNs, no trackers.</div></li>
               <li><i class="bi bi-people"></i><div><strong>No sharing.</strong> Contents are not passed to any advertising or tracking third parties. Full stop.</div></li>
             </ul>
-            <a href="/privacy" class="btn btn-outline-secondary btn-sm mt-2">
+            <a href="{{langPath $.Lang "/privacy"}}" class="btn btn-outline-secondary btn-sm mt-2">
               <i class="bi bi-file-earmark-text me-1"></i>{{if eq .Lang "de"}}Zur Datenschutzerklärung{{else}}Privacy Policy{{end}}
             </a>
             {{end}}
@@ -1241,10 +1241,10 @@
             <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#mp-faq">
               <div class="accordion-body text-secondary">
                 {{if eq .Lang "de"}}
-                Mit dem Simulator unter <a href="/simulate">/simulate</a> kannst du RFC-2822-Quelltext direkt bearbeiten
+                Mit dem Simulator unter <a href="{{langPath $.Lang "/simulate"}}">/simulate</a> kannst du RFC-2822-Quelltext direkt bearbeiten
                 und live sehen, wie Änderungen den Score beeinflussen – ohne eine neue Testmail versenden zu müssen.
                 {{else}}
-                The simulator at <a href="/simulate">/simulate</a> lets you edit RFC 2822 source directly and see live how
+                The simulator at <a href="{{langPath $.Lang "/simulate"}}">/simulate</a> lets you edit RFC 2822 source directly and see live how
                 changes affect the score — without having to send a new test email.
                 {{end}}
               </div>
@@ -1253,7 +1253,7 @@
         </div>
 
         <div class="text-center mt-5">
-          <a href="/" class="btn btn-primary px-4">
+          <a href="{{langPath $.Lang "/"}}" class="btn btn-primary px-4">
             <i class="bi bi-play-fill me-1"></i>{{if eq .Lang "de"}}Jetzt testen{{else}}Start testing now{{end}}
           </a>
         </div>

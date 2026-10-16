@@ -534,7 +534,7 @@ func renderPage(t *testing.T, handler http.HandlerFunc, path, lang string) strin
 // partials: operator default, pre-paint script, stylesheet and navbar menu.
 // A page without them would ignore the visitor's choice.
 func TestEveryPageOffersTheDisplayOptions(t *testing.T) {
-	want := []string{"about.html", "home.html", "mailbox.html", "privacy.html", "report.html", "simulate.html"}
+	want := []string{"about.html", "guides.html", "home.html", "mailbox.html", "privacy.html", "report.html", "simulate.html"}
 	pages, err := filepath.Glob(filepath.Join("templates", "*.html"))
 	if err != nil {
 		t.Fatalf("glob templates: %v", err)

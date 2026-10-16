@@ -8,7 +8,7 @@
   <meta name="keywords" content="E-Mail Deliverability Test, SPF prüfen, DKIM Test, DMARC Check, Spam Score Test, Blacklist Check, Mail Tester, E-Mail Zustellbarkeit, deliverability checker" />
   <meta name="robots" content="index,follow,max-image-preview:large" />
   <meta name="theme-color" content="#0d6efd" />
-  <link rel="canonical" href="{{.PublicURL}}/" />
+  {{seoHead .Lang .PublicURL "/"}}
   <title>{{.AppName}} – E-Mail Deliverability Test (SPF, DKIM, DMARC &amp; Spam-Score)</title>
 
   <!-- Open Graph / social sharing -->
@@ -16,13 +16,12 @@
   <meta property="og:site_name" content="{{.AppName}}" />
   <meta property="og:title" content="{{.AppName}} – kostenloser E-Mail Deliverability Test" />
   <meta property="og:description" content="Prüfe SPF, DKIM, DMARC, Spam-Score, Blacklists &amp; mehr in Sekunden – ohne Anmeldung, Ende-zu-Ende-verschlüsselt." />
-  <meta property="og:url" content="{{.PublicURL}}/" />
   <meta property="og:locale" content="de_DE" />
-  <meta property="og:image" content="{{.PublicURL}}/static/og-image.svg" />
+  <meta property="og:image" content="{{.PublicURL}}/static/og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="{{.AppName}} – E-Mail Deliverability Test" />
   <meta name="twitter:description" content="SPF, DKIM, DMARC, Spam-Score &amp; Blacklists in Sekunden prüfen – ohne Anmeldung, E2E-verschlüsselt." />
-  <meta name="twitter:image" content="{{.PublicURL}}/static/og-image.svg" />
+  <meta name="twitter:image" content="{{.PublicURL}}/static/og-image.png" />
 
   <script type="application/ld+json">
   {
@@ -59,7 +58,7 @@
   <!-- ── Navbar ─────────────────────────────────────────────────────────── -->
   <nav class="app-header navbar navbar-expand bg-body">
     <div class="container-fluid">
-      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{{langPath $.Lang "/"}}">
         <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" style="flex-shrink:0">
           <rect width="32" height="32" rx="7" fill="#0d6efd"/>
           <rect x="4" y="8" width="18" height="13" rx="2" fill="white"/>
@@ -78,11 +77,12 @@
             <i class="bi bi-list d-sm-none" aria-hidden="true"></i><span class="d-none d-sm-inline">{{t .Lang "nav.more"}}</span>
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>{{t .Lang "nav.about"}} sender.report</a></li>
-            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>{{t .Lang "nav.about_checks"}}</a></li>
-            <li><a class="dropdown-item small" href="/about#faq"><i class="bi bi-question-circle me-2"></i>FAQ</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/guides"}}"><i class="bi bi-book me-2"></i>{{if eq $.Lang "de"}}Ratgeber{{else}}Guides{{end}}</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/about"}}"><i class="bi bi-info-circle me-2"></i>{{t .Lang "nav.about"}} sender.report</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/about"}}#checks"><i class="bi bi-check2-circle me-2"></i>{{t .Lang "nav.about_checks"}}</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/about"}}#faq"><i class="bi bi-question-circle me-2"></i>FAQ</a></li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>{{t .Lang "nav.privacy"}}</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/privacy"}}"><i class="bi bi-shield-lock me-2"></i>{{t .Lang "nav.privacy"}}</a></li>
           </ul>
         </li>
         <!-- Language switcher -->
@@ -315,6 +315,22 @@
 
 
     </div>
+  <section class="py-5 border-top">
+    <div class="container-xl px-4 mp-home-container">
+      <h2 class="h4 fw-bold mb-1">{{if eq .Lang "de"}}Ratgeber zur Zustellbarkeit{{else}}Deliverability guides{{end}}</h2>
+      <p class="text-secondary mb-4">{{if eq .Lang "de"}}SPF, DKIM, DMARC, Spam-Score, Blacklists und Reverse-DNS verständlich erklärt.{{else}}SPF, DKIM, DMARC, spam score, blacklists and reverse DNS explained clearly.{{end}}</p>
+      <div class="row g-3">
+        {{range guideLinks .Lang nil}}
+        <div class="col-sm-6 col-lg-3">
+          <a class="card h-100 text-decoration-none" href="{{langPath $.Lang (printf "/guides/%s" .Slug)}}">
+            <div class="card-body"><strong><i class="bi {{.Icon}} me-2"></i>{{.Title}}</strong></div>
+          </a>
+        </div>
+        {{end}}
+      </div>
+    </div>
+  </section>
+
   </main>
 
   <!-- Bestätigungs-Modal für Mailbox-Löschung -->
@@ -376,11 +392,11 @@
               <em>Absender-Domain</em> (und bei Link-Prüfung die Domains der enthaltenen Links)
               an die jeweiligen Anbieter übermittelt. Der <em>Inhalt</em> deiner Mail verlässt
               den Server dabei nie. Mehr dazu in der
-              <a href="/privacy" target="_blank" rel="noopener">Datenschutzerklärung</a>.{{else}}<strong>What does this mean?</strong> When checks are enabled, the
+              <a href="{{langPath $.Lang "/privacy"}}" target="_blank" rel="noopener">Datenschutzerklärung</a>.{{else}}<strong>What does this mean?</strong> When checks are enabled, the
               <em>sender domain</em> (and for link checks, the domains of any links in the email)
               is transmitted to the respective providers. The <em>content</em> of your email never
               leaves the server. Learn more in our
-              <a href="/privacy" target="_blank" rel="noopener">{{if eq .Lang "de"}}Datenschutzerklärung{{else}}Privacy Policy{{end}}</a>.{{end}}
+              <a href="{{langPath $.Lang "/privacy"}}" target="_blank" rel="noopener">{{if eq .Lang "de"}}Datenschutzerklärung{{else}}Privacy Policy{{end}}</a>.{{end}}
             </div>
           </div>
 

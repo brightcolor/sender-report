@@ -21,7 +21,7 @@
   <!-- ── Navbar ─────────────────────────────────────────────────────────── -->
   <nav class="app-header navbar navbar-expand bg-body">
     <div class="container-fluid">
-      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{{langPath $.Lang "/"}}">
         <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" style="flex-shrink:0">
           <rect width="32" height="32" rx="7" fill="#0d6efd"/>
           <rect x="4" y="8" width="18" height="13" rx="2" fill="white"/>
@@ -38,13 +38,14 @@
             <i class="bi bi-list" aria-hidden="true"></i>
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item small" href="/"><i class="bi bi-plus-circle me-2"></i>{{if eq .Lang "de"}}Neuer Test{{else}}New test{{end}}</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/"}}"><i class="bi bi-plus-circle me-2"></i>{{if eq .Lang "de"}}Neuer Test{{else}}New test{{end}}</a></li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item small" href="/about"><i class="bi bi-info-circle me-2"></i>{{t .Lang "nav.about"}} sender.report</a></li>
-            <li><a class="dropdown-item small" href="/about#checks"><i class="bi bi-check2-circle me-2"></i>{{t .Lang "nav.about_checks"}}</a></li>
-            <li><a class="dropdown-item small" href="/about#faq"><i class="bi bi-question-circle me-2"></i>FAQ</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/guides"}}"><i class="bi bi-book me-2"></i>{{if eq $.Lang "de"}}Ratgeber{{else}}Guides{{end}}</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/about"}}"><i class="bi bi-info-circle me-2"></i>{{t .Lang "nav.about"}} sender.report</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/about"}}#checks"><i class="bi bi-check2-circle me-2"></i>{{t .Lang "nav.about_checks"}}</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/about"}}#faq"><i class="bi bi-question-circle me-2"></i>FAQ</a></li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item small" href="/privacy"><i class="bi bi-shield-lock me-2"></i>{{t .Lang "nav.privacy"}}</a></li>
+            <li><a class="dropdown-item small" href="{{langPath $.Lang "/privacy"}}"><i class="bi bi-shield-lock me-2"></i>{{t .Lang "nav.privacy"}}</a></li>
           </ul>
         </li>
         <li class="nav-item">
@@ -58,7 +59,7 @@
         </li>
         {{template "theme-menu" .}}
         <li class="nav-item d-none d-sm-block">
-          <a class="btn btn-primary btn-sm" href="/">
+          <a class="btn btn-primary btn-sm" href="{{langPath $.Lang "/"}}">
             <i class="bi bi-plus-circle me-1"></i>{{if eq .Lang "de"}}Neuer Test{{else}}New test{{end}}
           </a>
         </li>
@@ -76,8 +77,8 @@
           <i class="bi bi-info-circle-fill"></i>
           <span>
             {{if eq .Lang "de"}}Du benötigst eine Mailbox, um den Simulator zu nutzen.
-            <a href="/" class="alert-link">Mailbox erstellen &rarr;</a>{{else}}You need a mailbox to use the simulator.
-            <a href="/" class="alert-link">Create a mailbox &rarr;</a>{{end}}
+            <a href="{{langPath $.Lang "/"}}" class="alert-link">Mailbox erstellen &rarr;</a>{{else}}You need a mailbox to use the simulator.
+            <a href="{{langPath $.Lang "/"}}" class="alert-link">Create a mailbox &rarr;</a>{{end}}
           </span>
         </div>
 

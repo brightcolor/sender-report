@@ -96,6 +96,7 @@ type HomeData struct {
 
 type PrivacyData struct {
 	AppName          string
+	PublicURL        string
 	OperatorName     string
 	OperatorAddress  string
 	OperatorEmail    string
@@ -497,6 +498,9 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		"detailsText":        detailsText,
 		"safeID":             safeID,
 		"scorePercent":       scorePercent,
+		"langPath":           langPath,
+		"guideLinks":         guideLinks,
+		"seoHead":            seoHead,
 		"rspamdSymbols":      rspamdSymbolsFn,
 		"rspamdMeta":         rspamdMetaFn,
 		"rspamdActionClass":  rspamdActionClass,
@@ -676,6 +680,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/", s.home)
 	mux.HandleFunc("/about", s.aboutPage)
 	mux.HandleFunc("/privacy", s.privacyPage)
+	mux.HandleFunc("/guides", s.guidesIndex)
+	mux.HandleFunc("/guides/", s.guidePage)
 	mux.HandleFunc("/healthz", s.health)
 	mux.HandleFunc("/readyz", s.ready)
 	mux.HandleFunc("/metrics", s.metricsPage)
@@ -695,7 +701,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/mailbox/", s.mailboxPage)
 	mux.HandleFunc("/report/", s.reportPage)
 	mux.HandleFunc("/raw/", s.rawPage)
-	return s.withLogging(s.withSecurityHeaders(s.withRateLimit(s.withHTTPSRedirect(mux))))
+	return s.withLogging(s.withSecurityHeaders(s.withRateLimit(s.withHTTPSRedirect(s.withLangPrefix(mux)))))
 }
 
 // staticCacheHeaders sets caching policy for static assets. Requests carrying a
@@ -878,7 +884,7 @@ func (s *Server) setLang(w http.ResponseWriter, r *http.Request) {
 		Secure:   s.secureCookies(r),
 		SameSite: http.SameSiteLaxMode,
 	})
-	http.Redirect(w, r, localReturnPath(r.Header.Get("Referer")), http.StatusSeeOther)
+	http.Redirect(w, r, swapLangPrefix(localReturnPath(r.Header.Get("Referer")), lang), http.StatusSeeOther)
 }
 
 const secondsPerDay = 24 * 60 * 60
@@ -906,6 +912,9 @@ func localReturnPath(referer string) string {
 // lang is the language of the response to r: the choice stored in the
 // language cookie, otherwise the browser preference.
 func (s *Server) lang(r *http.Request) i18n.Lang {
+	if l, ok := r.Context().Value(langOverrideKey{}).(i18n.Lang); ok {
+		return l
+	}
 	return i18n.Detect(r, s.cfg.LangCookieName)
 }
 
@@ -980,46 +989,6 @@ func (s *Server) metricsPage(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	_, _ = w.Write([]byte(s.metrics.RenderPrometheus()))
-}
-
-// robotsTxt allows crawling of public pages, disallows token-scoped private
-// pages, and points to the sitemap.
-func (s *Server) robotsTxt(w http.ResponseWriter, r *http.Request) {
-	base := s.publicBaseURL(r)
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=86400")
-	_, _ = io.WriteString(w, "User-agent: *\n"+
-		"Allow: /$\n"+
-		"Allow: /about\n"+
-		"Allow: /privacy\n"+
-		"Disallow: /mailbox/\n"+
-		"Disallow: /report/\n"+
-		"Disallow: /raw/\n"+
-		"Disallow: /api/\n"+
-		"Sitemap: "+base+"/sitemap.xml\n")
-}
-
-// sitemapXML lists the public, indexable pages.
-func (s *Server) sitemapXML(w http.ResponseWriter, r *http.Request) {
-	base := s.publicBaseURL(r)
-	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=86400")
-	pages := []struct {
-		Loc      string
-		Priority string
-	}{
-		{base + "/", "1.0"},
-		{base + "/about", "0.8"},
-		{base + "/privacy", "0.3"},
-	}
-	var b strings.Builder
-	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
-	b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
-	for _, p := range pages {
-		b.WriteString("  <url><loc>" + template.HTMLEscapeString(p.Loc) + "</loc><changefreq>weekly</changefreq><priority>" + p.Priority + "</priority></url>\n")
-	}
-	b.WriteString("</urlset>\n")
-	_, _ = io.WriteString(w, b.String())
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
@@ -1366,6 +1335,7 @@ func (s *Server) privacyPage(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, "privacy", PrivacyData{
 		AppName:           s.cfg.AppName,
+		PublicURL:         s.publicBaseURL(r),
 		OperatorName:      s.cfg.PrivacyOperatorName,
 		OperatorAddress:   s.cfg.PrivacyOperatorAddress,
 		OperatorEmail:     s.cfg.PrivacyOperatorEmail,
