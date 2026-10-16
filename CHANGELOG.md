@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.45.2] - 2026-10-16
+
+### Fixed
+- **Die Zähler im Kopf des Berichts („31 bestanden, 3 Warnungen …“) folgen jetzt der Neuprüfung.**
+  Nach „DNS neu abfragen & neu bewerten“ oder einer Einzelprüfung stand die Gesamtwertung
+  schon bei 10/10, während die Zähler im Kopf noch den alten Stand zeigten, auch nach dem
+  Neuladen der Seite. Der Browser leitet die Zähler jetzt aus den entschlüsselten Befunden ab.
+
 ## [1.45.1] - 2026-10-16
 
 ### Fixed

@@ -1219,6 +1219,7 @@ function showDecrypted(payload, secretToken) {
   DEC_PAYLOAD = payload;
   if (secretToken) DEC_SECRET = secretToken;
   RECHECK_INPUTS = buildRecheckInputs(payload);
+  updateHeroCounts((payload.report && payload.report.checks) || []);
   if (CONTENT) {
     CONTENT.innerHTML = renderDecryptedReport(payload);
     if (typeof setupCopyButtons    === 'function') setupCopyButtons();
@@ -2081,6 +2082,7 @@ async function persistCurrent(okMsg) {
     var sc = jsComputeScore(checks);
     DEC_PAYLOAD.report.score = sc.score;
     DEC_PAYLOAD.report.score_label = sc.label;
+    updateHeroCounts(checks);
 
     var info = await crypto.fromToken(DEC_SECRET);
     var blob = await crypto.seal(crypto._utf8(JSON.stringify(DEC_PAYLOAD)), info.public);
@@ -2100,6 +2102,23 @@ async function persistCurrent(okMsg) {
   } catch (e) {
     recheckToast(LANG==='en' ? 'Updated ✓ (save failed)' : 'Aktualisiert ✓ (Speichern fehlgeschlagen)', true);
   }
+}
+
+// updateHeroCounts sets the pass/warning/error/info counters in the score hero
+// from the given checks. The server renders them from the stored statuses, which
+// lag behind after a re-check or a full re-analysis, so the browser derives them
+// from the decrypted report it shows.
+function updateHeroCounts(checks) {
+  var n = { pass: 0, warn: 0, fail: 0, info: 0 };
+  (checks || []).forEach(function (c) { if (n.hasOwnProperty(c.status)) n[c.status]++; });
+  Object.keys(n).forEach(function (k) {
+    var el = document.querySelector('.mp-score-hero .mp-pill.' + k);
+    if (!el) return;
+    for (var i = 0; i < el.childNodes.length; i++) {
+      var node = el.childNodes[i];
+      if (node.nodeType === 3 && /\d+/.test(node.nodeValue)) { node.nodeValue = node.nodeValue.replace(/\d+/, n[k]); break; }
+    }
+  });
 }
 
 // updateHeroScore updates the score ring + label after a persisted recheck.
