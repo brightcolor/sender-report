@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.43.3] - 2026-10-16
+
+### Fixed
+- **Der SpamAssassin-Befund nennt die Regeln, die seinen Wert ausmachen.** Bei „3,5 von 5,0,
+  dicht an der Grenze“ verwies der Text auf „die Auslöser in den technischen Details“, die
+  dort nie standen. spamd wird jetzt mit `REPORT` statt `SYMBOLS` gefragt. Der Bericht führt
+  jede Regel mit Punkten und Beschreibung als Tabelle auf, nach Gewicht sortiert, und die
+  Empfehlung nennt die drei Regeln mit den meisten Punkten. Die Rohdaten zeigen die Regeln
+  nicht ein zweites Mal.
+
 ## [1.43.2] - 2026-10-16
 
 ### Fixed

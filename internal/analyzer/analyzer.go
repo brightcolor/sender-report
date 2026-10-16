@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"mime"
 	"mime/multipart"
 	"net"
@@ -4809,7 +4810,7 @@ func spamAssassinHeuristic(ctx context.Context, hostport, raw string) model.Chec
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 
-	req := fmt.Sprintf("SYMBOLS SPAMC/1.5\r\nContent-length: %d\r\n\r\n%s", len(raw), raw)
+	req := fmt.Sprintf("REPORT SPAMC/1.5\r\nContent-length: %d\r\n\r\n%s", len(raw), raw)
 	if _, err := conn.Write([]byte(req)); err != nil {
 		details["error"] = err.Error()
 		return withDetails(info("spamassassin", "SpamAssassin", 0.0, "SpamAssassin Anfrage fehlgeschlagen.", "spamd-Verbindung prüfen."), details)
@@ -4829,6 +4830,13 @@ func spamAssassinHeuristic(ctx context.Context, hostport, raw string) model.Chec
 		}
 	}
 	details["spam_line"] = emptyFallback(spamLine, "none")
+	// Die Regeln, aus denen sich der Wert zusammensetzt, damit der Bericht sagt,
+	// was die Punkte auslöst.
+	rules := parseSpamAssassinReport(string(resp))
+	for _, r := range rules[:min(len(rules), spamAssassinRuleLimit)] {
+		details["sym:"+r.Name] = fmt.Sprintf("%+.2f|%s|", r.Score, r.Description)
+	}
+	details["rule_count"] = strconv.Itoa(len(rules))
 	if strings.Contains(lower, "spam: true") {
 		return withDetails(fail("spamassassin", "SpamAssassin", -1.6, emptyFallback(spamLine, "SpamAssassin stuft Nachricht als Spam ein."), "SpamAssassin-Regeln/Symbole prüfen und Mailinhalt überarbeiten."), details)
 	}
@@ -4839,11 +4847,67 @@ func spamAssassinHeuristic(ctx context.Context, hostport, raw string) model.Chec
 		if score, limit, ok := parseSpamAssassinScore(spamLine); ok && limit > 0 && score >= limit*0.6 {
 			return withDetails(warn("spamassassin", "SpamAssassin", -0.4,
 				fmt.Sprintf("%s — der Wert liegt bei %.1f von %.1f und damit dicht an der Grenze. Diese Grenze setzt jeder Empfänger selbst; viele liegen niedriger, dort gilt diese Nachricht bereits als Spam.", spamLine, score, limit),
-				"Die Auslöser stehen unten in den technischen Details. Meist helfen: weniger Bilder im Verhältnis zum Text, keine Wörter in Großbuchstaben, keine verkürzten Links und ein sauberer Plaintext-Teil."), details)
+				spamAssassinAdvice(rules)), details)
 		}
 		return withDetails(pass("spamassassin", "SpamAssassin", 0.0, spamLine, ""), details)
 	}
 	return withDetails(info("spamassassin", "SpamAssassin", 0.0, "SpamAssassin Antwort ohne klassisches Spam-Headerformat erhalten.", ""), details)
+}
+
+// spamAssassinRuleLimit begrenzt die Regeln, die der Bericht einzeln aufführt.
+const spamAssassinRuleLimit = 30
+
+var spamAssassinRuleLine = regexp.MustCompile(`^\s*\*?\s*(-?\d+(?:\.\d+)?)\s+([A-Z][A-Z0-9_]+)\s+(.*)$`)
+
+// parseSpamAssassinReport liest die Tabelle „pts rule name description“ aus der
+// REPORT-Antwort von spamd. Die Regeln kommen nach Gewicht sortiert zurück, die
+// mit dem größten Betrag zuerst. Mehrzeilige Beschreibungen werden zusammengefügt.
+func parseSpamAssassinReport(resp string) []rspamdSymbol {
+	var rules []rspamdSymbol
+	inTable := false
+	for _, line := range strings.Split(strings.ReplaceAll(resp, "\r\n", "\n"), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !inTable {
+			if strings.HasPrefix(trimmed, "pts") && strings.Contains(trimmed, "rule name") {
+				inTable = true
+			}
+			continue
+		}
+		if trimmed == "" || strings.HasPrefix(trimmed, "---") {
+			continue
+		}
+		if m := spamAssassinRuleLine.FindStringSubmatch(line); m != nil {
+			score, _ := strconv.ParseFloat(m[1], 64)
+			rules = append(rules, rspamdSymbol{Name: m[2], Score: score, Description: strings.TrimSpace(m[3])})
+			continue
+		}
+		if n := len(rules); n > 0 && (strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t")) {
+			rules[n-1].Description = strings.TrimSpace(rules[n-1].Description + " " + trimmed)
+		}
+	}
+	sort.SliceStable(rules, func(i, j int) bool {
+		ai, aj := math.Abs(rules[i].Score), math.Abs(rules[j].Score)
+		if ai != aj {
+			return ai > aj
+		}
+		return rules[i].Name < rules[j].Name
+	})
+	return rules
+}
+
+// spamAssassinAdvice nennt als Empfehlung die Regeln, die am meisten Punkte
+// geben. Ohne lesbare Regeln bleibt der allgemeine Hinweis.
+func spamAssassinAdvice(rules []rspamdSymbol) string {
+	var top []string
+	for _, r := range rules {
+		if r.Score >= 0.5 && len(top) < 3 {
+			top = append(top, fmt.Sprintf("%s (%+.1f)", r.Name, r.Score))
+		}
+	}
+	if len(top) == 0 {
+		return "Die Regeln stehen in der Tabelle unter diesem Befund. Meist helfen: weniger Bilder im Verhältnis zum Text, keine Wörter in Großbuchstaben, keine verkürzten Links und ein sauberer Plaintext-Teil."
+	}
+	return "Die meisten Punkte kommen von " + strings.Join(top, ", ") + ". Die Beschreibung jeder Regel steht in der Tabelle unter diesem Befund; wer sie behebt, senkt den Wert. Jede Regel lässt sich unter https://spamassassin.apache.org/tests_3_4_x.html nachschlagen."
 }
 
 type rspamdCheckResult struct {

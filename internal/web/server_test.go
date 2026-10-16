@@ -556,3 +556,53 @@ func chdirToRepoRoot(t *testing.T) func() {
 func itoa(v int64) string {
 	return strconv.FormatInt(v, 10)
 }
+
+// Der SpamAssassin-Befund zeigt die Regeln, aus denen sich sein Wert
+// zusammensetzt, als Tabelle. Die Rohdaten führen sie nicht ein zweites Mal auf.
+func TestReportShowsSpamAssassinRules(t *testing.T) {
+	restoreWD := chdirToRepoRoot(t)
+	defer restoreWD()
+
+	srv, st, mb, _, _ := prepareWebTestFixture(t)
+	ctx := context.Background()
+	msg, err := st.SaveMessage(ctx, model.Message{
+		MailboxID: mb.ID, SMTPFrom: "a@example.org", RCPTTo: mb.Address, RemoteIP: "203.0.113.20",
+		HELO: "mx.example.org", ReceivedAt: time.Now().UTC(), RawSource: "Subject: x\r\n\r\nHallo",
+		HeaderBlock: "Subject: x", Subject: "x", SizeBytes: 20,
+	})
+	if err != nil {
+		t.Fatalf("save message: %v", err)
+	}
+	if _, err := st.SaveReport(ctx, model.AnalysisReport{
+		MessageID: msg.ID, CreatedAt: time.Now().UTC(), Score: 8.5,
+		Checks: []model.CheckResult{{
+			ID: "spamassassin", Name: "SpamAssassin", Status: "warn", Summary: "Spam: False ; 3.5 / 5.0",
+			TechnicalDetails: map[string]string{
+				"spam_line":           "Spam: False ; 3.5 / 5.0",
+				"sym:MISSING_SUBJECT": "+2.00|Missing Subject: header|",
+				"sym:URIBL_BLOCKED":   "+1.50|URIBL query blocked|",
+			},
+		}},
+	}); err != nil {
+		t.Fatalf("save report: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/report/"+mb.Token+"?msg="+messageReference(mb.Token, msg.ID), nil)
+	req.Header.Set("Accept-Language", "de")
+	rr := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	for _, want := range []string{
+		"Regeln <span", "MISSING_SUBJECT</code>", "+2.00", "Missing Subject: header", "URIBL_BLOCKED</code>",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Bericht zeigt %q nicht", want)
+		}
+	}
+	if strings.Contains(body, "<dt>sym:") || strings.Contains(body, "sym:MISSING_SUBJECT</dt>") {
+		t.Error("die Rohdaten führen die Regeln ein zweites Mal auf")
+	}
+}

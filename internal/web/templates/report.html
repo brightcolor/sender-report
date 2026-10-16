@@ -360,6 +360,26 @@
                     <div id="chk-body-{{safeID .ID}}" class="accordion-collapse collapse">
                       <div class="accordion-body">
 
+                      {{if eq .ID "spamassassin"}}
+                      {{$saRules := rspamdSymbols .TechnicalDetails}}
+                      {{if $saRules}}
+                      <div class="mb-3">
+                        <h6 class="text-uppercase small fw-bold text-secondary mb-2" style="letter-spacing:.06em">
+                          Regeln <span class="text-body fw-normal">(nach Gewicht)</span>
+                        </h6>
+                        <div class="mp-symbol-table">
+                          {{range $saRules}}
+                          <div class="mp-symbol-row {{if gt .Score 0.0}}sym-pos{{else if lt .Score 0.0}}sym-neg{{else}}sym-zero{{end}}">
+                            <code class="mp-sym-name">{{.Name}}</code>
+                            <span class="mp-sym-score">{{printf "%+.2f" .Score}}</span>
+                            <span class="mp-sym-explain">{{.Desc}}</span>
+                          </div>
+                          {{end}}
+                        </div>
+                      </div>
+                      {{end}}
+                      {{end}}
+
                       {{if eq .ID "rspamd"}}
                       {{/* ── Rspamd – strukturierte Darstellung ───────────────────────────── */}}
                       {{$action := index .TechnicalDetails "action"}}
@@ -688,7 +708,7 @@ Kind regards,
                               </button>
                             </div>
                             <dl class="mp-tech-dl">
-                              {{range $k, $v := .TechnicalDetails}}
+                              {{range $k, $v := rspamdMeta .TechnicalDetails}}
                               <div><dt>{{techLabel $.Lang $k}}</dt><dd><code>{{$v}}</code></dd></div>
                               {{end}}
                             </dl>
@@ -1721,7 +1741,7 @@ function renderDecCheckItem(c, uid){
      '<span class="mp-pill '+esc(c.status)+'">'+statusLbl(c.status)+'</span>'+
      '<strong class="mp-delta">'+esc(delta)+'</strong></div></button>'+recheckBtn+'</h2>'+
      '<div id="cb-'+uid+'" class="accordion-collapse collapse '+open+'"><div class="accordion-body">';
-  if(c.id==='rspamd'&&c.technical_details)
+  if((c.id==='rspamd'||c.id==='spamassassin')&&c.technical_details)
     h+=renderRspamdSymbols(c.technical_details);
   if(c.id==='rbl'&&c.technical_details)
     h+=renderRblDetails(c.technical_details);
