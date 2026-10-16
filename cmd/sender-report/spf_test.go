@@ -104,6 +104,30 @@ func TestReceivedHeaderIsWritten(t *testing.T) {
 		}
 	})
 
+	t.Run("every line ends in CRLF, never CR CR LF", func(t *testing.T) {
+		// Rspamd (and other strict parsers) read a stray CR in front of CRLF as the
+		// end of the header block. Everything after it then counts as body: the
+		// report claimed From, Date, Message-ID, Subject and DMARC were missing on a
+		// message that carried all of them.
+		raw := "From: a@example.org\r\nDate: Fri, 16 Oct 2026 16:41:03 +0200\r\nSubject: Test\r\n\r\nHallo\r\n"
+		enriched := prependHeaders(raw, []string{got, "X-Test: eins"})
+		if strings.Contains(enriched, "\r\r") {
+			t.Errorf("doppeltes CR im Quelltext: %q", enriched)
+		}
+		if strings.Contains(strings.ReplaceAll(enriched, "\r\n", ""), "\n") {
+			t.Errorf("einzelnes LF im Quelltext: %q", enriched)
+		}
+		head, _, ok := strings.Cut(enriched, "\r\n\r\n")
+		if !ok {
+			t.Fatalf("Kopf und Text sind nicht durch eine Leerzeile getrennt: %q", enriched)
+		}
+		for _, h := range []string{"From: a@example.org", "Date: ", "Subject: Test", "X-Test: eins", "Received: from"} {
+			if !strings.Contains(head, h) {
+				t.Errorf("Kopfzeile %q liegt nicht im Kopfblock: %q", h, head)
+			}
+		}
+	})
+
 	t.Run("the message parses with the header prepended", func(t *testing.T) {
 		raw := "From: a@example.org\r\nSubject: Test\r\n\r\nHallo\r\n"
 		enriched := prependHeaders(raw, []string{got})

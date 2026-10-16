@@ -121,6 +121,32 @@ func TestDMARCPolicyHonoursPctAndSp(t *testing.T) {
 	}
 }
 
+// TestDMARCWeakPolicyFixNamesOnlyWhatTheRecordNeeds: die Empfehlung riet zu
+// "pct= entfernen", obwohl der Record gar kein pct= trug.
+func TestDMARCWeakPolicyFixNamesOnlyWhatTheRecordNeeds(t *testing.T) {
+	cases := []struct {
+		name, record, policy string
+		want, notWant        []string
+	}{
+		{"nur sp=none", "v=DMARC1; p=quarantine; sp=none; fo=1", "quarantine", []string{"sp= weglassen", "quarantine"}, []string{"pct="}},
+		{"nur pct", "v=DMARC1; p=reject; pct=50", "reject", []string{"pct= entfernen"}, []string{"sp="}},
+		{"beides", "v=DMARC1; p=reject; pct=10; sp=none", "reject", []string{"pct= entfernen", "sp= weglassen", "mindestens auf reject"}, nil},
+	}
+	for _, tc := range cases {
+		got := dmarcPolicyCheck([]string{tc.record}, tc.policy)
+		for _, w := range tc.want {
+			if !strings.Contains(got.Suggestion, w) {
+				t.Errorf("%s: Empfehlung sollte %q enthalten, war: %q", tc.name, w, got.Suggestion)
+			}
+		}
+		for _, w := range tc.notWant {
+			if strings.Contains(got.Suggestion, w) {
+				t.Errorf("%s: Empfehlung darf %q nicht enthalten, war: %q", tc.name, w, got.Suggestion)
+			}
+		}
+	}
+}
+
 // TestBulkContentBreaksTheCircularClassification covers the loop the mail-type
 // detection used to be caught in: the only bulk signals were the List-* headers,
 // so a newsletter missing them was classified as personal — and the

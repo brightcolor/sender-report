@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.42.1] - 2026-10-16
+
+### Fixed
+- **Rspamd bekam den Quelltext mit kaputtem Kopfblock und meldete fehlende Header.** Die
+  vom Server ergänzte `Received:`-Zeile wurde mit CR CR LF eingefügt. Rspamd las das als
+  Ende des Kopfblocks und behandelte alle Originalheader als Text. Der Bericht zeigte
+  daraufhin „kein From, kein Date, keine Message-ID, kein Betreff, kein DMARC-Record“
+  (Score 15,9, Aktion „reject“) bei einer vollständigen, authentifizierten Mail. Jede
+  Zeile endet jetzt auf CRLF.
+- **Rspamd erhält die Daten der SMTP-Sitzung** (`IP`, `Helo`, `From`, `Rcpt`). Damit kann
+  es SPF, Blocklisten und die Zuordnung der Authentifizierung selbst bewerten.
+- **Die DMARC-Empfehlung nennt nur, was der Record braucht.** Bei `p=quarantine; sp=none`
+  stand „pct= entfernen“, obwohl kein `pct=` gesetzt war.
+
 ## [1.42.0] - 2026-10-09
 
 ### Fixed

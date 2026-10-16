@@ -144,7 +144,9 @@ func prependHeaders(raw string, extra []string) string {
 
 	all := make([]string, 0, len(extra)+1)
 	for _, h := range extra {
-		h = strings.TrimSpace(h)
+		// Die Kopfzeilen kommen mit CRLF an (buildReceivedHeader faltet so). Ohne
+		// diese Angleichung macht das abschließende Ersetzen aus CRLF ein CR CR LF.
+		h = strings.TrimSpace(strings.ReplaceAll(h, "\r\n", "\n"))
 		if h != "" {
 			all = append(all, h)
 		}

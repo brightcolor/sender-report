@@ -757,7 +757,7 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 		}
 		if e.opts.EnableRspamd && strings.TrimSpace(e.opts.RspamdURL) != "" {
 			netTasks = append(netTasks, checkTask{"rspamd", func(c context.Context) []model.CheckResult {
-				return one(rspamdHeuristic(c, e.opts.RspamdURL, e.opts.RspamdPassword, in.Message.RawSource))
+				return one(rspamdHeuristic(c, e.opts.RspamdURL, e.opts.RspamdPassword, in.Message))
 			}})
 		}
 		// Group C — opt-in third-party reputation checks (off by default). Enabled
@@ -1252,12 +1252,12 @@ func dmarcPolicyCheck(records []string, policy string) model.CheckResult {
 	switch p {
 	case "reject":
 		if pct < 100 || sp == "none" {
-			return withDetails(warn("dmarc_policy", "DMARC-Policy-Stärke", -0.2, "DMARC p=reject ist gesetzt, greift aber nicht vollständig."+ruaNote, "pct= entfernen (dann gilt der Standardwert 100) und sp= entweder weglassen oder ebenfalls auf reject setzen."), det)
+			return withDetails(warn("dmarc_policy", "DMARC-Policy-Stärke", -0.2, "DMARC p=reject ist gesetzt, greift aber nicht vollständig."+ruaNote, dmarcWeakPolicyFix("reject", pct, sp)), det)
 		}
 		return withDetails(pass("dmarc_policy", "DMARC-Policy-Stärke", 0.3, "DMARC p=reject – stärkster Schutz gegen Domain-Spoofing."+ruaNote, ruaOnlyRec(hasRUA)), det)
 	case "quarantine":
 		if pct < 100 || sp == "none" {
-			return withDetails(warn("dmarc_policy", "DMARC-Policy-Stärke", -0.2, "DMARC p=quarantine ist gesetzt, greift aber nicht vollständig."+ruaNote, "pct= entfernen und sp= weglassen oder mindestens auf quarantine setzen."), det)
+			return withDetails(warn("dmarc_policy", "DMARC-Policy-Stärke", -0.2, "DMARC p=quarantine ist gesetzt, greift aber nicht vollständig."+ruaNote, dmarcWeakPolicyFix("quarantine", pct, sp)), det)
 		}
 		return withDetails(pass("dmarc_policy", "DMARC-Policy-Stärke", 0.1, "DMARC p=quarantine – mittlerer Schutz; verdächtige Mails landen im Spam."+ruaNote, "Sobald die Reports sauber sind, auf p=reject erhöhen."), det)
 	case "none":
@@ -1265,6 +1265,23 @@ func dmarcPolicyCheck(records []string, policy string) model.CheckResult {
 	default:
 		return withDetails(warn("dmarc_policy", "DMARC-Policy-Stärke", -0.2, "DMARC-Record vorhanden, aber keine gültige p=-Policy erkannt.", "Gültige Policy setzen: p=none, p=quarantine oder p=reject."), det)
 	}
+}
+
+// dmarcWeakPolicyFix nennt nur die Schritte, die der veröffentlichte Record
+// wirklich braucht. Ein pct= wird nur empfohlen zu entfernen, wenn es gesetzt
+// ist, und sp= nur, wenn es die Subdomains schwächer stellt als p=.
+func dmarcWeakPolicyFix(p string, pct int, sp string) string {
+	steps := make([]string, 0, 2)
+	if pct < 100 {
+		steps = append(steps, "pct= entfernen (dann gilt der Standardwert 100)")
+	}
+	if sp == "none" {
+		steps = append(steps, "sp= weglassen (dann gilt für Subdomains dieselbe Policy wie für die Hauptdomain) oder mindestens auf "+p+" setzen")
+	}
+	if len(steps) == 0 {
+		return "Policy und Subdomain-Policy prüfen und auf " + p + " angleichen."
+	}
+	return strings.Join(steps, " und ") + "."
 }
 
 func ruaOnlyRec(hasRUA bool) string {
@@ -4836,12 +4853,36 @@ type rspamdCheckResult struct {
 	Symbols       map[string]json.RawMessage `json:"symbols"`
 }
 
-func rspamdHeuristic(ctx context.Context, endpointURL, password, raw string) model.CheckResult {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewBufferString(raw))
+// rspamdEnvelopeHeaders übergibt Rspamd die Daten der SMTP-Sitzung. Ohne sie
+// kennt Rspamd weder die sendende IP noch Absender und Empfänger des Umschlags
+// und kann SPF, DNS-Blocklisten und die Zuordnung der Authentifizierung nicht
+// bewerten (Symbole wie AUTH_NA).
+func rspamdEnvelopeHeaders(m model.Message) map[string]string {
+	out := map[string]string{}
+	if ip := strings.TrimSpace(m.RemoteIP); net.ParseIP(ip) != nil {
+		out["IP"] = ip
+	}
+	if v := strings.TrimSpace(m.HELO); v != "" {
+		out["Helo"] = v
+	}
+	if v := strings.TrimSpace(m.SMTPFrom); v != "" {
+		out["From"] = v
+	}
+	if v := strings.TrimSpace(m.RCPTTo); v != "" {
+		out["Rcpt"] = v
+	}
+	return out
+}
+
+func rspamdHeuristic(ctx context.Context, endpointURL, password string, msg model.Message) model.CheckResult {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewBufferString(msg.RawSource))
 	if err != nil {
 		return info("rspamd", "Rspamd", 0.0, "Rspamd request build failed.", "Check RSPAMD_URL configuration.")
 	}
 	req.Header.Set("Content-Type", "message/rfc822")
+	for k, v := range rspamdEnvelopeHeaders(msg) {
+		req.Header.Set(k, v)
+	}
 	if strings.TrimSpace(password) != "" {
 		req.Header.Set("Password", password)
 	}
