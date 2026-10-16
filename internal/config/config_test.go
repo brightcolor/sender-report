@@ -612,3 +612,24 @@ func TestLoadRejectsInvalidDNSFallback(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadSpamAssassinWarnRatio(t *testing.T) {
+	t.Setenv("SMTP_DOMAIN", "example.test")
+	cfg, err := Load()
+	if err != nil || cfg.SpamAssassinWarnRatio != 0.9 {
+		t.Fatalf("Vorgabe: %v, %v", cfg.SpamAssassinWarnRatio, err)
+	}
+	for in, want := range map[string]float64{"0.6": 0.6, "0,75": 0.75, "1": 1, "0.1": 0.1} {
+		t.Setenv("SPAMASSASSIN_WARN_RATIO", in)
+		cfg, err := Load()
+		if err != nil || cfg.SpamAssassinWarnRatio != want {
+			t.Errorf("%q: %v, %v; erwartet %v", in, cfg.SpamAssassinWarnRatio, err, want)
+		}
+	}
+	for _, in := range []string{"0", "0.05", "1.5", "viel"} {
+		t.Setenv("SPAMASSASSIN_WARN_RATIO", in)
+		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "SPAMASSASSIN_WARN_RATIO") {
+			t.Errorf("%q sollte abgelehnt werden: %v", in, err)
+		}
+	}
+}

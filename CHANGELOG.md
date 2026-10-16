@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.44.0] - 2026-10-16
+
+### Added
+- **„DNS neu abfragen & neu bewerten“ im Bericht.** Ein Knopf in der Filterleiste fragt alles
+  neu ab, was von DNS abhängt, und berechnet die Bewertung neu: SPF, DKIM und DMARC der
+  Nachricht (bisher nur beim Empfang geprüft, also nicht neu abfragbar), die DNS-Records,
+  Blocklisten und alle Befunde. Wer im DNS etwas geändert hat, braucht dafür keine neue
+  Testmail. Der Browser schickt den entschlüsselten Quelltext aus dem Bericht an
+  `POST /api/reanalyze/{token}/{msgref}`; der Server speichert nichts im Klartext, und der
+  Browser verschlüsselt den neuen Bericht wieder. Fehler erklären, was geschah und was zu tun
+  ist (zu viele Neuprüfungen, Nachricht nicht mehr gespeichert, Server nicht erreichbar). Die
+  Datenschutzerklärung beschreibt den Vorgang.
+- Einstellung `SPAMASSASSIN_WARN_RATIO` (Vorgabe `0.9`, `0.1` bis `1.0`): Anteil des
+  SpamAssassin-Limits, ab dem der Befund gelb wird.
+
+### Changed
+- **SpamAssassin wird erst bei fast erreichtem Limit gelb.** Bisher warnte der Befund ab
+  60 % des Limits (3,0 von 5,0). Die Vorgabe liegt jetzt bei 90 % (ab 4,5 von 5,0).
+
 ## [1.43.3] - 2026-10-16
 
 ### Fixed

@@ -181,6 +181,7 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | `DNS_FALLBACK_RESOLVERS` | external resolvers asked for a TXT record (DKIM key, SPF, DMARC) that the local resolver reports as missing, so a stale negative answer cannot produce a false "record missing" (default `1.1.1.1,8.8.8.8,9.9.9.9`, at most 5, `none` turns it off); the resolvers see the queried domain names, and blocklist lookups always stay with the local resolver |
 | `DNS_FALLBACK_TIMEOUT` | how long each external resolver gets to answer (default `2s`, `500ms` to `10s`) |
 | `ENABLE_SPAMASSASSIN`, `ENABLE_RSPAMD`, … | external spam filters, optional |
+| `SPAMASSASSIN_WARN_RATIO` | share of the SpamAssassin spam limit from which the finding turns to a warning (default `0.9`: from 4.5 of 5.0; `0.1` to `1.0`) |
 | `ENABLE_DOMAIN_AGE`, `ENABLE_DOMAIN_BLOCKLIST`, `DOMAIN_BLOCKLIST_PROVIDERS` | force third-party checks on globally (default off) |
 | `ENABLE_INBOX_PLACEMENT`, `SEED_ACCOUNTS_FILE` | inbox placement testing via operator-configured seed accounts (default off) |
 | `ALERT_WEBHOOK_URL` | webhook on processing failures |

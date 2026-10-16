@@ -275,6 +275,10 @@
           <button class="mp-filter-btn warn"   data-filter="warn" type="button">&#33; {{t .Lang "report.warnings"}}</button>
           <button class="mp-filter-btn fail"   data-filter="fail" type="button">&#10007; {{t .Lang "report.errors"}}</button>
           <button class="mp-filter-btn info"   data-filter="info" type="button">&#x2139; Info</button>
+          <button class="mp-reanalyze-btn ms-auto" id="mp-reanalyze" type="button" hidden
+                  title="{{if eq .Lang "de"}}Fragt SPF, DKIM, DMARC und alle DNS-Einträge neu ab und berechnet die Bewertung neu. Nutze es, nachdem du im DNS etwas geändert hast.{{else}}Queries SPF, DKIM, DMARC and all DNS records again and recalculates the score. Use it after you changed something in DNS.{{end}}">
+            <i class="bi bi-arrow-clockwise me-1"></i>{{if eq .Lang "de"}}DNS neu abfragen &amp; neu bewerten{{else}}Re-query DNS &amp; re-score{{end}}
+          </button>
         </div>
 
         {{if .Encrypted}}
@@ -1223,6 +1227,7 @@ function showDecrypted(payload, secretToken) {
     if (typeof localizeStaticTimes === 'function') localizeStaticTimes();
     if (typeof setupDownloadButtons === 'function') setupDownloadButtons();
     setupRecheckButtons();
+    setupReanalyzeButton();
   }
 
   // Update all metadata info-boxes with decrypted values.
@@ -1969,6 +1974,72 @@ function setupRecheckButtons() {
       recheckToast(LANG==='en' ? 'Re-check failed – try again later.' : 'Recheck fehlgeschlagen – später erneut versuchen.', true);
     }
   });
+}
+
+// setupReanalyzeButton shows the "re-query DNS & re-score" button once the report
+// is decrypted and binds it once.
+function setupReanalyzeButton() {
+  var btn = document.getElementById('mp-reanalyze');
+  if (!btn) return;
+  btn.hidden = false;
+  if (btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', reanalyzeAll);
+}
+
+// reanalyzeError turns a failed re-analysis into a sentence that says what
+// happened and what to do next.
+function reanalyzeError(status) {
+  if (status === 429) return LANG==='en' ? 'Too many re-checks in a short time. Wait a moment and try again.' : 'Zu viele Neuprüfungen in kurzer Zeit. Warte einen Moment und versuche es erneut.';
+  if (status === 404) return LANG==='en' ? 'The message is no longer stored, so it cannot be re-checked. Send a new test mail.' : 'Die Nachricht ist nicht mehr gespeichert und lässt sich nicht neu prüfen. Sende eine neue Testmail.';
+  if (status === 0)   return LANG==='en' ? 'The server could not be reached. Check your connection and try again.' : 'Der Server war nicht erreichbar. Prüfe deine Verbindung und versuche es erneut.';
+  return (LANG==='en' ? 'The re-check failed (HTTP ' : 'Die Neuprüfung ist fehlgeschlagen (HTTP ') + status + (LANG==='en' ? '). Try again later.' : '). Versuche es später erneut.');
+}
+
+// reanalyzeAll queries every DNS-dependent result again (SPF, DKIM and DMARC of
+// the message, DNS records, blocklists) and recalculates the report. The browser
+// sends the source from the decrypted report; the server stores nothing, and the
+// browser seals the new report afterwards, like after a single re-check.
+async function reanalyzeAll() {
+  var btn = document.getElementById('mp-reanalyze');
+  if (!btn || btn.disabled) return;
+  if (!DEC_PAYLOAD || !DEC_PAYLOAD.raw_source) {
+    recheckToast(LANG==='en' ? 'This report holds no message source, so it cannot be recalculated. Send a new test mail.' : 'Dieser Bericht enthält keinen Quelltext und lässt sich nicht neu berechnen. Sende eine neue Testmail.', true);
+    return;
+  }
+  var orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>' + (LANG==='en' ? 'Querying …' : 'Frage ab …');
+  recheckToast(LANG==='en' ? 'Querying DNS again and recalculating …' : 'DNS wird neu abgefragt, die Bewertung wird erneuert …');
+  try {
+    var res;
+    try {
+      res = await fetch('/api/reanalyze/' + TOKEN + '/' + MSGREF, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+        body: JSON.stringify({
+          raw_source: DEC_PAYLOAD.raw_source, remote_ip: DEC_PAYLOAD.remote_ip || '',
+          helo: DEC_PAYLOAD.helo || '', smtp_from: DEC_PAYLOAD.smtp_from || ''
+        })
+      });
+    } catch (netErr) { throw { status: 0 }; }
+    if (!res.ok) throw { status: res.status };
+    var data = await res.json();
+    var old = DEC_PAYLOAD.report || {};
+    var fresh = data.report || {};
+    fresh.id = old.id; fresh.message_id = old.message_id; fresh.created_at = old.created_at;
+    DEC_PAYLOAD.report = fresh;
+    DEC_PAYLOAD.raw_source = data.raw_source || DEC_PAYLOAD.raw_source;
+    DEC_PAYLOAD.header_block = data.header_block || DEC_PAYLOAD.header_block;
+    showDecrypted(DEC_PAYLOAD, DEC_SECRET);
+    var before = typeof old.score === 'number' ? fmtScore(old.score) : '?';
+    var after = typeof fresh.score === 'number' ? fmtScore(fresh.score) : '?';
+    await persistCurrent((LANG==='en' ? 'Recalculated: score ' : 'Neu berechnet: Bewertung ') + before + ' → ' + after);
+  } catch (e) {
+    recheckToast(reanalyzeError(e && typeof e.status === 'number' ? e.status : 0), true);
+  } finally {
+    var b = document.getElementById('mp-reanalyze');
+    if (b) { b.disabled = false; b.innerHTML = orig; }
+  }
 }
 
 // recheckToast shows a small transient message at the bottom of the screen.

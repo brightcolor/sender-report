@@ -39,6 +39,8 @@ type Options struct {
 	RBLProviders         []string
 	EnableSpamAssassin   bool
 	SpamAssassinHostPort string
+	// SpamAssassinWarnRatio is the share of the spam limit from which the finding warns.
+	SpamAssassinWarnRatio float64
 	EnableRspamd         bool
 	RspamdURL            string
 	RspamdPassword       string
@@ -759,7 +761,7 @@ func (e *Engine) Analyze(ctx context.Context, in Input) (report model.AnalysisRe
 		}
 		if e.opts.EnableSpamAssassin && strings.TrimSpace(e.opts.SpamAssassinHostPort) != "" {
 			netTasks = append(netTasks, checkTask{"spamassassin", func(c context.Context) []model.CheckResult {
-				return one(spamAssassinHeuristic(c, e.opts.SpamAssassinHostPort, in.Message.RawSource))
+				return one(spamAssassinHeuristic(c, e.opts.SpamAssassinHostPort, in.Message.RawSource, e.opts.SpamAssassinWarnRatio))
 			}})
 		}
 		if e.opts.EnableRspamd && strings.TrimSpace(e.opts.RspamdURL) != "" {
@@ -4799,7 +4801,7 @@ func rblGenericRecommendation(remoteIP string) string {
 	return fmt.Sprintf("Wenn ein RBL-Listing auftritt: Ursache für IP %s zuerst abstellen, Versand temporär stoppen, Logs und Queue prüfen, dann über die jeweilige Provider-Seite delisten. Ohne behobene Ursache führt Delisting fast immer zu erneutem Listing.", emptyFallback(remoteIP, "<sender-ip>"))
 }
 
-func spamAssassinHeuristic(ctx context.Context, hostport, raw string) model.CheckResult {
+func spamAssassinHeuristic(ctx context.Context, hostport, raw string, warnRatio float64) model.CheckResult {
 	details := map[string]string{"spamd_hostport": hostport}
 	d := net.Dialer{Timeout: 3 * time.Second}
 	conn, err := d.DialContext(ctx, "tcp", hostport)
@@ -4844,7 +4846,11 @@ func spamAssassinHeuristic(ctx context.Context, hostport, raw string) model.Chec
 		// The yes/no threshold alone hides how close a message came to it. A score
 		// of 4.9 against a limit of 5.0 passed silently — yet every receiver runs
 		// its own limit, and many are stricter, so that message is spam elsewhere.
-		if score, limit, ok := parseSpamAssassinScore(spamLine); ok && limit > 0 && score >= limit*0.6 {
+		// SPAMASSASSIN_WARN_RATIO says how close counts as close.
+		if warnRatio <= 0 {
+			warnRatio = defaultSpamAssassinWarnRatio
+		}
+		if score, limit, ok := parseSpamAssassinScore(spamLine); ok && limit > 0 && score >= limit*warnRatio {
 			return withDetails(warn("spamassassin", "SpamAssassin", -0.4,
 				fmt.Sprintf("%s — der Wert liegt bei %.1f von %.1f und damit dicht an der Grenze. Diese Grenze setzt jeder Empfänger selbst; viele liegen niedriger, dort gilt diese Nachricht bereits als Spam.", spamLine, score, limit),
 				spamAssassinAdvice(rules)), details)
@@ -4853,6 +4859,9 @@ func spamAssassinHeuristic(ctx context.Context, hostport, raw string) model.Chec
 	}
 	return withDetails(info("spamassassin", "SpamAssassin", 0.0, "SpamAssassin Antwort ohne klassisches Spam-Headerformat erhalten.", ""), details)
 }
+
+// defaultSpamAssassinWarnRatio gilt, wenn die Optionen keinen Wert tragen (Tests).
+const defaultSpamAssassinWarnRatio = 0.9
 
 // spamAssassinRuleLimit begrenzt die Regeln, die der Bericht einzeln aufführt.
 const spamAssassinRuleLimit = 30

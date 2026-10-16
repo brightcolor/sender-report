@@ -694,3 +694,62 @@ func emptyFallback(v, fallback string) string {
 	}
 	return v
 }
+
+// stripReceiverHeaders entfernt die Kopfzeilen, die dieser Server beim Empfang
+// vorangestellt hat (Received, Authentication-Results, Received-SPF und die
+// X-Sender-Report-Detailzeilen). So lässt sich die Nachricht neu prüfen, ohne
+// dass das alte Ergebnis neben dem neuen steht. host ist die Kennung des
+// Servers aus SMTP_DOMAIN. Der zweite Wert sagt, ob die Übergabe
+// verschlüsselt war; er steht in der entfernten Received-Zeile.
+func stripReceiverHeaders(raw, host string) (clean string, tls bool) {
+	norm := strings.ReplaceAll(raw, "\r\n", "\n")
+	head, body, hasBody := strings.Cut(norm, "\n\n")
+	var blocks []string
+	for _, line := range strings.Split(head, "\n") {
+		if (strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t")) && len(blocks) > 0 {
+			blocks[len(blocks)-1] += "\n" + line
+			continue
+		}
+		blocks = append(blocks, line)
+	}
+	kept := make([]string, 0, len(blocks))
+	droppedReceived := false
+	for _, b := range blocks {
+		name, value, _ := strings.Cut(b, ":")
+		lname := strings.ToLower(strings.TrimSpace(name))
+		flat := strings.Join(strings.Fields(value), " ")
+		drop := false
+		switch {
+		case strings.HasPrefix(lname, "x-sender-report-"):
+			drop = true
+		case lname == "authentication-results":
+			drop = strings.HasPrefix(flat, host+";")
+		case lname == "received-spf":
+			drop = strings.Contains(flat, "receiver="+host)
+		case lname == "received" && !droppedReceived:
+			if strings.Contains(flat, " by "+host+" with ") {
+				drop, droppedReceived = true, true
+				tls = strings.Contains(strings.ToLower(flat), " with esmtps")
+			}
+		}
+		if !drop {
+			kept = append(kept, b)
+		}
+	}
+	out := strings.Join(kept, "\n")
+	if hasBody {
+		out += "\n\n" + body
+	}
+	return strings.ReplaceAll(out, "\n", "\r\n"), tls
+}
+
+// reverifyReceiverAuth prüft SPF, DKIM und DMARC einer bereits gespeicherten
+// Nachricht mit frischen DNS-Abfragen und liefert den Quelltext mit neuen
+// Kopfzeilen des Empfängers.
+func reverifyReceiverAuth(ctx context.Context, cfg config.Config, rm smtp.ReceivedMail, raw string) string {
+	host := emptyFallback(strings.TrimSpace(cfg.SMTPDomain), "sender-report.local")
+	clean, tls := stripReceiverHeaders(raw, host)
+	rm.TLS = rm.TLS || tls
+	rm.Data = []byte(clean)
+	return enrichWithReceiverAuthHeaders(ctx, cfg, rm, clean)
+}

@@ -859,6 +859,21 @@ body.mp-light-backdrop .modal-backdrop.show {
 .mp-filter-btn.fail.active { background: var(--bs-danger);  border-color: var(--bs-danger); }
 .mp-filter-btn.info.active { background: var(--bs-info);    border-color: var(--bs-info); }
 
+/* Reload of all DNS-dependent results; sits at the right end of the filter bar. */
+.mp-reanalyze-btn {
+  border: 1px solid var(--bs-primary);
+  background: transparent;
+  color: var(--bs-primary);
+  font-weight: 600;
+  font-size: .8rem;
+  padding: .35rem .9rem;
+  border-radius: 99px;
+  transition: background .14s, color .14s;
+}
+.mp-reanalyze-btn:hover:not(:disabled) { background: var(--bs-primary); color: #fff; }
+.mp-reanalyze-btn:disabled { opacity: .7; cursor: progress; }
+.mp-reanalyze-btn[hidden] { display: none; }
+
 /* Inner grid inside accordion button */
 .mp-check-accordion .accordion-button {
   padding-top: .75rem;

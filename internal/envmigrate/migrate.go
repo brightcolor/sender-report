@@ -96,6 +96,7 @@ var All = []VarDef{
 	{Key: "RSPAMD_URL", Default: "http://rspamd:11334/checkv2", Comment: "Rspamd checkv2 endpoint"},
 	{Key: "RSPAMD_PASSWORD", Default: "", Comment: "Rspamd controller password (leave empty when using secure_ip)"},
 	{Key: "ENABLE_SPAMASSASSIN", Default: "false", Comment: "Enable SpamAssassin integration (optional, disabled by default)"},
+	{Key: "SPAMASSASSIN_WARN_RATIO", Default: "0.9", Comment: "Share of the spam limit from which the SpamAssassin finding warns (0.9 = from 4.5 of 5.0; 0.1 to 1.0)"},
 	{Key: "SPAMASSASSIN_HOSTPORT", Default: "spamd:783", Comment: "SpamAssassin spamd address (only used when ENABLE_SPAMASSASSIN=true)"},
 
 	// ── Alerting ──────────────────────────────────────────────────────────────

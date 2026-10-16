@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"net/mail"
 	"strings"
 	"testing"
 
+	"github.com/brightcolor/sender-report/internal/config"
 	"github.com/brightcolor/sender-report/internal/smtp"
 )
 
@@ -142,4 +144,62 @@ func TestReceivedHeaderIsWritten(t *testing.T) {
 			t.Errorf("original headers damaged: From = %q", msg.Header.Get("From"))
 		}
 	})
+}
+
+// Die Neuprüfung nimmt die Kopfzeilen, die dieser Server beim Empfang vorangestellt
+// hat, vollständig wieder ab und lässt alles andere stehen, auch fremde
+// Authentication-Results-Zeilen.
+func TestStripReceiverHeadersRestoresTheOriginal(t *testing.T) {
+	const host = "mx.sender.test"
+	original := "Authentication-Results: mx.google.com; dkim=pass header.i=@example.org\r\n" +
+		"Received: by 2002:a05:6512 with SMTP id abc; Fri, 16 Oct 2026 16:41:00 +0200\r\n" +
+		"From: a@example.org\r\nSubject: Test\r\nContent-Type: text/plain\r\n\r\nHallo\r\n\r\nzweiter Absatz\r\n"
+	rm := smtp.ReceivedMail{RemoteIP: "209.85.214.171", HELO: "mail.google.com", MailFrom: "a@example.org", RcptTo: "x@mx.sender.test", TLS: true}
+	enriched := prependHeaders(original, []string{
+		buildReceivedHeader(host, rm),
+		buildAuthenticationResultsHeader(host, authResults{SPFResult: "pass", DKIMResult: "none", DMARCResult: "none"}),
+		buildReceivedSPFHeader(host, rm, "pass"),
+		"X-Sender-Report-SPF-Detail: domain=example.org",
+		"X-Sender-Report-DKIM-Detail: none",
+		"X-Sender-Report-DMARC-Detail: none",
+	})
+	if !strings.Contains(enriched, "X-Sender-Report-SPF-Detail") {
+		t.Fatal("Testaufbau: die Kopfzeilen fehlen")
+	}
+
+	clean, tls := stripReceiverHeaders(enriched, host)
+	if !tls {
+		t.Error("die entfernte Received-Zeile nannte ESMTPS, tls muss wahr sein")
+	}
+	if clean != original {
+		t.Errorf("nach dem Entfernen steht nicht der Originaltext da:\n%q\nerwartet\n%q", clean, original)
+	}
+	if again, _ := stripReceiverHeaders(clean, host); again != clean {
+		t.Error("das Entfernen ist nicht idempotent")
+	}
+}
+
+func TestStripReceiverHeadersIgnoresOtherHosts(t *testing.T) {
+	raw := "Authentication-Results: mx.other.test; spf=pass\r\nReceived: from a by mx.other.test with ESMTP; x\r\nFrom: a@example.org\r\n\r\nHallo"
+	clean, tls := stripReceiverHeaders(raw, "mx.sender.test")
+	if clean != raw || tls {
+		t.Errorf("Kopfzeilen anderer Server bleiben stehen:\n%q", clean)
+	}
+}
+
+// Die Neuprüfung ersetzt die alten Ergebnisse, sie hängt keine zweite Serie an.
+func TestReverifyReplacesTheReceiverHeaders(t *testing.T) {
+	cfg := config.Config{SMTPDomain: "mx.sender.test"}
+	rm := smtp.ReceivedMail{RemoteIP: "203.0.113.5", HELO: "mail.example.org", MailFrom: "a@example.org", RcptTo: "x@mx.sender.test"}
+	raw := "From: a@example.org\r\nSubject: Test\r\n\r\nHallo\r\n"
+	first := reverifyReceiverAuth(context.Background(), cfg, rm, raw)
+	second := reverifyReceiverAuth(context.Background(), cfg, rm, first)
+	for _, name := range []string{"Received:", "Authentication-Results:", "Received-SPF:", "X-Sender-Report-DKIM-Detail:"} {
+		if n := strings.Count(second, "\r\n"+name) + strings.Count(second[:len(name)], name); n != 1 {
+			t.Errorf("%s steht %d-mal im Kopf, erwartet einmal", name, n)
+		}
+	}
+	if _, err := mail.ReadMessage(strings.NewReader(second)); err != nil {
+		t.Errorf("die Nachricht lässt sich nicht mehr lesen: %v", err)
+	}
 }

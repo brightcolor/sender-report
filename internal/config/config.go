@@ -54,6 +54,9 @@ type Config struct {
 	EnableBrokenLinks        bool
 	EnableSpamAssassin       bool
 	SpamAssassinHostPort     string
+	// SPAMASSASSIN_WARN_RATIO — share of the spam limit (score / limit) from which
+	// the SpamAssassin finding turns to a warning.
+	SpamAssassinWarnRatio float64
 	EnableRspamd             bool
 	RspamdURL                string
 	RspamdPassword           string
@@ -321,6 +324,9 @@ func Load() (Config, error) {
 			return cfg, fmt.Errorf("%s=%s is not a positive duration; set a value like 30m or 24h, or remove it to use the default", d.key, d.value)
 		}
 	}
+	if err := loadSpamAssassinWarnRatio(&cfg); err != nil {
+		return cfg, err
+	}
 	if err := loadDNSFallback(&cfg); err != nil {
 		return cfg, err
 	}
@@ -331,6 +337,29 @@ func Load() (Config, error) {
 		return cfg, err
 	}
 	return cfg, nil
+}
+
+const (
+	DefaultSpamAssassinWarnRatio = 0.9
+	MinSpamAssassinWarnRatio     = 0.1
+	MaxSpamAssassinWarnRatio     = 1.0
+)
+
+// loadSpamAssassinWarnRatio reads and checks SPAMASSASSIN_WARN_RATIO.
+func loadSpamAssassinWarnRatio(cfg *Config) error {
+	ratio := DefaultSpamAssassinWarnRatio
+	if v := strings.TrimSpace(os.Getenv("SPAMASSASSIN_WARN_RATIO")); v != "" {
+		f, err := strconv.ParseFloat(strings.ReplaceAll(v, ",", "."), 64)
+		if err != nil {
+			return fmt.Errorf("SPAMASSASSIN_WARN_RATIO=%q is not a number; set a value like %.1f", v, DefaultSpamAssassinWarnRatio)
+		}
+		ratio = f
+	}
+	if ratio < MinSpamAssassinWarnRatio || ratio > MaxSpamAssassinWarnRatio {
+		return fmt.Errorf("SPAMASSASSIN_WARN_RATIO=%v is outside %.1f to %.1f; it is the share of the SpamAssassin spam limit from which the finding turns to a warning (0.9 warns from 4.5 of 5.0); remove it to use %.1f", ratio, MinSpamAssassinWarnRatio, MaxSpamAssassinWarnRatio, DefaultSpamAssassinWarnRatio)
+	}
+	cfg.SpamAssassinWarnRatio = ratio
+	return nil
 }
 
 // loadDNSFallback reads and checks DNS_FALLBACK_RESOLVERS and DNS_FALLBACK_TIMEOUT.

@@ -56,6 +56,7 @@ type Server struct {
 	staticFS       http.Handler
 	trustedProxy   []*net.IPNet
 	engine         *analyzer.Engine   // for live single-check rechecks
+	reverify       AuthReverifier     // fresh SPF/DKIM/DMARC verdicts for /api/reanalyze; nil leaves the stored headers
 	iptLimiter     *ratelimit.Limiter // IPT_RATE_LIMIT_PER_HOUR placement tests per IP
 	seeds          *ipt.SeedConfig    // nil when feature disabled
 	iptMailer      *ipt.Mailer        // nil when email alerting not configured
@@ -63,6 +64,14 @@ type Server struct {
 	// Written by the background health checker, read by iptStartAPI.
 	iptHealth sync.Map
 }
+
+// AuthReverifier prüft SPF, DKIM und DMARC einer gespeicherten Nachricht mit
+// frischen DNS-Abfragen neu und liefert den Quelltext mit neuen Kopfzeilen des
+// Empfängers. Der Aufrufer in main setzt sie, weil die Prüfung dort liegt.
+type AuthReverifier func(ctx context.Context, remoteIP, helo, mailFrom, rcptTo string, tls bool, raw string) string
+
+// SetAuthReverifier stellt die Neuprüfung von SPF, DKIM und DMARC bereit.
+func (s *Server) SetAuthReverifier(f AuthReverifier) { s.reverify = f }
 
 var errActiveMailboxLimit = errors.New("active mailbox limit reached for ip")
 var errGlobalActiveMailboxLimit = errors.New("active mailbox limit reached globally")
@@ -535,6 +544,7 @@ func New(cfg config.Config, st *store.Store, logger *log.Logger, metrics *teleme
 		RBLProviders:             cfg.RBLProviders,
 		EnableSpamAssassin:       cfg.EnableSpamAssassin,
 		SpamAssassinHostPort:     cfg.SpamAssassinHostPort,
+		SpamAssassinWarnRatio:    cfg.SpamAssassinWarnRatio,
 		EnableRspamd:             cfg.EnableRspamd,
 		RspamdURL:                cfg.RspamdURL,
 		RspamdPassword:           cfg.RspamdPassword,
@@ -678,6 +688,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/payload/", s.payloadAPI)
 	mux.HandleFunc("/api/recheck/", s.recheckAPI)
 	mux.HandleFunc("/api/recheck-persist/", s.recheckPersistAPI)
+	mux.HandleFunc("/api/reanalyze/", s.reanalyzeAPI)
 	mux.HandleFunc("/simulate", s.simulatePage)
 	mux.HandleFunc("/api/simulate", s.simulateAPI)
 	mux.HandleFunc("/api/simulate/recheck/", s.simulateRecheckAPI)
@@ -1650,6 +1661,93 @@ func (s *Server) recheckPersistAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResp(w, http.StatusOK, map[string]any{"status": "saved", "score": score, "score_label": label})
 }
+
+// reanalyzeAPI fragt alles neu ab, was von DNS abhängt, und berechnet den Bericht
+// neu: SPF, DKIM und DMARC der Nachricht, DNS-Records, Blocklisten und die
+// Bewertung. Der Browser schickt den Quelltext aus dem entschlüsselten Bericht
+// mit; der Server speichert nichts und liefert den neuen Bericht zurück. Der
+// Browser sichert ihn danach über /api/recheck-persist verschlüsselt.
+// Route: POST /api/reanalyze/{token}/{msgref}
+func (s *Server) reanalyzeAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonResp(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	ip := s.clientIP(r)
+	if s.payloadLimiter != nil && !s.payloadLimiter.Allow("recheck:"+ip) {
+		jsonResp(w, http.StatusTooManyRequests, map[string]string{"error": "rate limited"})
+		return
+	}
+	parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/api/reanalyze/"), "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "bad path"})
+		return
+	}
+	ctx := r.Context()
+	mb, err := s.store.GetMailboxByToken(ctx, parts[0])
+	if err != nil {
+		jsonResp(w, http.StatusNotFound, map[string]string{"error": "mailbox not found"})
+		return
+	}
+	msgs, err := s.store.ListMessagesByMailbox(ctx, mb.ID, 500)
+	if err != nil {
+		jsonResp(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
+	found := false
+	for i := range msgs {
+		if messageReference(parts[0], msgs[i].ID) == parts[1] {
+			found = true
+			break
+		}
+	}
+	if !found {
+		jsonResp(w, http.StatusNotFound, map[string]string{"error": "message not found"})
+		return
+	}
+	var body struct {
+		RawSource string `json:"raw_source"`
+		RemoteIP  string `json:"remote_ip"`
+		HELO      string `json:"helo"`
+		SMTPFrom  string `json:"smtp_from"`
+	}
+	limit := s.cfg.MaxMessageBytes + 64*1024
+	if err := json.NewDecoder(io.LimitReader(r.Body, limit)).Decode(&body); err != nil || strings.TrimSpace(body.RawSource) == "" {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return
+	}
+	// Die Neuprüfung fragt viele DNS-Server nacheinander und braucht mehr Zeit als
+	// der übliche Schreibrahmen der Antwort.
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Now().Add(reanalyzeTimeout + 5*time.Second))
+	ctx, cancel := context.WithTimeout(ctx, reanalyzeTimeout)
+	defer cancel()
+
+	raw := body.RawSource
+	if s.reverify != nil {
+		raw = s.reverify(ctx, body.RemoteIP, body.HELO, body.SMTPFrom, mb.Address, false, raw)
+	}
+	report := s.engine.Analyze(ctx, analyzer.Input{
+		Message: model.Message{
+			MailboxID: mb.ID, SMTPFrom: body.SMTPFrom, RCPTTo: mb.Address, RemoteIP: body.RemoteIP,
+			HELO: body.HELO, ReceivedAt: time.Now().UTC(), RawSource: raw,
+		},
+		SMTPDomain:            s.cfg.SMTPDomain,
+		EnableDomainAge:       mb.CheckDomainAge,
+		EnableDomainBlocklist: mb.CheckDomainBlocklist,
+		EnableBrokenLinks:     mb.CheckBrokenLinks,
+	})
+	head, _, _ := strings.Cut(strings.ReplaceAll(raw, "\r\n", "\n"), "\n\n")
+	jsonResp(w, http.StatusOK, map[string]any{
+		"report":       report,
+		"raw_source":   raw,
+		"header_block": strings.ReplaceAll(head, "\n", "\r\n"),
+	})
+}
+
+// reanalyzeTimeout begrenzt die Neuprüfung. Sie entspricht der Zeit, die der
+// Empfang einer Mail für Prüfung und Analyse hat.
+const reanalyzeTimeout = 45 * time.Second
 
 // iptProviderNames returns the display names of all configured seed providers,
 // or nil when the feature is disabled.

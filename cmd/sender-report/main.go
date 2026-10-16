@@ -76,6 +76,7 @@ func main() {
 		RBLProviders:             cfg.RBLProviders,
 		EnableSpamAssassin:       cfg.EnableSpamAssassin,
 		SpamAssassinHostPort:     cfg.SpamAssassinHostPort,
+		SpamAssassinWarnRatio:    cfg.SpamAssassinWarnRatio,
 		EnableRspamd:             cfg.EnableRspamd,
 		RspamdURL:                cfg.RspamdURL,
 		RspamdPassword:           cfg.RspamdPassword,
@@ -95,6 +96,9 @@ func main() {
 		slogLogger.Error("web init error", "error", err)
 		os.Exit(1)
 	}
+	webServer.SetAuthReverifier(func(ctx context.Context, remoteIP, helo, mailFrom, rcptTo string, tls bool, raw string) string {
+		return reverifyReceiverAuth(ctx, cfg, smtp.ReceivedMail{RemoteIP: remoteIP, HELO: helo, MailFrom: mailFrom, RcptTo: rcptTo, TLS: tls}, raw)
+	})
 	webServer.StartBackgroundTasks(ctx)
 
 	httpSrv := &http.Server{

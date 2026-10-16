@@ -19,6 +19,7 @@ import (
 	"github.com/brightcolor/sender-report/internal/config"
 	"github.com/brightcolor/sender-report/internal/db"
 	"github.com/brightcolor/sender-report/internal/model"
+	"github.com/brightcolor/sender-report/internal/ratelimit"
 	"github.com/brightcolor/sender-report/internal/store"
 )
 
@@ -604,5 +605,76 @@ func TestReportShowsSpamAssassinRules(t *testing.T) {
 	}
 	if strings.Contains(body, "<dt>sym:") || strings.Contains(body, "sym:MISSING_SUBJECT</dt>") {
 		t.Error("die Rohdaten führen die Regeln ein zweites Mal auf")
+	}
+}
+
+// /api/reanalyze fragt DNS neu ab und liefert den neu berechneten Bericht samt
+// Quelltext mit den frischen Kopfzeilen des Empfängers zurück.
+func TestReanalyzeReturnsAFreshReport(t *testing.T) {
+	restoreWD := chdirToRepoRoot(t)
+	defer restoreWD()
+
+	srv, st, mb, _, _ := prepareWebTestFixture(t)
+	ctx := context.Background()
+	msg, err := st.SaveMessage(ctx, model.Message{
+		MailboxID: mb.ID, SMTPFrom: "a@example.org", RCPTTo: mb.Address, RemoteIP: "203.0.113.20",
+		HELO: "mx.example.org", ReceivedAt: time.Now().UTC(), RawSource: "Subject: x\r\n\r\nHallo",
+		HeaderBlock: "Subject: x", Subject: "x", SizeBytes: 20,
+	})
+	if err != nil {
+		t.Fatalf("save message: %v", err)
+	}
+	srv.payloadLimiter = ratelimit.New(time.Minute, 100)
+	var seen struct{ ip, helo, from, rcpt string }
+	srv.SetAuthReverifier(func(_ context.Context, ip, helo, from, rcpt string, _ bool, raw string) string {
+		seen.ip, seen.helo, seen.from, seen.rcpt = ip, helo, from, rcpt
+		return "X-Neu: geprueft\r\n" + raw
+	})
+
+	post := func(path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		rr := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rr, req)
+		return rr
+	}
+	path := "/api/reanalyze/" + mb.Token + "/" + messageReference(mb.Token, msg.ID)
+	payload := `{"raw_source":"From: a@example.org\r\nSubject: Test\r\n\r\nHallo\r\n","remote_ip":"203.0.113.20","helo":"mx.example.org","smtp_from":"a@example.org"}`
+
+	rr := post(path, payload)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Status %d: %s", rr.Code, rr.Body.String())
+	}
+	var out struct {
+		Report      model.AnalysisReport `json:"report"`
+		RawSource   string               `json:"raw_source"`
+		HeaderBlock string               `json:"header_block"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatalf("Antwort lesbar: %v", err)
+	}
+	if len(out.Report.Checks) == 0 || out.Report.ScoreLabel == "" {
+		t.Errorf("neuer Bericht ohne Prüfungen oder Bewertung: %d Prüfungen, Label %q", len(out.Report.Checks), out.Report.ScoreLabel)
+	}
+	if !strings.HasPrefix(out.RawSource, "X-Neu: geprueft\r\n") || !strings.Contains(out.HeaderBlock, "X-Neu: geprueft") || strings.Contains(out.HeaderBlock, "Hallo") {
+		t.Errorf("Quelltext und Kopfblock müssen die neuen Kopfzeilen tragen, der Kopfblock ohne Text: %q | %q", out.RawSource, out.HeaderBlock)
+	}
+	if seen.ip != "203.0.113.20" || seen.helo != "mx.example.org" || seen.from != "a@example.org" || seen.rcpt != mb.Address {
+		t.Errorf("Neuprüfung bekam %+v", seen)
+	}
+
+	if rr := post("/api/reanalyze/"+mb.Token+"/unbekannt", payload); rr.Code != http.StatusNotFound {
+		t.Errorf("unbekannte Nachricht: Status %d, erwartet 404", rr.Code)
+	}
+	if rr := post("/api/reanalyze/kein-token/"+messageReference(mb.Token, msg.ID), payload); rr.Code != http.StatusNotFound {
+		t.Errorf("unbekannte Mailbox: Status %d, erwartet 404", rr.Code)
+	}
+	if rr := post(path, `{"raw_source":"  "}`); rr.Code != http.StatusBadRequest {
+		t.Errorf("leerer Quelltext: Status %d, erwartet 400", rr.Code)
+	}
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	get := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(get, req)
+	if get.Code != http.StatusMethodNotAllowed {
+		t.Errorf("GET: Status %d, erwartet 405", get.Code)
 	}
 }

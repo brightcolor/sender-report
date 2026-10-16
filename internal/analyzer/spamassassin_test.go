@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -74,7 +75,7 @@ func TestSpamAssassinCheckListsTheRules(t *testing.T) {
 		_, _ = io.WriteString(c, spamdReport)
 	}()
 
-	res := spamAssassinHeuristic(context.Background(), ln.Addr().String(), "Subject: x\r\n\r\nHallo\r\n")
+	res := spamAssassinHeuristic(context.Background(), ln.Addr().String(), "Subject: x\r\n\r\nHallo\r\n", 0.6)
 	if cmd := <-gotCmd; !strings.HasPrefix(cmd, "REPORT ") {
 		t.Errorf("Anfrage an spamd = %q, erwartet REPORT", cmd)
 	}
@@ -91,5 +92,50 @@ func TestSpamAssassinCheckListsTheRules(t *testing.T) {
 	}
 	if !strings.Contains(res.Suggestion, "MISSING_SUBJECT (+2.0)") {
 		t.Errorf("Empfehlung nennt die Regel nicht: %s", res.Suggestion)
+	}
+}
+
+func fakeSpamd(t *testing.T, resp string) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = bufio.NewReader(c).ReadString('\n')
+			_, _ = io.WriteString(c, resp)
+			c.Close()
+		}
+	}()
+	return ln.Addr().String()
+}
+
+// SPAMASSASSIN_WARN_RATIO bestimmt, ab welchem Anteil des Limits der Befund gelb wird.
+func TestSpamAssassinWarnsOnlyNearTheLimit(t *testing.T) {
+	for _, tc := range []struct {
+		score, ratio float64
+		want         string
+	}{
+		{3.5, 0.9, "pass"},
+		{4.4, 0.9, "pass"},
+		{4.5, 0.9, "warn"},
+		{4.9, 0.9, "warn"},
+		{3.5, 0.6, "warn"},
+		{2.9, 0.6, "pass"},
+		{4.9, 1.0, "pass"},
+		{5.0, 1.0, "warn"},
+		{3.5, 0, "pass"}, // ohne Angabe gilt die Vorgabe 0,9
+	} {
+		resp := "SPAMD/1.1 0 EX_OK\r\nSpam: False ; " + strconv.FormatFloat(tc.score, 'f', 1, 64) + " / 5.0\r\n\r\n"
+		res := spamAssassinHeuristic(context.Background(), fakeSpamd(t, resp), "Subject: x\r\n\r\nHallo", tc.ratio)
+		if res.Status != tc.want {
+			t.Errorf("Wert %.1f bei Anteil %v: Status %q, erwartet %q", tc.score, tc.ratio, res.Status, tc.want)
+		}
 	}
 }
