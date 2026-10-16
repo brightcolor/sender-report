@@ -7,6 +7,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+
+	"github.com/brightcolor/sender-report/internal/dnsfallback"
 )
 
 // Zustände des DKIM-Schlüssels, wie sie die Abfrage des Selector-Records ergibt.
@@ -24,8 +26,9 @@ const (
 type dkimKeyDiag struct {
 	Selector, Domain, DNSName string
 	State                     string
-	KeyInfo                   string // z. B. „RSA, 2048 Bit“, wenn der Schlüssel brauchbar ist
-	ProblemDE, ProblemEN      string // gesetzt, wenn der Record vorhanden, aber fehlerhaft ist
+	KeyInfo                   string   // z. B. „RSA, 2048 Bit“, wenn der Schlüssel brauchbar ist
+	ProblemDE, ProblemEN      string   // gesetzt, wenn der Record vorhanden, aber fehlerhaft ist
+	ExternalResolvers         []string // externe Resolver, die zusätzlich gefragt wurden (DNS_FALLBACK_RESOLVERS)
 }
 
 func (d dkimKeyDiag) known() bool { return d.State != "" && d.DNSName != "" }
@@ -38,7 +41,7 @@ func diagnoseDKIMKey(ctx context.Context, dkimSig string) dkimKeyDiag {
 	if selector == "" || domain == "" {
 		return dkimKeyDiag{}
 	}
-	d := dkimKeyDiag{Selector: selector, Domain: domain, DNSName: selector + "._domainkey." + domain}
+	d := dkimKeyDiag{Selector: selector, Domain: domain, DNSName: selector + "._domainkey." + domain, ExternalResolvers: dnsfallback.Hosts()}
 	records, st := lookupTXT(ctx, d.DNSName)
 	switch st {
 	case dnsUnavailable:
@@ -150,6 +153,11 @@ func dkimMissingKeyFinding(detail string, diag dkimKeyDiag) dkimFinding {
 	case dkimKeyAbsent:
 		f.summaryDE = head + " Unter diesem Namen gibt es im DNS keinen TXT-Record."
 		f.summaryEN = headEN + " The DNS has no TXT record under that name."
+		if len(diag.ExternalResolvers) > 0 {
+			list := strings.Join(diag.ExternalResolvers, ", ")
+			f.summaryDE += " Auch die externen Resolver " + list + " kennen den Namen nicht."
+			f.summaryEN += " The external resolvers " + list + " do not know the name either."
+		}
 		f.suggestDE = fmt.Sprintf("TXT-Record %s anlegen mit dem Wert v=DKIM1; k=rsa; p=<öffentlicher Schlüssel>. Den Schlüssel erzeugt die Software, die signiert (etwa OpenDKIM, Rspamd oder der Mailanbieter). Der Selector im Namen muss genau dem s= der Signatur entsprechen: %s. Existiert der Record schon unter einem anderen Selector, den Signer auf diesen umstellen. %s", n, diag.Selector, check)
 		f.suggestEN = fmt.Sprintf("Create the TXT record %s with the value v=DKIM1; k=rsa; p=<public key>. The software that signs (for example OpenDKIM, Rspamd or the mail provider) generates the key. The selector in the name has to match the s= of the signature exactly: %s. If the record already exists under another selector, switch the signer to that one. %s", n, diag.Selector, checkEN)
 	case dkimKeyUnavailable:

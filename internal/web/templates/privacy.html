@@ -176,6 +176,11 @@
                 PTR/rDNS, MX- und A/AAAA-Records werden über den konfigurierten DNS-Resolver
                 abgefragt. Die IP-Adresse des sendenden Servers wird dabei an DNS-Server
                 übermittelt.</li>
+              {{if .DNSFallback}}<li><strong>Externe DNS-Resolver</strong>: Findet der konfigurierte
+                Resolver einen TXT-Record (DKIM-Schlüssel, SPF, DMARC) nicht, fragt {{.AppName}}
+                zusätzlich {{range $i, $r := .DNSFallback}}{{if $i}}, {{end}}{{$r}}{{end}}. Diese Dienste
+                erfahren dabei den Namen der abgefragten Domain, etwa die Domain des Absenders.
+                Die sendende IP-Adresse und der Mail-Inhalt gehen nicht an sie.</li>{{end}}
               <li><strong>DNSBL/RBL-Prüfungen</strong> (optional, konfigurierbar): Die sendende
                 IP-Adresse wird gegen konfigurierte DNS-Blocklisten geprüft. Dabei wird eine
                 DNS-Anfrage an den jeweiligen DNSBL-Betreiber gestellt.</li>
@@ -421,6 +426,9 @@
                 an den lokal oder im privaten Netzwerk laufenden spamd-Prozess übermittelt.</li>
               <li><strong>Rspamd</strong> (optional): Lokaler Dienst; E-Mail-Inhalt wird an
                 den lokal oder im privaten Netzwerk laufenden Rspamd-Controller übermittelt.</li>
+              {{if .DNSFallback}}<li><strong>Externe DNS-Resolver</strong>
+                ({{range $i, $r := .DNSFallback}}{{if $i}}, {{end}}{{$r}}{{end}}): Sie erhalten die
+                Namen von Domains, deren TXT-Record der lokale Resolver nicht findet.</li>{{end}}
               <li><strong>DNSBL-Betreiber</strong>: Bei aktivierten RBL-Prüfungen wird die
                 sendende IP-Adresse als DNS-Anfrage an den jeweiligen DNSBL-Betreiber übermittelt
                 (z.&nbsp;B. Spamhaus, SpamCop, Barracuda).</li>

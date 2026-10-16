@@ -241,3 +241,37 @@ func TestForceHTTPSRedirectKeepsTheEscapedPath(t *testing.T) {
 		t.Errorf("Location = %q", rr.Header().Get("Location"))
 	}
 }
+
+// Die externen DNS-Resolver sehen die Namen der abgefragten Domains. Die
+// Datenschutzseite nennt sie, solange DNS_FALLBACK_RESOLVERS gesetzt ist.
+func TestPrivacyPageNamesTheDNSFallbackResolvers(t *testing.T) {
+	t.Chdir(filepath.Join("..", ".."))
+	for _, tc := range []struct {
+		name      string
+		resolvers []string
+		want      []string
+		notWant   string
+	}{
+		{"zwei Resolver", []string{"1.1.1.1:53", "9.9.9.9:5353"}, []string{"Externe DNS-Resolver", "1.1.1.1, 9.9.9.9"}, ""},
+		{"abgeschaltet", nil, nil, "Externe DNS-Resolver"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := cookieTestConfig("auto")
+			cfg.UIDefaultTheme = "auto"
+			cfg.DNSFallbackResolvers = tc.resolvers
+			srv, err := New(cfg, nil, nil, nil)
+			if err != nil {
+				t.Fatalf("New: %v", err)
+			}
+			body := renderPage(t, srv.privacyPage, "/privacy", "de")
+			for _, w := range tc.want {
+				if !strings.Contains(body, w) {
+					t.Errorf("Datenschutzseite nennt %q nicht", w)
+				}
+			}
+			if tc.notWant != "" && strings.Contains(body, tc.notWant) {
+				t.Errorf("Datenschutzseite nennt %q trotz abgeschaltetem Fallback", tc.notWant)
+			}
+		})
+	}
+}

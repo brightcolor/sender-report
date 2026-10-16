@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.43.0] - 2026-10-16
+
+### Added
+- **Externe DNS-Resolver für TXT-Records.** Findet der lokale Resolver (in Docker meist
+  `127.0.0.11`) einen DKIM-Schlüssel, SPF- oder DMARC-Record nicht, fragt sender.report
+  zusätzlich `1.1.1.1` und `8.8.8.8`. Ein „no such host“ aus einem Zwischenspeicher mit
+  Negativ-Antwort führte bisher zu „DKIM-Schlüssel nicht gefunden“ bei einem Record, den es
+  gibt. Die Abfrage gilt für die Prüfung der eingehenden Mail (DKIM, SPF, DMARC) und für
+  die Befunde im Bericht samt Neuprüfung. Blocklisten (DNSBL) bleiben beim lokalen Resolver,
+  weil öffentliche Resolver sie mit Fehlercodes beantworten.
+- Einstellungen `DNS_FALLBACK_RESOLVERS` (Vorgabe `1.1.1.1,8.8.8.8`, höchstens 5, `none`
+  schaltet ab) und `DNS_FALLBACK_TIMEOUT` (Vorgabe `2s`, `500ms` bis `10s`). Ungültige Werte
+  stoppen den Start mit einer Meldung, die Wert und Korrektur nennt.
+- Meldet der Bericht „Record fehlt“, nennt er die befragten externen Resolver mit.
+- Die Datenschutzerklärung nennt die externen Resolver, solange sie eingestellt sind. Sie
+  erfahren den Namen der abgefragten Domain, aber weder die sendende IP noch den Inhalt.
+
 ## [1.42.2] - 2026-10-16
 
 ### Fixed

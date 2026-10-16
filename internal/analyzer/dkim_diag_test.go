@@ -135,3 +135,21 @@ func TestDKIMDetailIsKeyProblem(t *testing.T) {
 		}
 	}
 }
+
+func TestMissingKeyFindingNamesExternalResolversThatAlsoMissTheRecord(t *testing.T) {
+	diag := dkimKeyDiag{Selector: "dkim", Domain: "hopux.de", DNSName: "dkim._domainkey.hopux.de", State: dkimKeyAbsent,
+		ExternalResolvers: []string{"1.1.1.1", "8.8.8.8"}}
+	f := classifyDKIMFailure("permerror", verifierNoKey, time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC), diag)
+	for _, w := range []string{"externen Resolver 1.1.1.1, 8.8.8.8 kennen den Namen nicht"} {
+		if !strings.Contains(f.summaryDE, w) {
+			t.Errorf("Befund sollte %q enthalten: %s", w, f.summaryDE)
+		}
+	}
+	if !strings.Contains(f.summaryEN, "1.1.1.1, 8.8.8.8 do not know the name either") {
+		t.Errorf("englischer Befund nennt die externen Resolver nicht: %s", f.summaryEN)
+	}
+	diag.ExternalResolvers = nil
+	if f := classifyDKIMFailure("permerror", verifierNoKey, time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC), diag); strings.Contains(f.summaryDE, "externen Resolver") {
+		t.Errorf("ohne externe Resolver darf der Befund sie nicht nennen: %s", f.summaryDE)
+	}
+}

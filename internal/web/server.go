@@ -100,6 +100,9 @@ type PrivacyData struct {
 	// Lifetimes from MAILBOX_TTL and DATA_RETENTION_TTL, named in the text.
 	MailboxHours  int
 	RetentionDays int
+	// External resolvers of DNS_FALLBACK_RESOLVERS (hosts without port), named
+	// in the text because they see the queried domain names.
+	DNSFallback []string
 }
 
 type MailboxData struct {
@@ -1363,7 +1366,20 @@ func (s *Server) privacyPage(w http.ResponseWriter, r *http.Request) {
 		MailboxCookieName: s.cfg.MailboxCookieName,
 		MailboxHours:      int(s.cfg.MailboxTTL.Hours()),
 		RetentionDays:     int(s.cfg.RetentionTTL.Hours() / 24),
+		DNSFallback:       resolverHosts(s.cfg.DNSFallbackResolvers),
 	})
+}
+
+// resolverHosts strips the port from host:port resolver addresses.
+func resolverHosts(addrs []string) []string {
+	out := make([]string, 0, len(addrs))
+	for _, a := range addrs {
+		if h, _, err := net.SplitHostPort(a); err == nil {
+			a = h
+		}
+		out = append(out, a)
+	}
+	return out
 }
 
 func (s *Server) reportAPI(w http.ResponseWriter, r *http.Request) {

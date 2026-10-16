@@ -560,3 +560,55 @@ func TestFormatDurationWritesTheSettingsForm(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadDNSFallbackDefaultsAndOtherValues(t *testing.T) {
+	t.Setenv("SMTP_DOMAIN", "example.test")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(cfg.DNSFallbackResolvers, ","); got != "1.1.1.1:53,8.8.8.8:53" {
+		t.Errorf("Vorgabe für DNS_FALLBACK_RESOLVERS = %q", got)
+	}
+	if cfg.DNSFallbackTimeout != 2*time.Second {
+		t.Errorf("Vorgabe für DNS_FALLBACK_TIMEOUT = %s", cfg.DNSFallbackTimeout)
+	}
+
+	t.Setenv("DNS_FALLBACK_RESOLVERS", "9.9.9.9, 10.0.0.53:5353")
+	t.Setenv("DNS_FALLBACK_TIMEOUT", "750ms")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(cfg.DNSFallbackResolvers, ","); got != "9.9.9.9:53,10.0.0.53:5353" {
+		t.Errorf("DNS_FALLBACK_RESOLVERS = %q", got)
+	}
+	if cfg.DNSFallbackTimeout != 750*time.Millisecond {
+		t.Errorf("DNS_FALLBACK_TIMEOUT = %s", cfg.DNSFallbackTimeout)
+	}
+
+	t.Setenv("DNS_FALLBACK_RESOLVERS", "none")
+	cfg, err = Load()
+	if err != nil || len(cfg.DNSFallbackResolvers) != 0 {
+		t.Errorf("none schaltet den Fallback ab: %v, %v", cfg.DNSFallbackResolvers, err)
+	}
+}
+
+func TestLoadRejectsInvalidDNSFallback(t *testing.T) {
+	for _, tc := range []struct{ key, value, want string }{
+		{"DNS_FALLBACK_RESOLVERS", "dns.google", "not an IP address"},
+		{"DNS_FALLBACK_RESOLVERS", "1.1.1.1:99999", "port"},
+		{"DNS_FALLBACK_TIMEOUT", "50ms", "outside"},
+		{"DNS_FALLBACK_TIMEOUT", "5m", "outside"},
+		{"DNS_FALLBACK_TIMEOUT", "schnell", "not a duration"},
+	} {
+		t.Run(tc.key+"="+tc.value, func(t *testing.T) {
+			t.Setenv("SMTP_DOMAIN", "example.test")
+			t.Setenv(tc.key, tc.value)
+			_, err := Load()
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), tc.key) {
+				t.Fatalf("Fehler %v sollte %q und %s nennen", err, tc.want, tc.key)
+			}
+		})
+	}
+}

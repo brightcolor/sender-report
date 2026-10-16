@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/publicsuffix"
 
+	"github.com/brightcolor/sender-report/internal/dnsfallback"
 	"github.com/brightcolor/sender-report/internal/model"
 )
 
@@ -1389,7 +1390,7 @@ func spfLookupRedirect(ctx context.Context, domain string) string {
 	if domain == "" {
 		return ""
 	}
-	recs, err := net.DefaultResolver.LookupTXT(ctx, domain)
+	recs, err := dnsfallback.LookupTXT(ctx, domain)
 	if err != nil {
 		return ""
 	}

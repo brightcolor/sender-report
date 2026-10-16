@@ -12,6 +12,7 @@ import (
 
 	"golang.org/x/net/idna"
 
+	"github.com/brightcolor/sender-report/internal/dnsfallback"
 	"github.com/brightcolor/sender-report/internal/model"
 )
 
@@ -133,7 +134,7 @@ func lookupTXT(ctx context.Context, name string) ([]string, dnsStatus) {
 	if err != nil {
 		return nil, dnsAbsent
 	}
-	recs, err := net.DefaultResolver.LookupTXT(ctx, ascii)
+	recs, err := dnsfallback.LookupTXT(ctx, ascii)
 	if err != nil {
 		return nil, classifyDNSError(err)
 	}

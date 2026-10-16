@@ -15,6 +15,7 @@ import (
 
 	"github.com/brightcolor/sender-report/internal/analyzer"
 	"github.com/brightcolor/sender-report/internal/config"
+	"github.com/brightcolor/sender-report/internal/dnsfallback"
 	"github.com/brightcolor/sender-report/internal/smtp"
 )
 
@@ -58,7 +59,7 @@ func evaluateAuthResults(ctx context.Context, rm smtp.ReceivedMail, raw string) 
 	out.SPFDomain = spfDomain
 	out.SPFDetail = spfDetail
 
-	dkimRes, dkimDomain, dkimDetail := evaluateDKIM(raw)
+	dkimRes, dkimDomain, dkimDetail := evaluateDKIM(ctx, raw)
 	out.DKIMResult = dkimRes
 	out.DKIMDomain = dkimDomain
 	out.DKIMDetail = dkimDetail
@@ -191,8 +192,10 @@ func fromDomain(raw string) string {
 	return extractDomain(addr.Address)
 }
 
-func evaluateDKIM(raw string) (result, domain string, detail string) {
-	verifs, err := dkim.Verify(strings.NewReader(raw))
+func evaluateDKIM(ctx context.Context, raw string) (result, domain string, detail string) {
+	verifs, err := dkim.VerifyWithOptions(strings.NewReader(raw), &dkim.VerifyOptions{
+		LookupTXT: func(name string) ([]string, error) { return dnsfallback.LookupTXT(ctx, name) },
+	})
 	if len(verifs) == 0 {
 		if err != nil {
 			switch {
@@ -251,7 +254,7 @@ func evaluateDMARC(ctx context.Context, fromDomain, spfResult, spfDomain, dkimRe
 	}
 	rec, err := dmarc.LookupWithOptions(fromDomain, &dmarc.LookupOptions{
 		LookupTXT: func(domain string) ([]string, error) {
-			return net.DefaultResolver.LookupTXT(ctx, domain)
+			return dnsfallback.LookupTXT(ctx, domain)
 		},
 	})
 	if err != nil {
@@ -389,7 +392,7 @@ func checkSPFDomain(ctx context.Context, remoteIP net.IP, domain string, depth i
 }
 
 func lookupSPFRecord(ctx context.Context, domain string) (record string, status string) {
-	txts, err := net.DefaultResolver.LookupTXT(ctx, domain)
+	txts, err := dnsfallback.LookupTXT(ctx, domain)
 	if err != nil {
 		if dnsErr, ok := err.(*net.DNSError); ok && dnsErr.IsNotFound {
 			return "", "none"

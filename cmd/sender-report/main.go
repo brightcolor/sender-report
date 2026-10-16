@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/brightcolor/sender-report/internal/analyzer"
+	"github.com/brightcolor/sender-report/internal/dnsfallback"
 	"github.com/brightcolor/sender-report/internal/cleanup"
 	"github.com/brightcolor/sender-report/internal/config"
 	"github.com/brightcolor/sender-report/internal/db"
@@ -69,6 +70,7 @@ func main() {
 	st := store.New(database)
 	metrics := telemetry.New()
 	alerter := telemetry.NewAlerter(cfg.AlertWebhookURL)
+	dnsfallback.Configure(cfg.DNSFallbackResolvers, cfg.DNSFallbackTimeout)
 	engine := analyzer.New(analyzer.Options{
 		EnableRBLChecks:          cfg.EnableRBLChecks,
 		RBLProviders:             cfg.RBLProviders,

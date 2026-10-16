@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/brightcolor/sender-report/internal/dnsfallback"
 )
 
 type Config struct {
@@ -39,6 +41,11 @@ type Config struct {
 	PayloadRateLimitPerMin int
 	EnableRBLChecks        bool
 	RBLProviders           []string
+	// DNS_FALLBACK_RESOLVERS and DNS_FALLBACK_TIMEOUT — external resolvers asked
+	// for a TXT record (DKIM key, SPF, DMARC) that the local resolver reports as
+	// missing. Empty turns the fallback off.
+	DNSFallbackResolvers []string
+	DNSFallbackTimeout   time.Duration
 	// Group C — opt-in third-party reputation checks (contact external services
 	// with the sender/link domain; off by default for privacy).
 	EnableDomainAge          bool
@@ -314,6 +321,9 @@ func Load() (Config, error) {
 			return cfg, fmt.Errorf("%s=%s is not a positive duration; set a value like 30m or 24h, or remove it to use the default", d.key, d.value)
 		}
 	}
+	if err := loadDNSFallback(&cfg); err != nil {
+		return cfg, err
+	}
 	if !slices.Contains(UIThemes, cfg.UIDefaultTheme) {
 		return cfg, fmt.Errorf("UI_DEFAULT_THEME=%q is not a display option of the web interface; set it to one of %s, or remove it to follow the visitor's system setting", cfg.UIDefaultTheme, strings.Join(UIThemes, ", "))
 	}
@@ -321,6 +331,24 @@ func Load() (Config, error) {
 		return cfg, err
 	}
 	return cfg, nil
+}
+
+// loadDNSFallback reads and checks DNS_FALLBACK_RESOLVERS and DNS_FALLBACK_TIMEOUT.
+func loadDNSFallback(cfg *Config) error {
+	resolvers, err := dnsfallback.ParseResolvers(getEnv("DNS_FALLBACK_RESOLVERS", dnsfallback.DefaultResolvers))
+	if err != nil {
+		return err
+	}
+	timeout, err := getEnvDurationChecked("DNS_FALLBACK_TIMEOUT", dnsfallback.DefaultTimeout)
+	if err != nil {
+		return err
+	}
+	if timeout < dnsfallback.MinTimeout || timeout > dnsfallback.MaxTimeout {
+		return fmt.Errorf("DNS_FALLBACK_TIMEOUT=%s is outside %s to %s; it sets how long each external resolver gets to answer a TXT lookup; remove it to use %s", FormatDuration(timeout), FormatDuration(dnsfallback.MinTimeout), FormatDuration(dnsfallback.MaxTimeout), FormatDuration(dnsfallback.DefaultTimeout))
+	}
+	cfg.DNSFallbackResolvers = resolvers
+	cfg.DNSFallbackTimeout = timeout
+	return nil
 }
 
 // checkHTTPSExemptPaths validates FORCE_HTTPS_EXEMPT_PATHS: every entry is an
