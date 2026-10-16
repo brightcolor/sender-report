@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.45.1] - 2026-10-16
+
+### Fixed
+- **Eine Maildomain ohne A/AAAA-Record bekommt keine Warnung mehr, wenn MX-Records da sind.**
+  Der Befund „A/AAAA-Records“ zog 0,3 Punkte ab, wenn die Hauptdomain (etwa `hopux.de`)
+  keine Adresse trägt, und empfahl „A-Record setzen: mail.hopux.de“, obwohl dieser
+  Hostname samt IPv6-Adresse längst existierte. Die Hauptdomain trägt in der Regel nur MX,
+  SPF und DMARC, der Server heißt `mail.<domain>`. Jetzt gilt: MX vorhanden → Info ohne
+  Abzug, mit den MX-Hosts in den Rohdaten. Weder A/AAAA noch MX → Warnung, die sagt, dass
+  Antworten und Rückläufer kein Ziel haben. Die Anleitung nennt die geprüfte Domain und
+  `dig`-Befehle für MX, A und AAAA statt des HELO-Namens.
+
 ## [1.45.0] - 2026-10-16
 
 ### Added

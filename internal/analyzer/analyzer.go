@@ -1150,7 +1150,26 @@ func addressRecordCheck(ctx context.Context, domain string) model.CheckResult {
 		return unresolved("address_records", "A/AAAA-Records", "Die A/AAAA-Einträge")
 	}
 	if st == dnsAbsent {
-		return warn("address_records", "A/AAAA-Records", -0.3, fmt.Sprintf("%s löst nicht auf A/AAAA auf.", domain), fmt.Sprintf("In der DNS-Zone A/AAAA-Records für %s setzen, wenn diese Domain direkt als Hostname verwendet wird.", domain))
+		// Eine Maildomain braucht keine A/AAAA-Records, wenn MX-Records auf die
+		// Mailserver zeigen. Das ist der übliche Aufbau: die Hauptdomain trägt nur
+		// MX, SPF und DMARC, der Server heißt mail.<domain>.
+		mxs, mxSt := lookupMX(ctx, domain)
+		det := map[string]string{"domain": domain}
+		switch {
+		case mxSt == dnsOK && len(mxs) > 0:
+			hosts := make([]string, 0, len(mxs))
+			for _, mx := range mxs {
+				hosts = append(hosts, strings.TrimSuffix(mx.Host, "."))
+			}
+			det["mx_hosts"] = strings.Join(hosts, "\n")
+			return withDetails(info("address_records", "A/AAAA-Records", 0.0,
+				fmt.Sprintf("%s hat keine A/AAAA-Records. Mail läuft über die MX-Records (%d) und braucht sie nicht.", domain, len(mxs)), ""), det)
+		case mxSt == dnsUnavailable:
+			return unresolved("address_records", "A/AAAA-Records", "Die MX- und A/AAAA-Einträge von "+domain)
+		}
+		return withDetails(warn("address_records", "A/AAAA-Records", -0.3,
+			fmt.Sprintf("%s hat weder A/AAAA- noch MX-Records. Antworten und Rückläufer an diese Domain haben kein Ziel.", domain),
+			fmt.Sprintf("MX-Record für %s auf den Mailserver setzen (oder A/AAAA, wenn die Domain selbst der Mailserver ist).", domain)), det)
 	}
 	values := make([]string, 0, len(ips))
 	for _, ip := range ips {
@@ -2244,6 +2263,12 @@ func enrichCheckResult(c model.CheckResult, ctx checkContext) model.CheckResult 
 		}
 	case "address_records":
 		c.Explanation = "A/AAAA-Records zeigen, auf welche IPs ein Hostname zeigt. Mailserver-Hostnamen aus HELO/EHLO und MX-Einträgen müssen sauber auflösen. Ein HELO-Name ohne gültigen A/AAAA-Record erhöht Spam-Scores und signalisiert schlechte DNS-Hygiene. Tracking-Subdomains und Bounce-Domains sollten ebenfalls konsistent auflösen. Wichtigkeit: hoch – inkonsistente DNS-Auflösung ist ein verlässliches Zeichen für schlechte Infrastruktur-Qualität und erhöht den Spam-Score bei fast allen Filtersystemen."
+		if c.Recommendation == "" && c.Suggestion != "" && c.TechnicalDetails["domain"] != "" {
+			// Der Befund nennt die Domain, die er geprüft hat. Die allgemeine
+			// Anleitung unten bezieht sich auf den HELO-Namen und passt dann nicht.
+			d := c.TechnicalDetails["domain"]
+			c.Recommendation = fmt.Sprintf("%s\n\nPrüfen:\n  dig MX %s +short\n  dig A %s +short\n  dig AAAA %s +short", c.Suggestion, d, d, d)
+		}
 		if c.Recommendation == "" {
 			c.Recommendation = fmt.Sprintf("A-Record setzen:\n\n  Name: %s\n  Typ:  A\n  Wert: %s\n\nBei IPv6: zusätzlich AAAA und PTR für IPv6.\nPrüfen: dig A %s +short", emptyFallback(ctx.Message.HELO, "mail.example.org"), emptyFallback(ctx.Message.RemoteIP, "203.0.113.10"), emptyFallback(ctx.Message.HELO, "mail.example.org"))
 		}
