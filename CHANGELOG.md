@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.43.2] - 2026-10-16
+
+### Fixed
+- Die Tests des DNS-Fallbacks zählten Anfragen an einen Test-Resolver und schlugen auf
+  Systemen mit Suchdomäne in `resolv.conf` fehl (zwei statt einer Anfrage je Name). Sie
+  fragen jetzt absolute Namen. Der Code des Fallbacks bleibt unverändert; v1.43.0 und
+  v1.43.1 wurden wegen dieses Testfehlers nicht gebaut.
+
 ## [1.43.1] - 2026-10-16
 
 ### Changed

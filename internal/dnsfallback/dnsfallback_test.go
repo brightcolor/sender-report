@@ -13,7 +13,9 @@ import (
 )
 
 // fakeDNS startet einen UDP-DNS-Server auf 127.0.0.1, der für bekannte Namen ein
-// TXT-Record liefert und sonst NXDOMAIN. Er zählt die Anfragen.
+// TXT-Record liefert und sonst NXDOMAIN. Er zählt die Anfragen. Die Tests fragen
+// absolute Namen (mit Punkt am Ende), damit die Suchdomänen des Systems keine
+// zusätzlichen Anfragen auslösen.
 func fakeDNS(t *testing.T, records map[string]string) (addr string, queries *atomic.Int32) {
 	t.Helper()
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
@@ -56,7 +58,7 @@ func TestFallbackFindetRecordDenDerLokaleResolverNichtKennt(t *testing.T) {
 	withLocal(t, notFound)
 	Configure([]string{ext}, time.Second)
 
-	recs, via, err := LookupTXTSource(context.Background(), "dkim._domainkey.hopux.de")
+	recs, via, err := LookupTXTSource(context.Background(), "dkim._domainkey.hopux.de.")
 	if err != nil || len(recs) != 1 || !strings.HasPrefix(recs[0], "v=DKIM1") {
 		t.Fatalf("recs=%v err=%v", recs, err)
 	}
@@ -70,7 +72,7 @@ func TestLokalerTrefferFragtKeinenExternenResolver(t *testing.T) {
 	withLocal(t, func(context.Context, string) ([]string, error) { return []string{"lokal"}, nil })
 	Configure([]string{ext}, time.Second)
 
-	recs, via, err := LookupTXTSource(context.Background(), "a.example")
+	recs, via, err := LookupTXTSource(context.Background(), "a.example.")
 	if err != nil || recs[0] != "lokal" || via != "" {
 		t.Fatalf("recs=%v via=%q err=%v", recs, via, err)
 	}
@@ -84,7 +86,7 @@ func TestBeideKennenDenNamenNichtGibtDenLokalenFehlerZurueck(t *testing.T) {
 	withLocal(t, notFound)
 	Configure([]string{ext}, time.Second)
 
-	_, via, err := LookupTXTSource(context.Background(), "gibt-es-nicht.example")
+	_, via, err := LookupTXTSource(context.Background(), "gibt-es-nicht.example.")
 	var de *net.DNSError
 	if !errors.As(err, &de) || !de.IsNotFound || via != "" {
 		t.Fatalf("err=%v via=%q, erwartet den lokalen NXDOMAIN-Fehler", err, via)
@@ -98,7 +100,7 @@ func TestAbgeschalteterFallbackFragtNiemandenExtern(t *testing.T) {
 	_, queries := fakeDNS(t, map[string]string{"a.example": "extern"})
 	withLocal(t, notFound)
 	Configure(nil, time.Second)
-	if _, _, err := LookupTXTSource(context.Background(), "a.example"); err == nil {
+	if _, _, err := LookupTXTSource(context.Background(), "a.example."); err == nil {
 		t.Fatal("ohne Fallback bleibt der lokale Fehler")
 	}
 	if n := queries.Load(); n != 0 {
@@ -112,7 +114,7 @@ func TestZweiterResolverSpringtEin(t *testing.T) {
 	withLocal(t, notFound)
 	Configure([]string{first, second}, time.Second)
 
-	recs, via, err := LookupTXTSource(context.Background(), "x.example")
+	recs, via, err := LookupTXTSource(context.Background(), "x.example.")
 	if err != nil || via != second || recs[0] != "v=spf1 -all" {
 		t.Fatalf("recs=%v via=%q err=%v", recs, via, err)
 	}
