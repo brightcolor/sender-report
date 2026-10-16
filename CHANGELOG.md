@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.45.3] - 2026-10-16
+
+### Fixed
+- **„Neu prüfen“ bei SPF, DKIM, DMARC und deren Alignment führt die volle Neuberechnung aus.**
+  Diese Ergebnisse hängen an der Nachricht und lassen sich aus einem DNS-Eintrag allein nicht
+  entscheiden. Der Einzelknopf prüfte bisher nur, ob der Record existiert, und zeigte dann
+  „Info“ mit einem Abzug von 1,3 Punkten, mit dem Hinweis, eine neue Testmail zu senden.
+  Jetzt startet der Knopf (auch der der Sektion) dieselbe Neuberechnung wie „DNS neu abfragen
+  & neu bewerten“. DKIM und die Alignment-Befunde haben ebenfalls einen Neuprüfen-Knopf.
+- Bleibt ein Befund nach einer reinen Record-Prüfung mit Abzug stehen, heißt er „Warnung“
+  statt „Info“, und der Hinweis nennt die Neuberechnung im Bericht.
+
 ## [1.45.2] - 2026-10-16
 
 ### Fixed

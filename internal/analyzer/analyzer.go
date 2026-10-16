@@ -211,7 +211,12 @@ const recheckPendingDetailKey = "recheck_pending"
 // essentialsAllPass only looks at the status.
 func recheckUnconfirmed(id, name string, in RecheckInput, summary string) model.CheckResult {
 	c := info(id, name, in.pendingDelta(id), summary,
-		"Schicken Sie eine neue Testmail an diese Adresse, damit das Ergebnis an einer echten Zustellung geprüft werden kann. Bis dahin bleibt die bisherige Bewertung stehen.")
+		"Klicke im Bericht auf „DNS neu abfragen & neu bewerten“: Das prüft die gespeicherte Mail gegen den neuen Eintrag. Alternativ schicke eine neue Testmail an diese Adresse. Bis dahin bleibt die bisherige Bewertung stehen.")
+	// Ein Befund, der Punkte kostet, ist eine Warnung. Als „Info“ mit Abzug (-1,3)
+	// widersprach er sich selbst.
+	if c.ScoreDelta < 0 {
+		c.Status = "warn"
+	}
 	return withDetails(c, map[string]string{
 		recheckPendingDetailKey: "Eintrag vorhanden, Ergebnis noch nicht durch eine echte Zustellung bestätigt",
 	})

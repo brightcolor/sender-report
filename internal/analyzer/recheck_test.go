@@ -84,3 +84,21 @@ func TestSPFRecheckMissingRecordKeepsWeight(t *testing.T) {
 		t.Error("a missing record is a finding, not a notice")
 	}
 }
+
+// Ein Befund mit Abzug darf nicht „Info“ heißen: Bei einem früheren Fehler bleibt
+// der Abzug stehen und der Status ist Warnung, bei einem früher sauberen Befund
+// bleibt es eine Info ohne Abzug.
+func TestRecheckPendingStatusMatchesItsPenalty(t *testing.T) {
+	carried := recheckUnconfirmed("dmarc", "DMARC", RecheckInput{PrevStatus: "fail", PrevDelta: -1.3}, "Record vorhanden.")
+	enriched := enrichCheckResult(carried, checkContext{FromDomain: "example.org"})
+	if enriched.Status != "warn" || enriched.ScoreDelta != -1.3 {
+		t.Errorf("mit Abzug: Status %q, Abzug %v; erwartet warn und -1.3", enriched.Status, enriched.ScoreDelta)
+	}
+	if !strings.Contains(enriched.Suggestion, "DNS neu abfragen") {
+		t.Errorf("der Befund nennt die Neuberechnung nicht: %q", enriched.Suggestion)
+	}
+	clean := recheckUnconfirmed("dmarc", "DMARC", RecheckInput{PrevStatus: "pass", PrevDelta: 0}, "Record vorhanden.")
+	if clean.Status != "info" || clean.ScoreDelta != 0 {
+		t.Errorf("ohne Abzug: Status %q, Abzug %v; erwartet info und 0", clean.Status, clean.ScoreDelta)
+	}
+}

@@ -1692,7 +1692,13 @@ function updateGroupHeader(card){
 // analyzer.Recheckable in Go.
 var RECHECKABLE = {spf:1, spf_strictness:1, dmarc:1, dmarc_policy:1, mx_records:1, address_records:1, dkim_keylength:1,
   envelope_mx:1, mta_sts:1, tls_rpt:1, bimi:1, dnssec:1, dane_tlsa:1, ptr:1, ptr_pattern:1,
-  domain_age:1, domain_blocklist:1, link_blocklist:1, from_domain_rcv:1, broken_links:1};
+  domain_age:1, domain_blocklist:1, link_blocklist:1, from_domain_rcv:1, broken_links:1,
+  dkim:1, spf_alignment:1, dkim_alignment:1, dmarc_alignment:1};
+
+// Verdicts that depend on the message itself (SPF, DKIM and DMARC results and their
+// alignment). A DNS lookup alone cannot decide them, so their re-check runs the full
+// re-analysis ("DNS neu abfragen & neu bewerten") instead of a single-record lookup.
+var FULL_REANALYSIS = {spf:1, dmarc:1, dkim:1, spf_alignment:1, dkim_alignment:1, dmarc_alignment:1};
 
 // Opt-in check IDs — shown as "info/disabled" until the user activates them.
 // Activating persists the flag to the mailbox and runs the check immediately.
@@ -1872,6 +1878,7 @@ function setupRecheckButtons() {
         if (rb) targets.push({ id: rb.dataset.recheck, itemId: it.id });
       });
       if (!targets.length) return;
+      if (targets.some(function(t){ return FULL_REANALYSIS[t.id]; })) { await reanalyzeAll(); return; }
       var so = sbtn.innerHTML; sbtn.disabled = true; sbtn.classList.add('is-busy');
       sbtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
       recheckToast(LANG==='en' ? 'Re-checking section …' : 'Sektion wird neu geprüft …');
@@ -1957,6 +1964,7 @@ function setupRecheckButtons() {
     var id = btn.dataset.recheck;
     var item = btn.closest('.mp-check-item');
     if (!id || !item) return;
+    if (FULL_REANALYSIS[id]) { await reanalyzeAll(); return; }
     var grpCard = item.closest('.mp-group-card');
     var orig = btn.innerHTML;
     btn.disabled = true; btn.classList.add('is-busy');
