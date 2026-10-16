@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.43.1] - 2026-10-16
+
+### Changed
+- Die Vorgabe von `DNS_FALLBACK_RESOLVERS` enthält jetzt auch Quad9 (`9.9.9.9`):
+  `1.1.1.1,8.8.8.8,9.9.9.9`. Damit antwortet ein dritter Betreiber, wenn Cloudflare und
+  Google keinen Record liefern. Wer die Einstellung selbst gesetzt hat, behält seine Liste.
+
 ## [1.43.0] - 2026-10-16
 
 ### Added

@@ -21,7 +21,7 @@ import (
 
 const (
 	// DefaultResolvers ist die Vorgabe für DNS_FALLBACK_RESOLVERS.
-	DefaultResolvers = "1.1.1.1,8.8.8.8"
+	DefaultResolvers = "1.1.1.1,8.8.8.8,9.9.9.9"
 	// Off schaltet den Fallback in DNS_FALLBACK_RESOLVERS ab.
 	Off = "none"
 

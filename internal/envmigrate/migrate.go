@@ -87,7 +87,7 @@ var All = []VarDef{
 	// ── Optional checks ───────────────────────────────────────────────────────
 	{Group: "Optional checks", Key: "ENABLE_RBL_CHECKS", Default: "false", Comment: "Enable DNSBL/RBL IP reputation checks"},
 	{Key: "RBL_PROVIDERS", Default: "zen.spamhaus.org,bl.spamcop.net,b.barracudacentral.org,psbl.surriel.com,dnsbl.dronebl.org,bl.blocklist.de", Comment: "Comma-separated list of RBL zones"},
-	{Key: "DNS_FALLBACK_RESOLVERS", Default: "1.1.1.1,8.8.8.8", Comment: "External resolvers asked for a TXT record (DKIM key, SPF, DMARC) the local resolver cannot find; 'none' turns it off. They see the queried domain names"},
+	{Key: "DNS_FALLBACK_RESOLVERS", Default: "1.1.1.1,8.8.8.8,9.9.9.9", Comment: "External resolvers asked for a TXT record (DKIM key, SPF, DMARC) the local resolver cannot find; 'none' turns it off. They see the queried domain names"},
 	{Key: "DNS_FALLBACK_TIMEOUT", Default: "2s", Comment: "How long each external resolver gets to answer (500ms to 10s)"},
 	{Key: "ENABLE_DOMAIN_AGE", Default: "false", Comment: "Opt-in: domain registration age via RDAP (third-party rdap.org)"},
 	{Key: "ENABLE_DOMAIN_BLOCKLIST", Default: "false", Comment: "Opt-in: sender/link domains against domain/URI blocklists (third-party)"},

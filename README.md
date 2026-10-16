@@ -178,7 +178,7 @@ Everything via `.env` (see `.env.example`). The most important variables:
 | `IPT_SEARCH_MARGIN` | how far before the start of a test the IMAP search reaches back, so a provider whose clock runs behind still finds the message (default `2m`, `0s` to `1h`) |
 | `IPT_SPAM_FOLDERS` | folders a placement test searches after INBOX, in this order (default `Spam,Junk,[Gmail]/Spam,Bulk Mail,Bulk,Junk E-Mail`, at most 20; `none` searches INBOX alone) |
 | `ENABLE_RBL_CHECKS`, `RBL_PROVIDERS` | DNSBL/RBL (IP reputation), optional |
-| `DNS_FALLBACK_RESOLVERS` | external resolvers asked for a TXT record (DKIM key, SPF, DMARC) that the local resolver reports as missing, so a stale negative answer cannot produce a false "record missing" (default `1.1.1.1,8.8.8.8`, at most 5, `none` turns it off); the resolvers see the queried domain names, and blocklist lookups always stay with the local resolver |
+| `DNS_FALLBACK_RESOLVERS` | external resolvers asked for a TXT record (DKIM key, SPF, DMARC) that the local resolver reports as missing, so a stale negative answer cannot produce a false "record missing" (default `1.1.1.1,8.8.8.8,9.9.9.9`, at most 5, `none` turns it off); the resolvers see the queried domain names, and blocklist lookups always stay with the local resolver |
 | `DNS_FALLBACK_TIMEOUT` | how long each external resolver gets to answer (default `2s`, `500ms` to `10s`) |
 | `ENABLE_SPAMASSASSIN`, `ENABLE_RSPAMD`, … | external spam filters, optional |
 | `ENABLE_DOMAIN_AGE`, `ENABLE_DOMAIN_BLOCKLIST`, `DOMAIN_BLOCKLIST_PROVIDERS` | force third-party checks on globally (default off) |

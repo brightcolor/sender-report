@@ -567,7 +567,7 @@ func TestLoadDNSFallbackDefaultsAndOtherValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(cfg.DNSFallbackResolvers, ","); got != "1.1.1.1:53,8.8.8.8:53" {
+	if got := strings.Join(cfg.DNSFallbackResolvers, ","); got != "1.1.1.1:53,8.8.8.8:53,9.9.9.9:53" {
 		t.Errorf("Vorgabe für DNS_FALLBACK_RESOLVERS = %q", got)
 	}
 	if cfg.DNSFallbackTimeout != 2*time.Second {
